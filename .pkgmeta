@@ -1,0 +1,16 @@
+package-as: FlintarsFunNGames
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .git
+  - .gitignore
+  - .gitattributes
+  - .pkgmeta
+  - .claude
+  - dev
+  - TODO.md
+  - README.md
+  - CURSEFORGE.md

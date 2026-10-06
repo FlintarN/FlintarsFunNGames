@@ -1,0 +1,65 @@
+## Interface: 16001
+## Title: Flintar's Fun 'n' Games
+## Notes: Casino and Arcade games for your group, guild or realm: dice, poker, blackjack, slots, roulette, Hearthstone, Tetris, Battleship, Agar.io and more. /fng to open.
+## Author: FlintarN
+## Version: 1.0.0
+## SavedVariables: FlintarsFunNGamesDB
+## IconTexture: Interface\Icons\INV_Misc_Dice_01
+
+Core\Init.lua
+Core\Serialize.lua
+Core\Fair.lua
+Core\Net.lua
+Core\Rolls.lua
+Core\Stats.lua
+Core\Tab.lua
+Games\DeathRoll.lua
+Games\HighLow.lua
+Games\Poker.lua
+Games\Blackjack.lua
+Games\Slots.lua
+Games\Roulette.lua
+Games\Raffle.lua
+Games\TicTacToe.lua
+Games\Battleship.lua
+Games\Agario.lua
+Games\Snake.lua
+Games\Game2048.lua
+Games\Minesweeper.lua
+Games\Tetris.lua
+Games\Flappy.lua
+Games\Wordle.lua
+Games\Shooter.lua
+Games\CandyCrush.lua
+Games\AngryBirds.lua
+Games\Hearthstone\Cards.lua
+Games\Hearthstone\Heroes.lua
+Games\Hearthstone\Engine.lua
+Games\Hearthstone\AI.lua
+Games\Hearthstone.lua
+Core\Session.lua
+Core\Live.lua
+Core\Scores.lua
+UI\Widgets.lua
+UI\Cards.lua
+UI\Kit.lua
+UI\Solo.lua
+UI\Home.lua
+UI\GamePage.lua
+UI\PokerPage.lua
+UI\BlackjackPage.lua
+UI\SlotsPage.lua
+UI\RoulettePage.lua
+UI\RafflePage.lua
+UI\Arcade.lua
+UI\TicTacToePage.lua
+UI\BattleshipPage.lua
+UI\AgarioPage.lua
+UI\HearthstonePage.lua
+UI\HearthstoneDecks.lua
+UI\Help.lua
+UI\SettlePage.lua
+UI\StatsPage.lua
+UI\SettingsPage.lua
+UI\Main.lua
+UI\Minimap.lua

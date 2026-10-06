@@ -1,0 +1,1 @@
+{ "diagnostics.globals": ["ns", "check", "Advance", "Fire", "OUTBOX", "PLAYER_NAME", "RandomRoll", "SlashCmdList", "CLOCK", "TIMERS", "EVENTS", "POPUP", "GROUP", "ROLL_SOURCE", "CHAT"] }
