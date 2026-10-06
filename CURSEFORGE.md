@@ -60,4 +60,4 @@ The card game, in WoW, against the computer.
 - `/fng mute` - turn the sounds off or on
 - `/fng reset` - move the window back to the middle of the screen
 
-Everyone who wants to play together needs the addon. Made for WoW Forever.
+Everyone who wants to play together needs the addon. Works on **Retail** and **WoW Forever**.

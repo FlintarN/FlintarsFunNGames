@@ -76,7 +76,7 @@ How Flintar's Fun 'n' Games is built, the conventions to keep, and what we learn
 ## Release checklist
 
 1. `node dev/run.mjs` passes, a few times in a row.
-2. Bump `## Version` in both TOC files (`FlintarsFunNGames.toc` and `_Vanilla.toc` are identical; copy one to the other).
+2. Bump `## Version` in all TOC files: `FlintarsFunNGames.toc` and `_Vanilla.toc` (Forever/Classic, Interface 16001) are identical; `_Mainline.toc` (Retail, Interface 120001) differs only in `## Interface`. Add new files to all three.
 3. Add the version to `CHANGELOG.md`; update `README.md` and `CURSEFORGE.md`.
 4. Full client restart, then try each game in practice.
 5. Package: `.pkgmeta` leaves out `dev/`, `TODO.md`, `README.md` and `CURSEFORGE.md`.

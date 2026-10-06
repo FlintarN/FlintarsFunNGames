@@ -2,12 +2,12 @@
 
 A games room for World of Warcraft, in one window styled like the game's own. A **Casino** for your group (Death Roll, High-Low, Poker, Blackjack, Slot Machine, Roulette, Raffle), where every number comes from the game's own `/roll` so nobody can fake a result, and an **Arcade** of just-for-fun games: Hearthstone against the computer, Tic-Tac-Toe, Battleship, Agar.io, Tetris and more, with guild and realm leaderboards.
 
-![WoW Forever](https://img.shields.io/badge/World%20of%20Warcraft-Forever-blue)
+![Retail](https://img.shields.io/badge/World%20of%20Warcraft-Retail-blue) ![WoW Forever](https://img.shields.io/badge/World%20of%20Warcraft-Forever-blue)
 
 ## Installation
 
 1. Download the latest release.
-2. Extract the folder into `World of Warcraft/_classic_beta_/Interface/AddOns/` (the WoW Forever client).
+2. Extract the folder into your game's `Interface/AddOns/` folder: `World of Warcraft/_retail_/Interface/AddOns/` for Retail, `World of Warcraft/_classic_beta_/Interface/AddOns/` for WoW Forever.
 3. Make sure the folder is named `FlintarsFunNGames`.
 4. Restart WoW completely. A `/reload` does not pick up a new addon or new files.
 
