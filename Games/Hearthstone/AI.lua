@@ -39,8 +39,11 @@ function AI.Score(st, me)
     end
     local p, o = st.players[me], st.players[3 - me]
     local s = HeroValue(p.hero) - HeroValue(o.hero) * 1.1
-    for _, m in ipairs(p.board) do s = s + MinionValue(m) end
-    for _, m in ipairs(o.board) do s = s - MinionValue(m) * 1.05 end
+    local function Value(m) return MinionValue(m) * (m.doomedBy and 0.15 or 1) end
+    local function Weapon(h) return h.weapon and (h.weapon.attack * h.weapon.durability * 0.6 + 0.5) or 0 end
+    for _, m in ipairs(p.board) do s = s + Value(m) end
+    for _, m in ipairs(o.board) do s = s - Value(m) * 1.05 end
+    s = s + Weapon(p.hero) - Weapon(o.hero)
     s = s + #p.hand * 1.2 - #o.hand * 1.2
     return s
 end

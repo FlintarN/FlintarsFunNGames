@@ -225,9 +225,13 @@ H.RULES = {
             .. "the right to take it out, Auto-fill completes the deck. Only full decks can be played." },
         { "Limits", "Ten cards in hand (more are burned), seven minions on the board. An empty deck deals "
             .. "growing fatigue damage on each draw." },
-        { "Heroes", "Jaina (Fireblast: deal 1 damage), Thrall (Totemic Call: summon a random totem) and "
-            .. "Garrosh (Armor Up!: gain 2 Armor), each with a deck of the original basic cards. Wins count "
-            .. "on the leaderboard." },
+        { "Heroes", "All nine classes, each with its original basic cards and hero power: Jaina (Mage, "
+            .. "Fireblast), Thrall (Shaman, Totemic Call), Garrosh (Warrior, Armor Up!), Malfurion (Druid, "
+            .. "Shapeshift), Rexxar (Hunter, Steady Shot), Uther (Paladin, Reinforce), Anduin (Priest, Lesser "
+            .. "Heal), Valeera (Rogue, Dagger Mastery) and Gul'dan (Warlock, Life Tap). Wins count on the "
+            .. "leaderboard." },
+        { "Weapons", "Rogues, Warriors and Paladins equip weapons. Your hero can then attack once a turn; each "
+            .. "attack uses one Durability, and the weapon breaks at 0." },
     },
     agario = {
         { "The idea", "Everyone is a blob in one big arena. Eat the coloured dots to grow. Touch a blob that's "

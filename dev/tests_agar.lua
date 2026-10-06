@@ -38,7 +38,14 @@ function AgarPractice()
     check(view.me.x > x0 + 30, "agar: D moves you right")
 
     -- Eat a smaller bot sitting on you.
+    -- Set the scene: both alive, the other bots far away and small (they
+    -- wander, and could eat one of us first).
     local bot = view.bots.Ragnar
+    for name, b in pairs(view.bots) do
+        if name ~= "Ragnar" then b.x, b.y, b.r = 50, 50, 5 end
+    end
+    view.me.alive, bot.alive = true, true
+    view.me.x, view.me.y = AG.ARENA_W / 2, AG.ARENA_H / 2
     bot.x, bot.y, bot.r = view.me.x, view.me.y, 5
     view.me.r = 20
     AgarRun(0.05)
@@ -48,6 +55,10 @@ function AgarPractice()
 
     -- A big bot eats you.
     local big = view.bots.Jaina
+    for name, b in pairs(view.bots) do
+        if name ~= "Jaina" then b.x, b.y, b.r = 50, 50, 5 end
+    end
+    view.me.alive, big.alive = true, true
     big.x, big.y, big.r = view.me.x, view.me.y, 60
     view.me.r = 12
     AgarRun(0.05)

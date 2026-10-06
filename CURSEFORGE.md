@@ -28,7 +28,7 @@ No betting, just games. Open a lobby to your group, your guild, the whole realm,
 
 The card game, in WoW, against the computer.
 
-- Play as **Jaina**, **Thrall** or **Garrosh**, with the original basic cards: real costs, stats and text.
+- Play **all nine classes**: Jaina, Thrall, Garrosh, Malfurion, Rexxar, Uther, Anduin, Valeera and Gul'dan, each with the original basic cards (real costs, stats and text) and their hero power.
 - Minions show their **WoW creature** as a live 3D model: Murloc Raider, Boulderfist Ogre, Core Hound, War Golem and more.
 - Taunt, Charge, Divine Shield, Windfury, Freeze, Spell Damage, Battlecries, Overload, hero powers and fatigue.
 - **Build your own decks**: class and neutral cards, two copies each, 30 cards.

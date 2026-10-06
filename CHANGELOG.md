@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 (not released yet)
+
+### New
+- **Hearthstone: all nine classes.** Malfurion (Druid), Rexxar (Hunter), Uther (Paladin), Anduin (Priest), Valeera (Rogue) and Gul'dan (Warlock) join Jaina, Thrall and Garrosh, who now has his Warrior cards. Each class has its original basic cards, hero power and a basic deck, and every minion shows its WoW creature.
+- New rules for them: **weapons** (the hero attacks, durability, Truesilver's heal, Deadly Poison), targets like "a damaged minion" or "3 or less Attack", Sap and Vanish, Mind Control, Hunter's Mark, Humility, Divine Spirit, Corruption, discards, Mind Vision, Wild Growth, Multi-Shot and Cleave, Kill Command's Beast bonus, Warsong Commander, Starving Buzzard, Tundra Rhino, Timber Wolf and Northshire Cleric.
+
 ## 1.0.0 (2026-10-06)
 
 The first public release. Works on **Retail** and **WoW Forever**.

@@ -25,7 +25,8 @@ local DECK_X, DECK_Y = 695, { 262, 104 }
 local Y = { enemyHand = 30, enemyHero = 58, enemyBoard = 142, mid = 182, myBoard = 222, myHero = 306, hand = 404 }
 local TINT = {
     neutral = { 1, 0.95, 0.86 }, mage = { 0.84, 0.8, 1 }, shaman = { 0.74, 0.86, 1 },
-    warrior = { 1, 0.82, 0.76 },
+    warrior = { 1, 0.8, 0.74 }, druid = { 0.95, 0.84, 0.66 }, hunter = { 0.8, 0.96, 0.72 },
+    paladin = { 1, 0.93, 0.62 }, priest = { 1, 1, 1 }, rogue = { 0.78, 0.78, 0.8 }, warlock = { 0.86, 0.74, 0.96 },
 }
 
 local function HS() return ns.HS end
@@ -317,6 +318,7 @@ local function MakeCard(parent, w, h)
         end
         local c = Card(key)
         local minion = c.type == "minion"
+        local weapon = c.type == "weapon"
         self.frame:SetTexture(ART .. (minion and "HsCardMinion" or "HsCardSpell"))
         self.frame:SetTexCoord(0, 1, 0, CARD_V)
         local tint = TINT[c.class] or TINT.neutral
@@ -336,8 +338,17 @@ local function MakeCard(parent, w, h)
         self.name:SetText(c.name)
         self.desc:SetText(c.text or "")
         self.race:SetText(c.race and (c.race:sub(1, 1):upper() .. c.race:sub(2)) or "")
-        self.atk:SetShown(minion)
-        self.hp:SetShown(minion)
+        self.atk:SetShown(minion or weapon)
+        self.hp:SetShown(minion or weapon)
+        if weapon then
+            self.atk.text:SetText(tostring(c.attack))
+            self.hp.text:SetText(tostring(c.durability))
+            self.atk.text:SetTextColor(1, 1, 1)
+            self.hp.text:SetTextColor(1, 1, 1)
+            self.hp.bg:SetTexture(ART .. "HsArmor")
+        else
+            self.hp.bg:SetTexture(ART .. "HsHealth")
+        end
         if minion then
             local atk, hp, max = c.attack, c.health, c.health
             if stats then atk, hp, max = stats[1], stats[2], stats[3] end
@@ -405,6 +416,11 @@ local function MakeMinion(parent)
     f.hp:SetPoint("CENTER", f, "BOTTOMRIGHT", -6, 7)
     f.atk:SetFrameLevel(f:GetFrameLevel() + 4)
     f.hp:SetFrameLevel(f:GetFrameLevel() + 4)
+    f.doom = top:CreateTexture(nil, "OVERLAY", nil, 3)
+    f.doom:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
+    f.doom:SetSize(18, 18)
+    f.doom:SetPoint("TOPRIGHT", 2, 2)
+    f.doom:Hide()
     f.zzz = W.Label(top, "z z", "GameFontHighlightSmall")
     f.zzz:SetPoint("TOP", 0, 6)
     f.zzz:SetTextColor(0.8, 0.85, 1)
@@ -441,6 +457,33 @@ local function MakeHero(parent)
     f.atk = Badge(f, "HsAttack", 32, 16)
     f.atk:SetPoint("CENTER", f, "BOTTOMLEFT", 4, 10)
     for _, x in ipairs({ f.hp, f.armor, f.atk }) do x:SetFrameLevel(f:GetFrameLevel() + 8) end
+    -- The weapon, left of the portrait.
+    local wpn = CreateFrame("Frame", nil, f)
+    wpn:SetSize(46, 46)
+    wpn:SetPoint("RIGHT", f, "LEFT", -12, -4)
+    wpn.icon = wpn:CreateTexture(nil, "ARTWORK")
+    wpn.icon:SetPoint("TOPLEFT", 5, -5)
+    wpn.icon:SetPoint("BOTTOMRIGHT", -5, 5)
+    if wpn.CreateMaskTexture then
+        local mask = wpn:CreateMaskTexture()
+        if mask then
+            mask:SetTexture(ART .. "HsOvalMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(wpn.icon)
+            wpn.icon:AddMaskTexture(mask)
+        end
+    end
+    wpn.ring = wpn:CreateTexture(nil, "OVERLAY")
+    wpn.ring:SetAllPoints()
+    wpn.ring:SetTexture(ART .. "HsMinionRing")
+    wpn.atk = Badge(wpn, "HsAttack", 22, 12)
+    wpn.atk:SetPoint("CENTER", wpn, "BOTTOMLEFT", 4, 5)
+    wpn.dur = Badge(wpn, "HsArmor", 22, 12)
+    wpn.dur:SetPoint("CENTER", wpn, "BOTTOMRIGHT", -4, 5)
+    wpn.atk:SetFrameLevel(wpn:GetFrameLevel() + 2)
+    wpn.dur:SetFrameLevel(wpn:GetFrameLevel() + 2)
+    wpn:EnableMouse(true)
+    wpn:Hide()
+    f.weapon = wpn
     return f
 end
 
@@ -636,7 +679,10 @@ function P.New(parent, kind)
         local h = ns.HS.Heroes[key]
         local btn = CreateFrame("Button", nil, o)
         btn:SetSize(100, 120)
-        btn:SetPoint("TOP", (i - (#heroes + 1) / 2) * 116, -120)
+        local perRow = 5
+        local row, col = math.floor((i - 1) / perRow), (i - 1) % perRow
+        local inRow = math.min(perRow, #heroes - row * perRow)
+        btn:SetPoint("TOP", (col - (inRow - 1) / 2) * 116, -96 - row * 132)
         btn.portrait = W.Portrait(btn, 72)
         btn.portrait:SetPoint("TOP")
         btn.portrait:SetPlayer(h.name, h.class)
@@ -1282,7 +1328,7 @@ function P:Animate(events, before)
             end
             W.PlaySound("U_CHAT_SCROLL_BUTTON")
         elseif k == "damage" or k == "heal" or k == "freeze" or k == "shield" or k == "buff" or k == "transform"
-            or k == "armor" then
+            or k == "armor" or k == "bounce" or k == "steal" or k == "doom" then
             local p = before[ev.id]
             local d = ctx and ctx.start or lead
             if ctx and not ctx.attack and p then
@@ -1341,6 +1387,16 @@ function P:Animate(events, before)
             self:Number(p[1], p[2] - 6, "Frozen", 0.6, 0.85, 1, d)
         elseif ev.kind == "armor" and p then
             self:Number(p[1], p[2] - 6, "+" .. ev.amount .. " Armor", 0.8, 0.8, 0.85, d)
+        elseif ev.kind == "bounce" and p then
+            self:Number(p[1], p[2] - 6, "Returned", 0.8, 0.8, 1, d)
+        elseif ev.kind == "steal" and p then
+            self:Number(p[1], p[2] - 6, "Stolen", 0.85, 0.5, 1, d)
+        elseif ev.kind == "doom" and p then
+            self:Number(p[1], p[2] - 6, "Corrupted", 0.7, 0.4, 0.9, d)
+        elseif ev.kind == "weaponBreak" and p then
+            self:Number(p[1] - 60, p[2], "Broken", 0.8, 0.8, 0.8, d)
+        elseif ev.kind == "discard" and ev.owner == ME then
+            self:Say("Discarded " .. Card(ev.key).name)
         elseif ev.kind == "death" and p and p.art then
             self:Ghost(p[1], p[2], p.art, d)
         elseif ev.kind == "fatigue" then
@@ -1478,6 +1534,26 @@ function P:Draw(animate, before)
         hf.atk:SetShown(atk > 0)
         hf.atk.text:SetText(tostring(atk))
         hf.frozen:SetShown(p.hero.frozen == true)
+        local wp = p.hero.weapon
+        hf.weapon:SetShown(wp ~= nil)
+        if wp then
+            local wc = Card(wp.key)
+            hf.weapon.icon:SetTexture(wc.art)
+            hf.weapon.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            hf.weapon.atk.text:SetText(tostring(wp.attack))
+            hf.weapon.dur.text:SetText(tostring(wp.durability))
+            hf.weapon.key = wp.key
+            if not hf.weapon.hooked then
+                hf.weapon.hooked = true
+                hf.weapon:SetScript("OnEnter", function(w)
+                    if not w.key then return end
+                    self.preview:SetCard(w.key)
+                    self.preview:Show()
+                    self.previewUntil = nil
+                end)
+                hf.weapon:SetScript("OnLeave", function() self:HoverEnd() end)
+            end
+        end
         local ring = hf.frame
         if targets[i] then ring:SetVertexColor(1, 0.35, 0.25)
         elseif i == ME and myTurn and E().CanAttack(st, p.hero) then ring:SetVertexColor(0.4, 1, 0.4)
@@ -1519,9 +1595,10 @@ function P:Draw(animate, before)
             if c.art:find("\\Icons\\") then f.art:SetTexCoord(0.08, 0.92, 0.08, 0.92) else f.art:SetTexCoord(0, 1, 0, 1) end
             SetModel(f.model, f.art, c.npc, 0.8)
             f.taunt:SetShown(m.taunt == true)
+            f.doom:SetShown(m.doomedBy ~= nil)
             f.divine:SetShown(m.divineShield == true)
             f.frozen:SetShown(m.frozen == true)
-            f.zzz:SetShown(i == ME and myTurn and m.sleeping and not m.charge and true or false)
+            f.zzz:SetShown(i == ME and myTurn and m.sleeping and not (m.charge or m.auraCharge) and true or false)
             local atk = E().Attack(m)
             f.atk.text:SetText(tostring(atk))
             f.atk.text:SetTextColor(1, atk > (c.attack or 0) and 1 or 1, atk > (c.attack or 0) and 0.4 or 1)

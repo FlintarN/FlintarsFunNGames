@@ -33,7 +33,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 - [ ] Optional chat announcements of results.
 - [ ] CurseForge listing and packaging.
 
-- [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, more heroes and class cards (and Warrior cards for Garrosh).
+- [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, Classic-set class cards (secrets, combo, stealth, enrage), a card choice for Tracking.
 
 ## Done
 

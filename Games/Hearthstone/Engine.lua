@@ -16,7 +16,8 @@
 --   { type = "end" }
 -- Events (for the UI to animate), each { kind, ... }:
 --   draw, burn, fatigue, play, summon, damage, heal, shield, freeze,
---   transform, buff, death, attack, power, mana, armor, turn, over
+--   transform, buff, death, attack, power, mana, armor, turn, over,
+--   equip, weaponBreak, bounce, discard, steal, doom
 --
 -- Ids: hero 1 and hero 2 are ids 1 and 2; every card instance gets a new id.
 local ADDON, ns = ...
@@ -76,7 +77,8 @@ local function BoardIndex(p, m)
 end
 
 function E.Attack(ent)
-    return math.max(0, (ent.attack or 0) + (ent.tempAttack or 0) + (ent.auraAttack or 0))
+    local weapon = ent.weapon and ent.weapon.attack or 0
+    return math.max(0, (ent.attack or 0) + (ent.tempAttack or 0) + (ent.auraAttack or 0) + weapon)
 end
 
 local function SpellDamage(p)
@@ -94,14 +96,19 @@ E.SpellDamage = SpellDamage
 local function Refresh(st)
     for _, p in ipairs(st.players) do
         for i, m in ipairs(p.board) do
-            local atk, hp = 0, 0
+            local atk, hp, charge = 0, 0, nil
+            local race = Card(m.key).race
             for j, s in ipairs(p.board) do
                 local aura = Card(s.key).aura
-                if aura and s ~= m and (aura.scope == "others" or (aura.scope == "adjacent" and math.abs(i - j) == 1)) then
+                local reaches = aura and (aura.scope == "all" or (s ~= m and (aura.scope == "others"
+                    or (aura.scope == "adjacent" and math.abs(i - j) == 1))))
+                if reaches and (not aura.race or aura.race == race) then
                     atk, hp = atk + (aura.attack or 0), hp + (aura.health or 0)
+                    if aura.charge then charge = true end
                 end
             end
             m.auraAttack = atk
+            m.auraCharge = charge
             local delta = hp - (m.auraHealth or 0)
             if delta ~= 0 then
                 m.maxHealth = m.maxHealth + delta
@@ -141,6 +148,7 @@ local function Summon(st, owner, key, pos, id)
     table.insert(p.board, pos, m)
     Emit("summon", { id = m.id, owner = owner, key = key, pos = pos })
     Refresh(st)
+    E.OnSummon(st, owner, m)
     return m
 end
 
@@ -170,7 +178,7 @@ E.Draw = Draw
 ---------------------------------------------------------------------------
 -- Damage, healing, freezing
 ---------------------------------------------------------------------------
-local Run
+local Run, Equip, Bounce, Steal
 
 local function Freeze(st, t)
     t.frozen = true
@@ -206,7 +214,17 @@ local function Heal(st, t, amount)
     if not t or t.health <= 0 then return end
     local before = t.health
     t.health = math.min(t.maxHealth, t.health + amount)
-    if t.health > before then Emit("heal", { id = t.id, amount = t.health - before }) end
+    if t.health > before then
+        Emit("heal", { id = t.id, amount = t.health - before })
+        if t.key then
+            for i, p in ipairs(st.players) do
+                for _, m in ipairs(p.board) do
+                    local trig = Card(m.key).minionHealed
+                    if trig and m.health > 0 then Run(st, { owner = i, source = m }, trig.effects) end
+                end
+            end
+        end
+    end
 end
 
 -- Remove the dead (deathrattles can kill more, so loop) and check heroes.
@@ -282,14 +300,44 @@ local function Who(st, ctx, to)
         for _, m in ipairs(Alive(Chars(them))) do table.insert(out, m) end
         return out
     end
+    if to == "allOthers" then -- every character but the source
+        local out = {}
+        for _, c in ipairs(Alive(Chars(me))) do if c ~= ctx.source then table.insert(out, c) end end
+        for _, c in ipairs(Alive(Chars(them))) do if c ~= ctx.source then table.insert(out, c) end end
+        return out
+    end
+    if to == "otherEnemies" then -- enemies but the target
+        local out = {}
+        for _, c in ipairs(Alive(Chars(them))) do if c ~= ctx.target then table.insert(out, c) end end
+        return out
+    end
+    if to == "summoned" then return { ctx.summoned } end
     return {}
 end
 
--- Ids a target spec allows for player `owner` (`except` = the minion being played).
-function E.Targets(st, owner, spec, except)
+-- Does a character pass a target filter? { maxAttack, minAttack, damaged, undamaged, race }
+local function Passes(x, f)
+    if not f then return true end
+    local atk = E.Attack(x)
+    if f.maxAttack and atk > f.maxAttack then return false end
+    if f.minAttack and atk < f.minAttack then return false end
+    if f.damaged and x.health >= x.maxHealth then return false end
+    if f.undamaged and x.health < x.maxHealth then return false end
+    if f.race and not (x.key and Card(x.key).race == f.race) then return false end
+    return true
+end
+E.Passes = Passes
+
+-- Ids a target spec allows for player `owner` (`except` = the minion being
+-- played, `filter` = see Passes).
+function E.Targets(st, owner, spec, except, filter)
     local me, them = st.players[owner], st.players[3 - owner]
     local out = {}
-    local function Add(list) for _, x in ipairs(list) do if x.health > 0 and x.id ~= except then table.insert(out, x.id) end end end
+    local function Add(list)
+        for _, x in ipairs(list) do
+            if x.health > 0 and x.id ~= except and Passes(x, filter) then table.insert(out, x.id) end
+        end
+    end
     if spec == "any" then Add(Chars(me)) Add(Chars(them))
     elseif spec == "minion" then Add(me.board) Add(them.board)
     elseif spec == "enemyChar" then Add(Chars(them))
@@ -314,13 +362,59 @@ local function Transform(st, t, into)
     Refresh(st)
 end
 
+-- Weapons: the hero's attack and durability.
+Equip = function(st, owner, key)
+    local c = Card(key)
+    local hero = st.players[owner].hero
+    if hero.weapon then Emit("weaponBreak", { id = hero.id, key = hero.weapon.key }) end
+    hero.weapon = { key = key, attack = c.attack, durability = c.durability }
+    Emit("equip", { id = hero.id, key = key })
+end
+
+-- Back to its owner's hand (destroyed if the hand is full).
+Bounce = function(st, t)
+    local p = st.players[t.owner]
+    local i = BoardIndex(p, t)
+    if not i then return end
+    table.remove(p.board, i)
+    if #p.hand < MAX_HAND then
+        table.insert(p.hand, { id = t.id, key = t.key })
+        Emit("bounce", { id = t.id, owner = t.owner, key = t.key })
+    else
+        Emit("death", { id = t.id, owner = t.owner, key = t.key, pos = i })
+    end
+    Refresh(st)
+end
+
+-- Take control of an enemy minion (it can't attack this turn).
+Steal = function(st, t, owner)
+    local from = st.players[t.owner]
+    local to = st.players[owner]
+    local i = BoardIndex(from, t)
+    if not i or #to.board >= MAX_BOARD then return end
+    table.remove(from.board, i)
+    t.owner, t.sleeping, t.attacks, t.doomedBy = owner, true, 0, nil
+    table.insert(to.board, t)
+    Emit("steal", { id = t.id, owner = owner })
+    Refresh(st)
+end
+
 Run = function(st, ctx, effects)
     local me = st.players[ctx.owner]
     for _, e in ipairs(effects or {}) do
         local op = e.op
         if op == "damage" then
-            local amount = e.amount + ((ctx.spell and e.spell) and SpellDamage(me) or 0)
-            for _, t in ipairs(Who(st, ctx, e.to)) do Damage(st, ctx.source, t, amount) end
+            local amount = e.amount
+            if e.ifRace then
+                for _, m in ipairs(me.board) do
+                    if Card(m.key).race == e.ifRace.race then amount = e.ifRace.amount break end
+                end
+            end
+            amount = amount + ((ctx.spell and e.spell) and SpellDamage(me) or 0)
+            for _, t in ipairs(Who(st, ctx, e.to)) do
+                Damage(st, ctx.source, t, amount)
+                if e.onKill and t.health <= 0 then Run(st, ctx, e.onKill) end
+            end
         elseif op == "missiles" then
             for _ = 1, e.n + (ctx.spell and SpellDamage(me) or 0) do
                 local pool = Alive(Chars(st.players[3 - ctx.owner]))
@@ -360,6 +454,7 @@ Run = function(st, ctx, effects)
                 if e.taunt then t.taunt = true end
                 if e.windfury then t.windfury = true end
                 if e.divineShield then t.divineShield = true end
+                if e.charge then t.charge = true end
                 Emit("buff", { id = t.id })
             end
         elseif op == "mana" then
@@ -370,11 +465,86 @@ Run = function(st, ctx, effects)
             Emit("armor", { id = me.hero.id, amount = e.n })
         elseif op == "destroy" then
             for _, t in ipairs(Who(st, ctx, e.to)) do t.health = 0 end
+        elseif op == "damageRandom" then
+            -- `n` different random enemy minions.
+            local amount = e.amount + ((ctx.spell and e.spell) and SpellDamage(me) or 0)
+            local pool = Alive(st.players[3 - ctx.owner].board)
+            for _ = 1, e.n do
+                if #pool == 0 then break end
+                Damage(st, ctx.source, table.remove(pool, Rand(st, #pool)), amount)
+            end
+        elseif op == "equip" then
+            Equip(st, ctx.owner, e.card)
+        elseif op == "weaponBuff" then
+            if me.hero.weapon then
+                me.hero.weapon.attack = me.hero.weapon.attack + (e.attack or 0)
+                Emit("buff", { id = me.hero.id })
+            end
+        elseif op == "returnToHand" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do Bounce(st, t) end
+        elseif op == "control" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do Steal(st, t, ctx.owner) end
+        elseif op == "setHealth" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do
+                t.health, t.maxHealth, t.auraHealth = e.n, e.n, 0
+                Emit("buff", { id = t.id })
+            end
+        elseif op == "setAttack" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do
+                t.attack, t.tempAttack = e.n, 0
+                Emit("buff", { id = t.id })
+            end
+        elseif op == "doubleHealth" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do
+                t.maxHealth = t.maxHealth + t.health
+                t.health = t.health * 2
+                Emit("buff", { id = t.id })
+            end
+        elseif op == "discard" then
+            for _ = 1, e.n or 1 do
+                if #me.hand == 0 then break end
+                local c = table.remove(me.hand, Rand(st, #me.hand))
+                Emit("discard", { owner = ctx.owner, id = c.id, key = c.key })
+            end
+        elseif op == "copyEnemyHand" then
+            local them = st.players[3 - ctx.owner]
+            if #them.hand > 0 and #me.hand < MAX_HAND then
+                local src = them.hand[Rand(st, #them.hand)]
+                local c = { id = NewId(st), key = src.key }
+                table.insert(me.hand, c)
+                Emit("draw", { owner = ctx.owner, id = c.id, key = c.key })
+            end
+        elseif op == "manaCrystal" then
+            if me.maxMana < MAX_MANA then
+                me.maxMana = me.maxMana + 1 -- an empty one
+                Emit("mana", { owner = ctx.owner })
+            else
+                Draw(st, ctx.owner, 1)
+            end
+        elseif op == "doom" then
+            for _, t in ipairs(Who(st, ctx, e.to)) do
+                t.doomedBy = ctx.owner
+                Emit("doom", { id = t.id })
+            end
         end
         Refresh(st)
     end
 end
 E.Run = Run
+
+-- A minion was summoned: friendly "whenever you summon" minions react.
+function E.OnSummon(st, owner, m)
+    local p = st.players[owner]
+    for _, other in ipairs(p.board) do
+        local trig = Card(other.key).onSummon
+        if trig and other ~= m and other.health > 0 then
+            local f = trig.filter or {}
+            local c = Card(m.key)
+            local ok = (not f.maxAttack or E.Attack(m) <= f.maxAttack) and (not f.race or c.race == f.race)
+            if ok then Run(st, { owner = owner, source = other, summoned = m }, trig.effects) end
+        end
+    end
+end
 
 ---------------------------------------------------------------------------
 -- A new game
@@ -425,6 +595,14 @@ function E.StartTurn(st)
         m.attacks = 0
     end
     Emit("turn", { owner = st.active, turn = st.turn })
+    -- Corruption: minions this player doomed die now.
+    for _, q in ipairs(st.players) do
+        for _, m in ipairs(q.board) do
+            if m.doomedBy == st.active and m.health > 0 then m.health = 0 end
+        end
+    end
+    Deaths(st)
+    if st.over then return end
     Draw(st, st.active, 1)
     Deaths(st)
 end
@@ -456,7 +634,7 @@ end
 local function CanAttack(st, ent)
     if ent.frozen or E.Attack(ent) <= 0 then return false end
     if ent.key then
-        if ent.sleeping and not ent.charge then return false end
+        if ent.sleeping and not (ent.charge or ent.auraCharge) then return false end
         return ent.attacks < (ent.windfury and 2 or 1)
     end
     return ent.attacks < 1
@@ -474,9 +652,15 @@ end
 
 -- Would these effects do anything? (A summon needs room, a unique random
 -- summon needs something left in its pool.)
-local function Useful(st, owner, effects)
+local function Useful(st, owner, effects, requires)
     local p = st.players[owner]
+    if requires then
+        if requires.weapon and not p.hero.weapon then return false end
+        if requires.boardRoom and #p.board >= MAX_BOARD then return false end
+        if requires.enemyMinions and #Alive(st.players[3 - owner].board) < requires.enemyMinions then return false end
+    end
     for _, e in ipairs(effects or {}) do
+        if e.op == "summon" and not e.free and #p.board >= MAX_BOARD then return false end
         if e.op == "summonRandom" then
             if #p.board >= MAX_BOARD then return false end
             local free = false
@@ -500,15 +684,16 @@ function E.PlayTargets(st, owner, c)
         if #p.board >= MAX_BOARD then return false end
         local bc = card.battlecry
         if bc and bc.target then
-            local t = E.Targets(st, owner, bc.target)
+            local t = E.Targets(st, owner, bc.target, nil, bc.filter)
             return #t > 0 and t or nil -- no one to hit: the battlecry just does nothing
         end
         return nil
     end
+    if card.type == "weapon" then return nil end
     local sp = card.spell or {}
-    if not Useful(st, owner, sp.effects) then return false end
+    if not Useful(st, owner, sp.effects, sp.requires) then return false end
     if sp.target then
-        local t = E.Targets(st, owner, sp.target)
+        local t = E.Targets(st, owner, sp.target, nil, sp.filter)
         if #t == 0 then return false end
         return t
     end
@@ -580,6 +765,8 @@ local function Play(st, a)
         if m and card.battlecry then
             Run(st, { owner = i, source = m, target = target }, card.battlecry.effects)
         end
+    elseif card.type == "weapon" then
+        Equip(st, i, c.key)
     else
         Run(st, { owner = i, target = target, spell = true }, card.spell.effects)
     end
@@ -595,10 +782,22 @@ local function Fight(st, a)
     if not Contains(E.AttackTargets(st, i), a.target) then return false, "must attack a Taunt minion" end
     att.attacks = att.attacks + 1
     Emit("attack", { attacker = att.id, target = def.id })
+    local weapon = not att.key and att.weapon
+    if weapon then
+        local trig = Card(weapon.key).onAttack
+        if trig then Run(st, { owner = i, source = att }, trig.effects) end
+    end
     -- Both hit at once; heroes only hit back when they're the attacker.
     local dealt, back = E.Attack(att), def.key and E.Attack(def) or 0
     Damage(st, att, def, dealt)
     if back > 0 then Damage(st, def, att, back) end
+    if weapon and att.weapon == weapon then
+        weapon.durability = weapon.durability - 1
+        if weapon.durability <= 0 then
+            att.weapon = nil
+            Emit("weaponBreak", { id = att.id, key = weapon.key })
+        end
+    end
     Deaths(st)
     return true
 end

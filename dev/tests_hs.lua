@@ -276,7 +276,7 @@ function HsPageTests()
         end
         ns.Cards.Tick(true)
     end
-    check(view.overlay:IsShown() and #view.pick == 3, "hs page: choose a hero (" .. #view.pick .. ")")
+    check(view.overlay:IsShown() and #view.pick == 9, "hs page: choose a hero (" .. #view.pick .. ")")
     ns.Cards.Tick(true)
     check(math.floor(ns.UI.frame:GetWidth() + 0.5) == 760 and math.floor(ns.UI.frame:GetHeight() + 0.5) == 560,
         "hs page: the window grows for Hearthstone (" .. tostring(ns.UI.frame:GetWidth()) .. ")")
@@ -517,4 +517,205 @@ function HsPreloadTests()
     l._scripts.OnModelLoaded(l)
     check(ns.db.hearthstone.looks[npc] == 4242 and l.npc == nil, "preload: the look is saved and the loader is free")
     view:Quit()
+end
+
+
+-- The other classes: weapons, filters, new effects, triggers, heroes.
+function HsClassTests()
+    local HS = ns.HS
+    local E = HS.Engine
+    local function Fresh(h1, h2)
+        local st = E.New({ heroes = { h1 or "valeera", h2 or "garrosh" }, seed = 11, first = 1 })
+        for _, p in ipairs(st.players) do
+            p.hand, p.board = {}, {}
+            p.mana, p.maxMana = 10, 10
+        end
+        return st
+    end
+    local function Put(st, owner, key, awake)
+        E.Run(st, { owner = owner }, { { op = "summon", card = key } })
+        local p = st.players[owner]
+        local m = p.board[#p.board]
+        if awake then m.sleeping = nil end
+        return m
+    end
+    local function Give(st, owner, key)
+        st.nextId = st.nextId + 1
+        local c = { id = st.nextId, key = key }
+        table.insert(st.players[owner].hand, c)
+        return c
+    end
+    local function Play(st, key, target) return E.Apply(st, { type = "play", card = Give(st, st.active, key).id, target = target }) end
+
+    -- Every hero has a 30-card deck that passes the rules.
+    local n = 0
+    for hk, h in pairs(HS.Heroes) do
+        n = n + 1
+        check(HS.CheckDeck(hk, HS.DeckList(h.deck)), "classes: " .. hk .. "'s basic deck is legal")
+    end
+    check(n == 9, "classes: nine heroes (" .. n .. ")")
+
+    -- Weapons: Dagger Mastery, attacking uses durability, Deadly Poison.
+    local st = Fresh("valeera")
+    E.Apply(st, { type = "power" })
+    local hero = st.players[1].hero
+    check(hero.weapon and hero.weapon.key == "wicked_knife" and E.Attack(hero) == 1, "classes: Dagger Mastery equips a 1/2")
+    Play(st, "deadly_poison")
+    check(hero.weapon.attack == 3, "classes: Deadly Poison +2 Attack")
+    E.Apply(st, { type = "attack", attacker = 1, target = 2 })
+    check(st.players[2].hero.health == 27 and hero.weapon.durability == 1, "classes: the hero swings, durability drops")
+    hero.attacks = 0
+    E.Apply(st, { type = "attack", attacker = 1, target = 2 })
+    check(hero.weapon == nil and st.players[2].hero.health == 24, "classes: the weapon breaks at 0")
+    local c = Give(st, 1, "deadly_poison")
+    check(E.PlayTargets(st, 1, c) == false, "classes: no Deadly Poison without a weapon")
+    -- Truesilver heals when the hero attacks.
+    st = Fresh("uther")
+    st.players[1].hero.health = 20
+    Play(st, "truesilver_champion")
+    E.Apply(st, { type = "attack", attacker = 1, target = 2 })
+    check(st.players[1].hero.health == 22 and st.players[2].hero.health == 26, "classes: Truesilver heals 2 on each swing")
+
+    -- Target filters.
+    st = Fresh("anduin")
+    local small, big = Put(st, 2, "bloodfen_raptor"), Put(st, 2, "boulderfist_ogre")
+    local pain = E.PlayTargets(st, 1, Give(st, 1, "shadow_word_pain"))
+    local death = E.PlayTargets(st, 1, Give(st, 1, "shadow_word_death"))
+    local function Has(list, id) for _, x in ipairs(list or {}) do if x == id then return true end end return false end
+    check(Has(pain, small.id) and not Has(pain, big.id), "classes: Shadow Word: Pain only on 3 Attack or less")
+    check(Has(death, big.id) and not Has(death, small.id), "classes: Shadow Word: Death only on 5 Attack or more")
+    st = Fresh("garrosh")
+    local y = Put(st, 2, "chillwind_yeti")
+    check(E.PlayTargets(st, 1, Give(st, 1, "execute")) == false, "classes: Execute needs a damaged minion")
+    E.Damage(st, nil, y, 1)
+    Play(st, "execute", y.id)
+    check(#st.players[2].board == 0, "classes: Execute destroys a damaged one")
+
+    -- Return, steal, set, double, doom.
+    st = Fresh("valeera")
+    local r = Put(st, 2, "river_crocolisk")
+    Play(st, "sap", r.id)
+    check(#st.players[2].board == 0 and st.players[2].hand[1] and st.players[2].hand[1].key == "river_crocolisk", "classes: Sap returns it to their hand")
+    st = Fresh("anduin")
+    local ogre = Put(st, 2, "boulderfist_ogre")
+    Play(st, "mind_control", ogre.id)
+    check(#st.players[1].board == 1 and st.players[1].board[1].owner == 1 and not E.CanAttack(st, ogre), "classes: Mind Control takes it, sleepy")
+    st = Fresh("rexxar")
+    local yeti = Put(st, 2, "chillwind_yeti")
+    Play(st, "hunters_mark", yeti.id)
+    check(yeti.health == 1 and yeti.maxHealth == 1, "classes: Hunter's Mark sets Health to 1")
+    st = Fresh("uther")
+    yeti = Put(st, 2, "chillwind_yeti")
+    Play(st, "humility", yeti.id)
+    check(E.Attack(yeti) == 1, "classes: Humility sets Attack to 1")
+    st = Fresh("anduin")
+    yeti = Put(st, 1, "chillwind_yeti")
+    Play(st, "divine_spirit", yeti.id)
+    check(yeti.health == 10, "classes: Divine Spirit doubles Health")
+    st = Fresh("guldan")
+    yeti = Put(st, 2, "chillwind_yeti")
+    Play(st, "corruption", yeti.id)
+    check(yeti.doomedBy == 1 and #st.players[2].board == 1, "classes: Corruption marks it")
+    E.Apply(st, { type = "end" })
+    check(#st.players[2].board == 1, "classes: it lives through their turn")
+    E.Apply(st, { type = "end" })
+    check(#st.players[2].board == 0, "classes: and dies at the start of yours")
+
+    -- Random damage, conditional damage, kill-then-draw, discard, copy.
+    st = Fresh("garrosh")
+    check(E.PlayTargets(st, 1, Give(st, 1, "cleave")) == false, "classes: Cleave needs two enemy minions")
+    local a1, a2 = Put(st, 2, "river_crocolisk"), Put(st, 2, "chillwind_yeti")
+    Play(st, "cleave")
+    check(a1.health == 1 and a2.health == 3, "classes: Cleave hits both for 2")
+    st = Fresh("rexxar")
+    Play(st, "kill_command", 2)
+    check(st.players[2].hero.health == 27, "classes: Kill Command 3 without a Beast")
+    Put(st, 1, "river_crocolisk")
+    Play(st, "kill_command", 2)
+    check(st.players[2].hero.health == 22, "classes: 5 with a Beast")
+    st = Fresh("guldan")
+    local wisp = Put(st, 2, "murloc_scout")
+    local hand = #st.players[1].hand
+    Play(st, "mortal_coil", wisp.id)
+    check(#st.players[1].hand == hand + 1, "classes: Mortal Coil draws when it kills")
+    Give(st, 1, "fireball")
+    Give(st, 1, "frostbolt")
+    hand = #st.players[1].hand
+    Play(st, "soulfire", 2)
+    check(#st.players[1].hand == hand - 1 and st.players[2].hero.health == 26, "classes: Soulfire hits 4 and discards one")
+    st = Fresh("anduin")
+    Give(st, 2, "fireball")
+    Play(st, "mind_vision")
+    check(st.players[1].hand[#st.players[1].hand].key == "fireball", "classes: Mind Vision copies their card")
+
+    -- Triggers and auras.
+    st = Fresh("garrosh")
+    Put(st, 1, "warsong_commander")
+    Play(st, "murloc_raider")
+    local raider = st.players[1].board[2]
+    check(raider.charge and E.CanAttack(st, raider), "classes: Warsong Commander gives Charge")
+    st = Fresh("rexxar")
+    Put(st, 1, "starving_buzzard")
+    hand = #st.players[1].hand
+    Play(st, "river_crocolisk")
+    check(#st.players[1].hand == hand + 1, "classes: Starving Buzzard draws for a Beast")
+    st = Fresh("rexxar")
+    Put(st, 1, "tundra_rhino")
+    Play(st, "bloodfen_raptor")
+    check(E.CanAttack(st, st.players[1].board[2]), "classes: Tundra Rhino gives Beasts Charge")
+    st = Fresh("rexxar")
+    local wolf = Put(st, 1, "timber_wolf")
+    local croc, yeti2 = Put(st, 1, "river_crocolisk"), Put(st, 1, "chillwind_yeti")
+    check(E.Attack(croc) == 3 and E.Attack(yeti2) == 4 and E.Attack(wolf) == 1, "classes: Timber Wolf only buffs other Beasts")
+    st = Fresh("anduin")
+    Put(st, 1, "northshire_cleric")
+    local hurt = Put(st, 1, "chillwind_yeti")
+    hurt.health = 2
+    hand = #st.players[1].hand
+    E.Apply(st, { type = "power", target = hurt.id })
+    check(hurt.health == 4 and #st.players[1].hand == hand + 1, "classes: Lesser Heal + Northshire Cleric draws")
+
+    -- Hero powers.
+    st = Fresh("malfurion")
+    E.Apply(st, { type = "power" })
+    check(E.Attack(st.players[1].hero) == 1 and st.players[1].hero.armor == 1, "classes: Shapeshift")
+    st = Fresh("rexxar")
+    E.Apply(st, { type = "power" })
+    check(st.players[2].hero.health == 28, "classes: Steady Shot")
+    st = Fresh("uther")
+    E.Apply(st, { type = "power" })
+    check(st.players[1].board[1] and st.players[1].board[1].key == "silver_hand_recruit", "classes: Reinforce")
+    st = Fresh("guldan")
+    hand = #st.players[1].hand
+    E.Apply(st, { type = "power" })
+    check(#st.players[1].hand == hand + 1 and st.players[1].hero.health == 28, "classes: Life Tap")
+    st = Fresh("malfurion")
+    local max = st.players[1].maxMana
+    st.players[1].maxMana, st.players[1].mana = 5, 5
+    Play(st, "wild_growth")
+    check(st.players[1].maxMana == 6 and st.players[1].mana == 3, "classes: Wild Growth adds an empty crystal")
+    st = Fresh("guldan")
+    Put(st, 1, "river_crocolisk")
+    Put(st, 2, "chillwind_yeti")
+    Play(st, "hellfire")
+    check(st.players[1].hero.health == 27 and st.players[2].hero.health == 27 and #st.players[1].board == 0, "classes: Hellfire hits everything")
+
+    -- Every hero plays whole games.
+    local keys = {}
+    for k in pairs(HS.Heroes) do table.insert(keys, k) end
+    table.sort(keys)
+    local wins, games = {}, 0
+    for i, a in ipairs(keys) do
+        local b = keys[(i % #keys) + 1]
+        for seed = 1, 2 do
+            local g = E.New({ heroes = { a, b }, seed = i * 101 + seed })
+            for _ = 1, 120 do if g.over then break end HS.AI.PlayTurn(g) end
+            check(g.over, "classes: " .. a .. " vs " .. b .. " finishes")
+            games = games + 1
+            if g.winner == 1 then wins[a] = (wins[a] or 0) + 1 elseif g.winner == 2 then wins[b] = (wins[b] or 0) + 1 end
+        end
+    end
+    local line = {}
+    for _, k in ipairs(keys) do table.insert(line, k .. " " .. (wins[k] or 0)) end
+    print("  classes: " .. games .. " games: " .. table.concat(line, ", "))
 end
