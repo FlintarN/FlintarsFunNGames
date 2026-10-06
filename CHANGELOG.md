@@ -2,7 +2,7 @@
 
 ## 1.0.0 (2026-10-06)
 
-The first public release.
+The first public release. Works on **Retail** and **WoW Forever**.
 
 ### Casino (your party or raid, real `/roll`s)
 - **Death Roll**, **High-Low**, **Poker** (Texas Hold'em, 2-6 players), **Blackjack**, **Slot Machine**, **Roulette** and **Raffle**.
