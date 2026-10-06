@@ -1,4 +1,4 @@
-## Interface: 120001
+## Interface: 120100
 ## Title: Flintar's Fun 'n' Games
 ## Notes: Casino and Arcade games for your group, guild or realm: dice, poker, blackjack, slots, roulette, Hearthstone, Tetris, Battleship, Agar.io and more. /fng to open.
 ## Author: FlintarN
