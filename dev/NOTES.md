@@ -36,7 +36,7 @@ How Flintar's Fun 'n' Games is built, the conventions to keep, and what we learn
 
 ## Lessons learned
 
-- **New files need a full client restart**, not a `/reload` (new `.lua` in the TOC, new `.tga` art). Say so every time a change adds files.
+- A `/reload` picks up new addons and new files (`.lua`, `.tga`) in current clients; no full restart needed.
 - **Lua and/or traps**: `cond and false or x` never gives false; `local a, b = x and f()` keeps only f's first return value (this crashed the Roll! tooltip in game). Use an explicit `if`.
 - **Roll messages on Forever** didn't match a strict `^...$` pattern. `Rolls.Parse` strips colors and links, doesn't anchor the end, and falls back to "first word = name, last `N (lo-hi)` = roll". `/fng debug` prints what it reads.
 - Texture **rotation animations only work on textures**, not frames. Animate the texture (`die.tex`).

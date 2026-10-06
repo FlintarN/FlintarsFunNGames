@@ -9,7 +9,7 @@ A games room for World of Warcraft, in one window styled like the game's own. A 
 1. Download the latest release.
 2. Extract the folder into your game's `Interface/AddOns/` folder: `World of Warcraft/_retail_/Interface/AddOns/` for Retail, `World of Warcraft/_classic_beta_/Interface/AddOns/` for WoW Forever.
 3. Make sure the folder is named `FlintarsFunNGames`.
-4. Restart WoW completely. A `/reload` does not pick up a new addon or new files.
+4. `/reload` in game (or log in), then type `/fng`.
 
 ## Slash Commands
 
