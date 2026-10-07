@@ -94,7 +94,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [x] Unit sounds, building sounds, under-attack warnings. [ ] A minimap ping where the attack is.
 - [x] Attack projectiles from the game files (P.MISSILE in WarcraftPage.lua).
 - [x] Tab between unit types, group icons with health, click/double-click. [ ] Select and command buildings in groups; rally points for several buildings.
-- [ ] Score screen at the end (units, buildings, resources, heroes).
+- [x] Score screen at the end (units, buildings, resources, heroes).
 
 ### 8. Night Elf (at the very end)
 - [ ] Wisps: gather lumber without cutting the trees down, gold from an entangled mine, are used up when they build.

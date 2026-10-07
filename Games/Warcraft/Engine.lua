@@ -428,6 +428,19 @@ end
 ---------------------------------------------------------------------------
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
+-- The score (for the end of the game): per player, what they made, killed,
+-- lost and gathered.
+function E.Score(st, p, field, n)
+    if not p or p < 1 or not st.players[p] or st.players[p].neutral then return end
+    st.score = st.score or {}
+    local s = st.score[p]
+    if not s then
+        s = { made = 0, killed = 0, lost = 0, built = 0, razed = 0, gold = 0, lumber = 0, hero = 0 }
+        st.score[p] = s
+    end
+    if field == "hero" then s.hero = math.max(s.hero, n) else s[field] = s[field] + (n or 1) end
+end
+
 -- Teams: players with the same team number are allies (they don't fight,
 -- share sight, help each other); without teams everyone is on their own.
 function E.Team(st, p) return st.teams and st.teams[p] or p end
@@ -785,6 +798,10 @@ local function Strike(st, a, t, damage, ranged, attackType)
     if t.hp <= 0 and not t.dead then
         if E.OnDying and E.OnDying(st, t) then return end
         Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type, hero = E.IsHero and E.IsHero(t) or nil })
+        if not t.summon and not t.illusion then
+            E.Score(st, t.owner, "lost")
+            if E.Foe(st, a.owner, t.owner) then E.Score(st, a.owner, t.kind == "building" and "razed" or "killed") end
+        end
         if E.OnDeath then E.OnDeath(st, t) end
         if t.kind == "building" then
             -- Units still training there are lost; the food they held frees up.
@@ -877,6 +894,7 @@ local function Deposit(st, u)
         local n = math.floor(u.carry.n * (pl.income or 1) * upkeep + 0.5)
         if u.carry.res == "gold" then pl.gold = pl.gold + n else pl.lumber = pl.lumber + n end
         Emit("deposit", { id = u.id, owner = u.owner, res = u.carry.res, n = u.carry.n })
+        E.Score(st, u.owner, u.carry.res == "gold" and "gold" or "lumber", u.carry.n)
     end
     u.carry = nil
 end
@@ -1210,6 +1228,7 @@ local function BuildingStep(st, b, dt)
             -- Fractions add up to 999.99...: an undamaged building ends at full health.
             b.hp = math.min(b.maxHp, math.floor(b.hp + 0.5))
             Emit("built", { id = b.id, owner = b.owner, type = b.type })
+            E.Score(st, b.owner, "built")
             local u = st.ents[b.builder or 0]
             if u and u.order and u.order.site == b.id then
                 if u.insideBuild then
@@ -1293,6 +1312,7 @@ local function BuildingStep(st, b, dt)
                 b.trainT = 0
                 local u = NewUnit(st, b.owner, q, x + 0.5, y + 0.5)
                 Emit("trained", { id = u.id, owner = b.owner, type = q })
+                E.Score(st, b.owner, "made")
                 if b.rally then
                     local target = b.rally.target and st.ents[b.rally.target]
                     if target and target.kind == "mine" and D().Units[q].worker then

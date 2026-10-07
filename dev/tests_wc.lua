@@ -311,6 +311,9 @@ function WcPageTests()
     end
     Run(1)
     check(st.over and view.overlay:IsShown() and view.overTitle:GetText() == "Victory!", "wc page: victory")
+    local row = view.scoreFrame.rows[1]
+    check(view.scoreFrame:IsShown() and row[1]:GetText():find("Human", 1, true) and tonumber(row[7]:GetText()) > 0,
+        "wc page: the score: the gold you mined (" .. tostring(row[7]:GetText()) .. ")")
     check(ns.db.warcraft.wins == 1 and ns.db.warcraft.game == nil, "wc page: the win counts")
     check(not ns.Solo.Running("warcraft"), "wc page: the tab can go")
 end

@@ -169,6 +169,7 @@ function E.GiveXp(st, u, n)
         u.hp = u.hp + (u.maxHp - hp)
         u.mana = u.mana + (u.maxMana - mana)
         E.Emit("levelUp", { id = u.id, owner = u.owner, level = u.level, type = u.type })
+        E.Score(st, u.owner, "hero", u.level)
     end
 end
 

@@ -719,11 +719,37 @@ function P.New(parent, kind)
         btn.key = key
         self.diffButtons[i] = btn
     end
+    -- The score at the end: a row per player.
+    local sf = CreateFrame("Frame", nil, o)
+    sf:SetSize(BW - 60, 260)
+    sf:SetPoint("TOP", 0, -150)
+    sf:SetFrameLevel(o:GetFrameLevel() + 3)
+    local COLS = { { "Player", 0, "LEFT" }, { "Units made", 200 }, { "Killed", 270 }, { "Lost", 330 }, { "Buildings", 395 },
+        { "Razed", 460 }, { "Gold", 525 }, { "Lumber", 590 }, { "Hero", 645 } }
+    sf.cols = COLS
+    sf.rows = {}
+    for r = 0, 10 do
+        local row = {}
+        for c, col in ipairs(COLS) do
+            local fs = W.Label(sf, r == 0 and col[1] or "", r == 0 and "GameFontNormal" or "GameFontHighlight")
+            fs:SetPoint(col[3] == "LEFT" and "TOPLEFT" or "TOP", sf, "TOPLEFT", col[2] + (col[3] == "LEFT" and 18 or 20), -r * 22)
+            row[c] = fs
+        end
+        if r > 0 then
+            row.swatch = sf:CreateTexture(nil, "ARTWORK")
+            row.swatch:SetSize(12, 12)
+            row.swatch:SetPoint("TOPLEFT", 0, -r * 22 - 1)
+        end
+        sf.rows[r] = row
+    end
+    sf:Hide()
+    self.scoreFrame = sf
+
     -- The lobby (UI/WarcraftLobby.lua): seats, races, teams and the map.
     ns.WarcraftLobby.Build(self, o)
 
     self.againButton = W.Button(o, "Main menu", 110, function() self:ShowMenu() end, 26)
-    self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
+    self.againButton:SetPoint("BOTTOM", 0, 24)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self:Resume() end, 22)
     self.resumeButton:SetPoint("BOTTOM", 0, 30)
     self.backButton = W.Button(o, "Back", 100, function() self:ShowMenu() end, 24)
@@ -835,8 +861,36 @@ function P:ShowMenu()
 end
 
 -- Everything the overlay can show, off.
+-- The score table: every player's units, buildings, resources and hero.
+function P:ShowScore(st, names)
+    local sf = self.scoreFrame
+    local i = 0
+    for p, pl in ipairs(st.players) do
+        if not pl.neutral then
+            i = i + 1
+            local row = sf.rows[i]
+            if not row then break end
+            local sc = st.score and st.score[p] or {}
+            local name = (names and names[p]) or (p == ME and ((ns.Me and ns.Me()) or "You")) or ("Computer " .. p)
+            local vals = { name .. "  |cffaaaaaa" .. WC().Factions[pl.faction].name .. ", team " .. E().Team(st, p) .. "|r",
+                sc.made or 0, sc.killed or 0, sc.lost or 0, sc.built or 0, sc.razed or 0, sc.gold or 0, sc.lumber or 0,
+                (sc.hero or 0) > 0 and ("level " .. sc.hero) or "-" }
+            for c, v in ipairs(vals) do row[c]:SetText(tostring(v)) end
+            local col = TEAM[p] or TEAM[1]
+            row.swatch:SetColorTexture(col[1], col[2], col[3], 1)
+            row.swatch:Show()
+        end
+    end
+    for r = i + 1, 10 do
+        for c in ipairs(sf.cols) do sf.rows[r][c]:SetText("") end
+        sf.rows[r].swatch:Hide()
+    end
+    sf:Show()
+end
+
 function P:HideScreens()
     self.mainMenu:Hide()
+    self.scoreFrame:Hide()
     ns.WarcraftLobby.Hide(self)
     for _, p in ipairs(self.picks) do p:Hide() end
     self.diffLabel:Hide()
@@ -1004,9 +1058,9 @@ function P:GameOver()
     self.againButton:Show()
     self.overTitle:SetText(won and "Victory!" or "Defeat")
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
-    self.overSub:SetText(string.format("%s, %d:%02d played. Wins %d, losses %d.",
-        WC().DIFFICULTY[st.difficulty or "normal"].name, math.floor(st.time / 60),
+    self.overSub:SetText(string.format("%d:%02d played. Wins %d, losses %d.", math.floor(st.time / 60),
         math.floor(st.time % 60), rec.wins, rec.losses))
+    self:ShowScore(st)
     W.PlayFile(won and Snd().Victory[self.st.players[ME].faction] or Snd().Defeat, "game")
     ns.Changed()
 end
@@ -3109,6 +3163,7 @@ function P:PvpScreen(title, sub, lobby, keys)
     for _, b in ipairs(self.diffButtons) do b:Hide() end
     for _, b in ipairs({ self.againButton, self.resumeButton, self.backButton }) do b:Hide() end
     self.mainMenu:Hide()
+    if not (title == "Victory!" or title == "Defeat" or title == "No winner") then self.scoreFrame:Hide() end
     ns.WarcraftLobby.Hide(self)
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
@@ -3350,6 +3405,7 @@ function P:RefreshPvp(s)
         local rec = Save()
         local score = {}
         for _, p in ipairs(s.players) do table.insert(score, p.name .. " " .. ((s.score and s.score[p.name]) or 0)) end
+        if self.st then self:ShowScore(self.st, s.game and s.game.names) end
         self:PvpScreen(won and "Victory!" or (draw and "No winner" or "Defeat"), s.banner or "",
             "Score: " .. table.concat(score, "  -  ") .. string.format("\nYour PvP record: %d wins, %d losses.",
                 rec.pvpWins or 0, rec.pvpLosses or 0), host and { "rematch", "close" } or { "leave" })

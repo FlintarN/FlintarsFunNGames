@@ -89,6 +89,7 @@ function E.Hire(st, p, cmd)
     pl.gold = pl.gold - cost
     local u = E.Spawn(st, p, cmd.utype, fx + 0.5, fy + 0.5)
     E.Emit("trained", { id = u.id, owner = p, type = u.type })
+    E.Score(st, p, "made")
     return true
 end
 
