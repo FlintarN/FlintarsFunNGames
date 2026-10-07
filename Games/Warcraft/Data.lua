@@ -34,13 +34,13 @@ U.headhunter = { npc = 671, hotkey = "T", name = "Troll Headhunter", hp = 350, a
 local B = {}
 ns.WC.Buildings = B
 B.town_hall = { hotkey = "H", name = "Town Hall", hp = 1500, armor = 5, size = 4, cost = { 385, 205 }, time = 60, food = 12,
-    trains = { "peasant" }, dropoff = true, hall = true, icon = I .. "INV_Misc_Flag_01" }
+    trains = { "peasant" }, dropoff = true, hall = true, icon = I .. "INV_BannerPVP_02" }
 B.farm = { hotkey = "F", name = "Farm", hp = 500, armor = 5, size = 2, cost = { 80, 20 }, time = 18, food = 6,
     icon = I .. "INV_Misc_Food_02" }
 B.barracks = { hotkey = "B", name = "Barracks", hp = 1000, armor = 5, size = 3, cost = { 160, 60 }, time = 30, food = 0,
     trains = { "footman", "rifleman" }, icon = I .. "INV_Sword_27" }
 B.great_hall = { hotkey = "H", name = "Great Hall", hp = 1500, armor = 5, size = 4, cost = { 385, 185 }, time = 60, food = 12,
-    trains = { "peon" }, dropoff = true, hall = true, icon = I .. "INV_Misc_Flag_02" }
+    trains = { "peon" }, dropoff = true, hall = true, icon = I .. "INV_BannerPVP_01" }
 B.orc_burrow = { hotkey = "O", name = "Orc Burrow", hp = 600, armor = 5, size = 2, cost = { 80, 40 }, time = 18, food = 6,
     garrison = 4, attack = { damage = 25, cooldown = 2.4, range = 7 }, -- Battle Stations: peons inside, it shoots
     icon = I .. "INV_Misc_Bone_01" }
@@ -56,22 +56,26 @@ F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon"
     melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "great_hall" } }
 
 -- Art from the WoW game files (file ids from the community listfile; all
--- vanilla-era files). Models: file, cam (camera distance, bigger = smaller
--- on screen), y (pixels to lift it), facing (radians), pitch (tilt, if the
--- client allows it), grow (frame size compared to the footprint).
+-- vanilla-era files). World models are shown in a ModelScene that fits each
+-- model to its frame from its bounding box, seen from above at an angle
+-- (view). Per model: file, grow (frame size compared to the footprint),
+-- y (pixels to lift it), facing (radians, turns the model).
 ns.WC.ART = {
     ground = 187126, -- tileset/elwynn/elwynngrassbase.blp
     groundRepeat = 4, -- tiles per texture repeat
     trees = { 189923, 189927, 189923, 189928 }, -- elwynnfirtree01, elwynntreecanopy01/02
-    treeCam = 1.0, treeGrow = 1.5, treeY = 6,
+    treeGrow = 1.6, treeY = 8,
+    -- The camera: from yaw (around), pitch (down), with this field of view;
+    -- margin > 1 leaves room around the model.
+    view = { yaw = math.pi, pitch = 0.75, fov = 0.6, margin = 1.0 },
     models = {
-        gold_mine = { file = 189620, cam = 1.0, grow = 1.5, y = 4 },      -- elwynn/buildings/goldmine
-        town_hall = { file = 190505, cam = 1.0, grow = 1.6, y = 8 },      -- westfall/buildings/church
-        farm = { file = 190519, cam = 1.0, grow = 1.8, y = 10 },          -- westfall/buildings/windmill
-        barracks = { file = 189601, cam = 1.0, grow = 1.6, y = 6 },       -- elwynn/buildings/blacksmith
-        great_hall = { file = 199384, cam = 1.0, grow = 1.5, y = 6 },     -- generic/orc/tents/durotarorctent01
-        orc_burrow = { file = 199387, cam = 1.0, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent01
-        orc_barracks = { file = 199385, cam = 1.0, grow = 1.5, y = 6 },   -- generic/orc/tents/durotarorctent02
+        gold_mine = { file = 189620, grow = 1.4, y = 4 },      -- elwynn/buildings/goldmine
+        town_hall = { file = 190505, grow = 1.5, y = 8 },      -- westfall/buildings/church
+        farm = { file = 190519, grow = 1.7, y = 10 },          -- westfall/buildings/windmill
+        barracks = { file = 189601, grow = 1.5, y = 6 },       -- elwynn/buildings/blacksmith
+        great_hall = { file = 199384, grow = 1.4, y = 6 },     -- generic/orc/tents/durotarorctent01
+        orc_burrow = { file = 199387, grow = 1.5, y = 6 },     -- generic/orc/tents/orctent01
+        orc_barracks = { file = 199385, grow = 1.4, y = 6 },   -- generic/orc/tents/durotarorctent02
     },
 }
 

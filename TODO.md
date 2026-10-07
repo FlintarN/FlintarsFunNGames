@@ -37,6 +37,8 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Warcraft III next: fog of war, more units and buildings (towers, casters, heroes), upgrades, WoW creature models for units, PvP (lockstep: both clients run the engine with the same commands), difficulty levels.
 
+- [ ] Flaky test: "a made-up roll is not verified" (group games) failed once in ~5 runs on 2026-10-07; look at its timing.
+
 ## Done
 
 - [x] Warcraft III: RTS vs the computer (Human/Orc, economy, buildings, combat, AI waves) (2026-10-07)

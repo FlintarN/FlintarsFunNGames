@@ -73,25 +73,47 @@ local function MakeModel(parent)
     return m
 end
 
--- A model of a world object (building, tree, mine) from its file id.
+-- A world object (building, tree, mine) from its file id, in a ModelScene:
+-- once the model has loaded, its bounding box tells how big it is, and the
+-- camera is placed to fit it, looking down at an angle like Warcraft III.
 local function MakeDoodad(parent)
-    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
-    if not ok or not m or not m.SetModel then return nil end
-    m:SetScript("OnShow", function(self) if self.file then self:Apply(true) end end)
-    function m:Use(file, cam, facing, pitch)
-        if self.file == file and self.cam == cam then return end
-        self.file, self.cam, self.facing, self.pitch = file, cam, facing, pitch
-        self:Apply(true)
+    local ok, sc = pcall(CreateFrame, "ModelScene", nil, parent)
+    if not ok or not sc or not sc.CreateActor then return nil end
+    local actor = sc:CreateActor()
+    if not actor or not actor.SetModelByFileID then return nil end
+    sc.actor = actor
+    local view = ns.WC.ART.view
+    if sc.SetCameraFieldOfView then sc:SetCameraFieldOfView(view.fov) end
+    if sc.SetCameraNearClip then sc:SetCameraNearClip(0.1) end
+    if sc.SetCameraFarClip then sc:SetCameraFarClip(5000) end
+    function sc:Fit()
+        local x1, y1, z1, x2, y2, z2 = actor:GetActiveBoundingBox()
+        if not x1 or not x2 then return false end
+        local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
+        local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
+        if r <= 0 then return false end
+        self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
+        local fx, fy, fz = 1, 0, 0
+        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
+        local dist = r / math.tan(view.fov / 2) * view.margin
+        self:SetCameraPosition(cx - fx * dist, cy - fy * dist, cz - fz * dist)
+        self.fitted = true
+        return true
     end
-    function m:Apply(reload)
-        if reload then self:SetModel(self.file) end
-        if self.SetPortraitZoom then self:SetPortraitZoom(0) end
-        if self.SetCamDistanceScale then self:SetCamDistanceScale(self.cam or 1) end
-        if self.SetFacing then self:SetFacing(self.facing or 0) end
-        if self.pitch and self.SetPitch then pcall(self.SetPitch, self, self.pitch) end
+    function sc:Use(file, facing)
+        if self.file == file then
+            if not self.fitted then self:Fit() end
+            return
+        end
+        self.file, self.fitted = file, false
+        if actor.SetOnModelLoadedCallback then
+            actor:SetOnModelLoadedCallback(function() sc:Fit() end)
+        end
+        actor:SetModelByFileID(file)
+        if actor.SetYaw then actor:SetYaw(facing or 0) end
+        self:Fit()
     end
-    pcall(m.SetScript, m, "OnModelLoaded", function(self) self:Apply(false) end)
-    return m
+    return sc
 end
 
 -- Which animation fits what the unit is doing.
@@ -995,7 +1017,7 @@ function P:DrawTrees()
                 end
                 local size = TILE * 2 * art.treeGrow * (n >= 3 and 1 or 0.8)
                 t:SetSize(size, size)
-                if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], art.treeCam, (bx * 7 + by * 3) % 6) end
+                if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], (bx * 7 + by * 3) % 6) end
                 t:Show()
                 Place(t, self.view, (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY)
             end
@@ -1102,7 +1124,8 @@ function P:Draw()
                 t = { art = self.buildLayer:CreateTexture(nil, "ARTWORK"), sel = self.buildLayer:CreateTexture(nil, "BORDER"),
                     bar = self.buildLayer:CreateTexture(nil, "OVERLAY"), barBg = self.buildLayer:CreateTexture(nil, "OVERLAY", nil, -1),
                     team = self.buildLayer:CreateTexture(nil, "OVERLAY", nil, 1) }
-                t.sel:SetColorTexture(0.3, 1, 0.3, 0.35)
+                t.sel:SetTexture(ART .. "WcSelect")
+                t.sel:SetVertexColor(0.3, 1, 0.3)
                 t.barBg:SetColorTexture(0, 0, 0, 0.8)
                 self.buildTex[bi] = t
             end
@@ -1114,7 +1137,7 @@ function P:Draw()
             if t.model and look then
                 local ms = size * look.grow
                 t.model:SetSize(ms, ms)
-                t.model:Use(look.file, look.cam, look.facing, look.pitch)
+                t.model:Use(look.file, look.facing)
                 Place(t.model, self.view, px + size / 2, py + size / 2 - (look.y or 0))
                 t.model:SetAlpha(alpha)
                 t.model:Show()
@@ -1127,7 +1150,7 @@ function P:Draw()
                 t.art:Show()
             end
             t.sel:SetShown(selected[id] == true)
-            t.sel:SetSize(size + 6, size + 6)
+            t.sel:SetSize(size * 1.3, size * 0.9)
             Place(t.sel, self.view, px + size / 2, py + size / 2)
             -- A team flag, a health bar when hurt or selected, progress while building.
             if e.owner > 0 then
@@ -1461,7 +1484,7 @@ function P:DrawCommands(sel)
                 end }
         end
         if E().Def(b).trains then
-            list[8] = { icon = IC .. "INV_Misc_Flag_01", key = "Y", title = "Set Rally Point (Y)",
+            list[8] = { icon = IC .. "INV_BannerPVP_02", key = "Y", title = "Set Rally Point (Y)",
                 tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
                 action = function() self:Target("rally", "Click where new units should go") end }
         end
@@ -1491,6 +1514,26 @@ function P:Refresh()
 end
 
 function P:FlashRoll() end
+
+-- Tuning the world-model camera live: /wcview pitch 0.9 (or yaw, fov, margin).
+SLASH_FNGWCVIEW1 = "/wcview"
+SlashCmdList.FNGWCVIEW = function(msg)
+    local key, value = (msg or ""):match("^(%a+)%s+([%-%d%.]+)")
+    local view = ns.WC.ART.view
+    if key and view[key] ~= nil then view[key] = tonumber(value) end
+    ns.Print(string.format("Warcraft view: yaw %.2f, pitch %.2f, fov %.2f, margin %.2f", view.yaw, view.pitch,
+        view.fov, view.margin))
+    local page = ns.UI.pages and ns.UI.pages.warcraft and ns.UI.pages.warcraft.view
+    if not page then return end
+    local function Refit(m)
+        if m and m.Fit then
+            if m.SetCameraFieldOfView then m:SetCameraFieldOfView(view.fov) end
+            m:Fit()
+        end
+    end
+    for _, t in ipairs(page.buildTex or {}) do Refit(t.model) end
+    for _, m in ipairs(page.treeModels or {}) do Refit(m) end
+end
 
 ns.CustomPages = ns.CustomPages or {}
 ns.CustomPages.warcraft = P.New
