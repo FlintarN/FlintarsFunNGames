@@ -163,7 +163,8 @@ AI.TECH = { human = { "arcane_sanctum", "workshop", "gryphon_aviary" }, orc = { 
 
 -- What the computer researches, in order of preference.
 AI.RESEARCH = { "keep", "stronghold", "guard_tower", "swords", "melee_o", "gunpowder", "ranged_o", "plating",
-    "armor_o", "harvest", "long_rifles", "berserker", "regeneration", "masonry", "defenses", "castle", "fortress" }
+    "armor_o", "harvest", "long_rifles", "berserker", "regeneration", "masonry", "defenses", "castle", "fortress",
+    "spikes", "cannon_tower", "arcane_tower" }
 
 function AI.Think(st, p)
     st.ai = st.ai or {}

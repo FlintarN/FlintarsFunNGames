@@ -34,7 +34,7 @@ local BUILDING_ART = {
     watch_tower = "WcBurrow", altar_storms = "WcBurrow",
     great_hall = "WcGreatHall", orc_burrow = "WcBurrow", orc_barracks = "WcOrcBarracks", gold_mine = "WcMine",
     keep = "WcTownHall", castle = "WcTownHall", stronghold = "WcGreatHall", fortress = "WcGreatHall",
-    blacksmith = "WcBarracks", war_mill = "WcOrcBarracks", scout_tower = "WcFarm",
+    blacksmith = "WcBarracks", war_mill = "WcOrcBarracks", scout_tower = "WcFarm", cannon_tower = "WcFarm", arcane_tower = "WcFarm",
     arcane_sanctum = "WcTownHall", workshop = "WcBarracks", gryphon_aviary = "WcFarm", arcane_vault = "WcFarm",
     spirit_lodge = "WcBurrow", beastiary = "WcOrcBarracks", tauren_totem = "WcGreatHall", voodoo_lounge = "WcBurrow",
 }
@@ -1847,11 +1847,23 @@ function P:TileSeen(e, vis)
     return false
 end
 
+-- Is an invisible unit near one of your (or an ally's) detectors?
+function P:Detected(e)
+    for _, id in ipairs(self.st.list) do
+        local d = self.st.ents[id]
+        if d and E().Ally(self.st, d.owner, ME) and E().Def(d).detects and (d.x - e.x) ^ 2 + (d.y - e.y) ^ 2 <= 81 then
+            return true
+        end
+    end
+    return false
+end
+
 -- Can you see this entity now?
 function P:Sees(e)
     if e.owner == ME or E().Ally(self.st, e.owner, ME) then return true end
     if e.kind ~= "unit" then return self.known[e.id] == true or self:TileSeen(e) end
-    if E().Hidden and E().Hidden(e) then return false end
+    -- Invisible: only near one of your Arcane Towers (they see through it).
+    if E().Hidden and E().Hidden(e) and not self:Detected(e) then return false end
     return self.vis[math.floor(e.y) * self.st.w + math.floor(e.x)] == true
 end
 
@@ -3940,7 +3952,7 @@ end
 -- every ability, mana and cooldowns refill, Target Dummies to hit. Nothing
 -- is saved or counted. Main menu > Showcase, or /wcdemo.
 ---------------------------------------------------------------------------
-local DEMO_EXTRA = { human = { "keep", "castle", "guard_tower" }, orc = { "stronghold", "fortress" } }
+local DEMO_EXTRA = { human = { "keep", "castle", "guard_tower", "cannon_tower", "arcane_tower" }, orc = { "stronghold", "fortress" } }
 local DEMO_UNITS = {
     human = { "peasant", "militia", "footman", "rifleman", "knight", "priest", "sorceress", "siege_engine",
         "mortar_team", "flying_machine", "gryphon_rider", "dragonhawk_rider" },

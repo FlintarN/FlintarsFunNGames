@@ -149,7 +149,7 @@ local function D(u) return U[u.type] end
 function E.CanHit(st, a, t)
     local d = a.type and U[a.type]
     local air = t.kind == "unit" and U[t.type] and U[t.type].air and not (t.buffs and t.buffs.ensnare)
-    if not d then return true end -- a tower or burrow: hits ground and air
+    if not d then return not (a.groundOnly and air) end -- a tower or burrow (a Cannon Tower: ground only)
     if d.buildingsOnly and t.kind ~= "building" then return false end
     if d.airOnly and not air then return false end
     if air and (d.groundOnly or d.range <= 1.5) then return false end

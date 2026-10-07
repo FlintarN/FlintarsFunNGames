@@ -523,3 +523,63 @@ function WcCasterTests()
     check(bullet and boulder, "projectiles: a bullet, and a boulder in an arc")
     view:Quit()
 end
+
+-- Towers: Cannon (area, ground only), Arcane (mana burn, sees invisible),
+-- each Scout Tower upgrades on its own; Spiked Barricades.
+function WcTowerTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 15 })
+    for p = 1, 2 do st.players[p].gold, st.players[p].lumber = 99999, 99999 end
+    local function Tower(x, y) return E.SpawnBuilding(st, 1, "scout_tower", x, y, true) end
+    local t1, t2 = Tower(20, 20), Tower(26, 20)
+    E.SpawnBuilding(st, 1, "lumber_mill", 20, 26, true)
+    check(E.Command(st, 1, { type = "research", building = t1.id, key = "guard_tower" }), "towers: upgrade one Scout Tower")
+    check(E.Command(st, 1, { type = "research", building = t2.id, key = "guard_tower" }), "towers: and another one too")
+    local ok, why = E.Command(st, 1, { type = "research", building = t1.id, key = "cannon_tower" })
+    check(not ok, "towers: one upgrade at a time per tower (" .. tostring(why) .. ")")
+    for _ = 1, 35 * 20 do E.Step(st, 0.05) end
+    check(t1.type == "guard_tower" and t2.type == "guard_tower", "towers: both became Guard Towers")
+    local t3 = Tower(32, 20)
+    ok, why = E.Command(st, 1, { type = "research", building = t3.id, key = "cannon_tower" })
+    check(not ok and why == "requires Workshop", "towers: a Cannon Tower needs a Workshop (" .. tostring(why) .. ")")
+    E.SpawnBuilding(st, 1, "workshop", 32, 26, true)
+    check(E.Command(st, 1, { type = "research", building = t3.id, key = "cannon_tower" }), "towers: with a Workshop it can")
+    for _ = 1, 50 * 20 do E.Step(st, 0.05) end
+    check(t3.type == "cannon_tower", "towers: a Cannon Tower")
+    -- It shells a group on the ground, and leaves a flyer alone.
+    local g1 = E.Spawn(st, 2, "grunt", 36, 21)
+    local g2 = E.Spawn(st, 2, "grunt", 36.6, 21)
+    g1.order, g2.order = { type = "hold" }, { type = "hold" }
+    for _ = 1, 3 * 20 do E.Step(st, 0.05) end
+    check(g1.hp < g1.maxHp and g2.hp < g2.maxHp, "towers: the Cannon Tower hits both grunts")
+    local wr = E.Spawn(st, 2, "wind_rider", 36, 24)
+    wr.order = { type = "hold" }
+    g1.hp, g2.hp = 0, 0
+    st.ents[g1.id], st.ents[g2.id] = nil, nil
+    for _ = 1, 3 * 20 do E.Step(st, 0.05) end
+    check(wr.hp == wr.maxHp, "towers: it doesn't shoot the Wind Rider (flyers)")
+    -- Arcane Tower: burns a shaman's mana; sees an invisible unit.
+    E.SpawnBuilding(st, 1, "arcane_sanctum", 40, 26, true)
+    local t4 = Tower(44, 30)
+    E.Command(st, 1, { type = "research", building = t4.id, key = "arcane_tower" })
+    for _ = 1, 40 * 20 do E.Step(st, 0.05) end
+    local sh = E.Spawn(st, 2, "shaman", 47, 31)
+    sh.order = { type = "hold" }
+    local mana = sh.mana
+    for _ = 1, 2 * 20 do E.Step(st, 0.05) end
+    check(t4.type == "arcane_tower" and sh.mana < mana, "towers: the Arcane Tower burns the Shaman's mana")
+    E.AddBuff(sh, "invis", 60)
+    sh.hp = sh.maxHp
+    local before = sh.hp
+    for _ = 1, 3 * 20 do E.Step(st, 0.05) end
+    check(sh.hp < before, "towers: it sees and shoots an invisible unit")
+    -- Spiked Barricades: a grunt hitting an Orc building... (here: Human attacker on an Orc building)
+    local wm = E.SpawnBuilding(st, 2, "war_mill", 10, 30, true)
+    E.Command(st, 2, { type = "research", building = wm.id, key = "spikes" })
+    for _ = 1, 25 * 20 do E.Step(st, 0.05) end
+    check(E.Level(st, 2, "spikes") == 1, "towers: Spiked Barricades researched")
+    local fm = E.Spawn(st, 1, "footman", 13.6, 31)
+    local hp = fm.hp
+    E.Command(st, 1, { type = "attack", units = { fm.id }, target = wm.id })
+    for _ = 1, 3 * 20 do E.Step(st, 0.05) end
+    check(fm.hp < hp, "towers: the footman hitting the War Mill gets spiked")
+end

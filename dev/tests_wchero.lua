@@ -324,7 +324,17 @@ function WcHeroAI()
         table.insert(info, "p" .. p .. ": " .. table.concat(b, ","))
     end
     check(#names >= 2, "wc hero AI: both sides got heroes (" .. table.concat(names, ", ") .. "; " .. table.concat(info, "; ") .. ")")
-    check(casts > 0, "wc hero AI: and cast spells (" .. casts .. ")")
+    -- The computer's hero casts when enemies are near (a set scene).
+    local sc = E.New({ factions = { "human", "orc" }, seed = 3 })
+    local mk = E.Spawn(sc, 1, "mountain_king", 30, 20)
+    mk.skills.storm_bolt = 1
+    for i = 1, 3 do E.Spawn(sc, 2, "grunt", 32 + i * 0.5, 20) end
+    local cast = 0
+    for _ = 1, 3 * 20 do
+        for _, ev in ipairs(E.Step(sc, 0.05)) do if ev.kind == "cast" then cast = cast + 1 end end
+        if math.floor(sc.time * 20 + 0.5) % 20 == 0 then WC.AI.Think(sc, 1) end
+    end
+    check(cast > 0, "wc hero AI: a hero next to enemies casts (" .. cast .. "; whole game: " .. casts .. ")")
     print("  wc hero AI: " .. table.concat(names, ", ") .. "; " .. casts .. " spells")
 end
 

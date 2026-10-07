@@ -71,7 +71,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 (M2 only), picked by the user from /wcgallery.
 
 ### 1. Tech and upgrades
-- [ ] Cannon Tower and Arcane Tower (need a Workshop / Arcane Sanctum: step 3); Spiked Barricades; Defend for Footmen.
+- [x] Cannon Tower, Arcane Tower, Spiked Barricades, Defend for Footmen.
 - [ ] Pick models for the new buildings (Keep, Castle, Stronghold, Fortress, Blacksmith, War Mill, Scout Tower) in /wcgallery.
 
 ### 2. Heroes

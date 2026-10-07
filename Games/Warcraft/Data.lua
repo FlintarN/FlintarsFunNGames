@@ -131,6 +131,22 @@ R.stronghold = { name = "Upgrade to Stronghold", building = "great_hall", upgrad
 R.fortress = { name = "Upgrade to Fortress", building = "stronghold", upgrade = "fortress", hotkey = "U", levels = 1,
     cost = { { 325, 190 } }, time = { 70 }, requires = { { "altar_storms" } }, icon = I .. "INV_BannerPVP_01",
     text = "More health; Arcanite upgrades." }
+-- The other towers (Cannon: Workshop; Arcane: Arcane Sanctum) and Spiked Barricades.
+B.cannon_tower = { name = "Cannon Tower", hp = 600, armor = 5, size = 2, cost = { 0, 0 }, time = 0, food = 0,
+    attack = { damage = 112, cooldown = 2.5, range = 8, type = "siege", splash = 1.5, groundOnly = true },
+    icon = I .. "INV_Misc_Bomb_08" }
+B.arcane_tower = { name = "Arcane Tower", hp = 500, armor = 5, size = 2, cost = { 0, 0 }, time = 0, food = 0,
+    attack = { damage = 15, cooldown = 1, range = 7, type = "magic", burn = 10 }, detects = true,
+    icon = I .. "Spell_Holy_MagicalSentry" }
+R.cannon_tower = { name = "Upgrade to Cannon Tower", building = "scout_tower", upgrade = "cannon_tower", hotkey = "C", levels = 1,
+    cost = { { 200, 100 } }, time = { 45 }, requires = { { "workshop" } }, icon = I .. "INV_Misc_Bomb_08",
+    text = "A tower that shells ground units: area damage, slow, long range." }
+R.arcane_tower = { name = "Upgrade to Arcane Tower", building = "scout_tower", upgrade = "arcane_tower", hotkey = "R", levels = 1,
+    cost = { { 100, 70 } }, time = { 35 }, requires = { { "arcane_sanctum" } }, icon = I .. "Spell_Holy_MagicalSentry",
+    text = "A tower that burns enemy mana and sees invisible units." }
+R.spikes = { names = { "Spiked Barricades", "Improved Spiked Barricades", "Advanced Spiked Barricades" }, building = "war_mill",
+    hotkey = "B", levels = 3, cost = { { 25, 75 }, { 50, 100 }, { 75, 125 } }, time = { 20, 25, 30 }, effect = { spikes = 10 },
+    icon = I .. "Spell_Nature_Thorns", text = "Melee units hitting your buildings take 10 damage per level." }
 R.guard_tower = { name = "Upgrade to Guard Tower", building = "scout_tower", upgrade = "guard_tower", hotkey = "G", levels = 1,
     cost = { { 70, 50 } }, time = { 30 }, requires = { { "lumber_mill" } }, icon = I .. "INV_Misc_Spyglass_03",
     text = "A tower that shoots enemies in range." }
@@ -268,4 +284,6 @@ function ns.WC.BaseOf(key)
     return key
 end
 
-
+-- The other towers look like the Guard Tower.
+ns.WC.ART.models.cannon_tower = ns.WC.ART.models.guard_tower
+ns.WC.ART.models.arcane_tower = ns.WC.ART.models.guard_tower

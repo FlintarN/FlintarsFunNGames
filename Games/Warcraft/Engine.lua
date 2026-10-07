@@ -319,6 +319,15 @@ function E.CanResearch(st, p, key, b)
     local r = D().Research[key]
     if not r then return false, "unknown research" end
     if b and b.type ~= r.building then return false, "not here" end
+    if r.upgrade then
+        -- A building's upgrade (Keep, Guard Tower...): each building its own.
+        for _, q in ipairs(b and b.queue or {}) do
+            if q:sub(1, 2) == "r:" then return false, "already upgrading" end
+        end
+        local miss = E.Missing(st, p, r.requires and r.requires[1])
+        if miss then return false, "requires " .. miss end
+        return true
+    end
     local level = E.Level(st, p, key) + 1
     if level > (r.levels or 1) then return false, "already done" end
     if st.players[p].busy[key] then return false, "already being researched" end
@@ -797,6 +806,14 @@ local function Strike(st, a, t, damage, ranged, attackType)
     local mult = (D().DAMAGE[attackType or "normal"] or {})[armorType] or 1
     if t.defend and attackType == "pierce" then mult = mult * 0.5 end -- a Footman's Defend
     if a.buffs and a.buffs.invis and a ~= t then a.buffs.invis = nil end -- attacking shows you
+    -- Spiked Barricades: a melee attacker hitting the building gets hurt.
+    if t.kind == "building" and a.kind == "unit" and D().Units[a.type] and D().Units[a.type].range <= 1.5 and not a.dead then
+        local spikes = Bonus(st, t.owner, "spikes")
+        if spikes > 0 then
+            a.hp = a.hp - spikes
+            if a.hp <= 0 then a.hp = 1 end -- (they can wound, not kill)
+        end
+    end
     local reduce = attackType == "spell" and 1 or (1 - Armor(E.ArmorOf(st, t)))
     local dmg = math.max(1, math.floor(damage * mult * reduce + 0.5))
     if E.OnTaken then dmg = math.floor(E.OnTaken(st, t, dmg) + 0.5) end
@@ -880,7 +897,7 @@ local function Nearest(st, u, range)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and E.Foe(st, e.owner, u.owner) and e.kind ~= "mine"
-            and not (E.Untouchable and (E.Untouchable(e) or E.Hidden(e)))
+            and not (E.Untouchable and (E.Untouchable(e) or (E.Hidden(e) and not u.detects)))
             and not (E.CanHit and not E.CanHit(st, u, e)) then
             local g = Gap(u, e)
             if g <= range then
@@ -1258,9 +1275,25 @@ local function BuildingStep(st, b, dt)
         b.cd = (b.cd or 0) - dt
         if b.cd <= 0 then
             local cx, cy = Center(b)
-            local t = Nearest(st, { x = cx, y = cy, owner = b.owner, kind = "unit" }, d.attack.range + b.size / 2)
+            local t = Nearest(st, { x = cx, y = cy, owner = b.owner, kind = "unit", groundOnly = d.attack.groundOnly,
+                detects = d.detects }, d.attack.range + b.size / 2)
             if t then
                 Strike(st, b, t, d.attack.damage, true, d.attack.type)
+                -- A Cannon Tower's shell hits round the target too (ground only).
+                if d.attack.splash then
+                    local tx, ty = Center(t)
+                    local near = {}
+                    for _, id in ipairs(st.list) do
+                        local e = st.ents[id]
+                        if e and e ~= t and e.kind == "unit" and not e.dead and E.Foe(st, b.owner, e.owner)
+                            and not D().Units[e.type].air and (e.x - tx) ^ 2 + (e.y - ty) ^ 2 <= d.attack.splash ^ 2 then
+                            table.insert(near, e)
+                        end
+                    end
+                    for _, e in ipairs(near) do Strike(st, b, e, d.attack.damage * 0.5, true, d.attack.type) end
+                end
+                -- An Arcane Tower burns mana.
+                if d.attack.burn and t.mana and t.mana > 0 then t.mana = math.max(0, t.mana - d.attack.burn) end
                 b.cd = d.attack.cooldown / (gar and #gar or 1) -- more peons, faster spears
             end
         end
@@ -1273,7 +1306,7 @@ local function BuildingStep(st, b, dt)
             table.remove(b.queue, 1)
             b.trainT = 0
             local pl = st.players[b.owner]
-            pl.up[key] = level
+            if not r.upgrade then pl.up[key] = level end
             pl.busy[key] = nil
             if r.upgrade then
                 -- The building becomes the next one (Keep, Castle, Guard Tower...).
