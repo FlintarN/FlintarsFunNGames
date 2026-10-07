@@ -611,6 +611,7 @@ await Section('Warcraft III armies', async () => {
   await p.run('WcArmyTests()');
   await p.run('WcArmyAI()');
   await p.run('WcArmyPage()');
+  await p.run('WcDemo()');
 });
 
 await Section('Warcraft III lockstep', async () => {

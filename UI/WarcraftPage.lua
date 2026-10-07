@@ -639,6 +639,9 @@ function P.New(parent, kind)
     self.friendButton:SetPoint("TOP", self.queueButton, "BOTTOM", 0, -12)
     self.menuResume = W.MenuButton(menu, "Back to the game", nil, 180, 36, function() self:Resume() end)
     self.menuResume:SetPoint("TOP", box, "BOTTOM", 0, -14)
+    self.demoButton = W.MenuButton(menu, "Showcase", nil, 140, 30, function() self:StartDemo() end)
+    self.demoButton:SetPoint("BOTTOMRIGHT", -16, 16)
+    W.Tooltip(self.demoButton, "Showcase", "Every building, unit and hero on one map, with names. Heroes cast all their spells in turn.")
     menu:Hide()
     self.mainMenu = menu
     self.lobbyText = W.Label(o, "", "GameFontHighlight")
@@ -784,10 +787,11 @@ end
 function P:Quit()
     if ns.Queue.IsQueued(self.kind) then ns.Queue.Leave(self.kind) end
     if self.pvp then return self:LeavePvp() end
+    local demo = self.st and self.st.demo
     self.st = nil
-    Save().game = nil
+    if not demo then Save().game = nil end
     ns.Solo.SetRunning(self.kind, false)
-    self:ShowStart()
+    self:ShowMenu()
     ns.Changed()
 end
 
@@ -843,6 +847,7 @@ function P:Tick(elapsed)
             self.acc = self.acc - STEP
             local events = E().Step(st, STEP)
             self:Events(events)
+            if st.demo then self:DemoTick(STEP) end
             self.think = self.think + STEP
             if self.think >= 1 and CPU then
                 self.think = 0
@@ -1464,6 +1469,12 @@ end
 
 function P:UpdateFog()
     local st = self.st
+    if st.demo then
+        local vis = {}
+        for i = 0, st.w * st.h - 1 do vis[i], self.explored[i] = true, true end
+        self.vis = vis
+        return
+    end
     local vis, explored = {}, self.explored
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
@@ -3167,6 +3178,210 @@ do
         Draw(self)
         self:DrawFx()
     end
+end
+
+---------------------------------------------------------------------------
+-- Showcase: every building, unit and hero on one open map, with names;
+-- units walk to and fro, heroes fight dummies and cast all their spells in
+-- turn. Nothing is saved or counted. Main menu > Showcase, or /wcdemo.
+---------------------------------------------------------------------------
+local DEMO_EXTRA = { human = { "keep", "castle", "guard_tower" }, orc = { "stronghold", "fortress" } }
+local DEMO_UNITS = {
+    human = { "peasant", "militia", "footman", "rifleman", "knight", "priest", "sorceress", "siege_engine",
+        "mortar_team", "flying_machine", "gryphon_rider", "dragonhawk_rider" },
+    orc = { "peon", "grunt", "headhunter", "raider", "kodo", "tauren", "shaman", "witch_doctor", "catapult",
+        "wind_rider", "batrider" },
+}
+local DEMO_HEROES = { "paladin", "archmage", "mountain_king", "blood_mage", "blademaster", "far_seer",
+    "tauren_chieftain", "shadow_hunter" }
+
+function P:StartDemo()
+    if self.pvp or self.ls then return end
+    ME, CPU = 1, nil
+    local st = E().New({ factions = { "human", "orc" }, seed = 7, difficulty = "normal" })
+    st.demo = true
+    local all = {}
+    for _, id in ipairs(st.list) do table.insert(all, st.ents[id]) end
+    for _, e in ipairs(all) do E().Remove(st, e) end
+    st.trees = {}
+    -- A strip of forest along the top, for the trees.
+    for x = 0, st.w - 1 do st.trees[x] = 50 end
+    local labels = {}
+    local function Label(e, text) table.insert(labels, { id = e.id, text = text }) end
+    -- Buildings: Human, then Orc.
+    local y = 2
+    for _, f in ipairs({ "human", "orc" }) do
+        local list = {}
+        for _, b in ipairs(WC().Factions[f].builds) do table.insert(list, b) end
+        for _, b in ipairs(DEMO_EXTRA[f]) do table.insert(list, b) end
+        local x, tallest = 1, 0
+        for _, bt in ipairs(list) do
+            local size = WC().Buildings[bt].size
+            if x + size > st.w - 1 then x, y, tallest = 1, y + tallest + 2, 0 end
+            local b = E().SpawnBuilding(st, 1, bt, x, y, true)
+            Label(b, WC().Buildings[bt].name)
+            x = x + size + 1
+            tallest = math.max(tallest, size)
+        end
+        y = y + tallest + 1
+    end
+    local mine = E().SpawnBuilding(st, 0, "gold_mine", st.w - 5, 2, true)
+    mine.gold = 99999
+    Label(mine, "Gold Mine")
+    -- Units: a row per side; they walk to and fro.
+    self.demoWalkers = {}
+    y = y + 1
+    for _, f in ipairs({ "human", "orc" }) do
+        local x = 2
+        for _, ut in ipairs(DEMO_UNITS[f]) do
+            if WC().Units[ut] then
+                local u = E().Spawn(st, 1, ut, x, y)
+                Label(u, WC().Units[ut].name)
+                table.insert(self.demoWalkers, { id = u.id, x = x, y = y })
+                x = x + 3.5
+            end
+        end
+        y = y + 3
+    end
+    -- The arena: each hero with an enemy dummy and a friend to heal.
+    y = y + 1
+    self.demoHeroes = {}
+    local x = 3
+    for _, ht in ipairs(DEMO_HEROES) do
+        if x > st.w - 4 then x, y = 3, y + 6 end
+        local h = E().Spawn(st, 1, ht, x, y)
+        h.level = 10
+        for _, key in ipairs(WC().Units[ht].abilities) do
+            h.skills[key] = WC().Abilities[key].ult and 1 or 3
+        end
+        h.points = 0
+        h.order = { type = "hold" }
+        Label(h, WC().Units[ht].name)
+        local foe = E().Spawn(st, 2, "footman", x + 2, y + 1.5)
+        foe.order = { type = "hold" }
+        local friend = E().Spawn(st, 1, "footman", x - 1.5, y + 1.5)
+        friend.order = { type = "hold" }
+        table.insert(self.demoHeroes, { id = h.id, foe = foe.id, friend = friend.id, x = x, y = y, n = 0 })
+        x = x + 7
+    end
+    -- Player 2 needs a building, or the game would end.
+    E().SpawnBuilding(st, 2, "orc_burrow", st.w - 3, st.h - 3, true)
+    E().Food(st)
+    st.players[1].gold, st.players[1].lumber = 99999, 99999
+    self.demoLabels = labels
+    self.demoT, self.demoWalkT, self.demoWalkFlip = 0, 0, false
+    self.st = st
+    self.groups, self.lastClick, self.lastGroup = {}, nil, nil
+    self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
+    self.sel, self.place, self.targeting = {}, nil, nil
+    self.counted = true
+    self.treeDirty = true
+    self.mmBuilt = false
+    self:BuildMinimapTrees()
+    self.camX, self.camY = 0, 0
+    self:Resume()
+    self:Say("Showcase: scroll around to see everything")
+end
+
+-- Twice a second: everyone topped up; walkers turn round; each hero casts
+-- its next spell every few seconds.
+function P:DemoTick(dt)
+    local st = self.st
+    self.demoT = self.demoT + dt
+    self.demoWalkT = self.demoWalkT + dt
+    if self.demoWalkT >= 5 then
+        self.demoWalkT = 0
+        self.demoWalkFlip = not self.demoWalkFlip
+        for _, w in ipairs(self.demoWalkers) do
+            local u = st.ents[w.id]
+            if u then
+                E().Command(st, 1, { type = "move", units = { u.id }, x = w.x + (self.demoWalkFlip and 2.5 or 0), y = w.y })
+            end
+        end
+    end
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind == "unit" then
+            if e.owner == 2 then e.maxHp = math.max(e.maxHp, 100000) end
+            if e.hp < e.maxHp * 0.6 then e.hp = e.maxHp end
+            if e.maxMana then e.mana = e.maxMana end
+        end
+    end
+    if self.demoT < 3 then return end
+    self.demoT = 0
+    for _, d in ipairs(self.demoHeroes) do
+        local h = st.ents[d.id]
+        if h and not h.dead then
+            local keys = {}
+            for _, key in ipairs(WC().Units[h.type].abilities) do
+                if not WC().Abilities[key].passive then table.insert(keys, key) end
+            end
+            d.n = d.n % #keys + 1
+            local key = keys[d.n]
+            local a = WC().Abilities[key]
+            h.cds, h.mana = {}, 10000
+            h.x, h.y = d.x, d.y
+            local foe, friend = st.ents[d.foe], st.ents[d.friend]
+            if foe then foe.x, foe.y, foe.buffs = d.x + 2, d.y + 1.5, nil end
+            if friend then
+                friend.x, friend.y = d.x - 1.5, d.y + 1.5
+                friend.hp = math.floor(friend.maxHp / 2)
+            end
+            local cmd = { type = "cast", unit = h.id, ability = key }
+            if a.target == "enemy" or a.target == "unit" then cmd.target = foe and foe.id
+            elseif a.target == "ally" or a.target == "friend" then cmd.target = friend and friend.id
+            elseif a.target == "point" then cmd.x, cmd.y = d.x + 2, d.y + 1.5 end
+            E().Command(st, 1, cmd)
+            d.last = a.name
+        end
+    end
+end
+
+-- Names under everything (and the spell each hero cast last).
+function P:DrawDemoLabels()
+    self.demoText = self.demoText or {}
+    local st = self.st
+    local on = st and st.demo and self.demoLabels
+    local casts = {}
+    for _, d in ipairs(on and self.demoHeroes or {}) do casts[d.id] = d.last end
+    for i, l in ipairs(on or {}) do
+        local fs = self.demoText[i]
+        if not fs then
+            fs = W.Label(self.fxLayer, "", "GameFontHighlightSmall")
+            fs:SetShadowColor(0, 0, 0, 1)
+            fs:SetShadowOffset(1, -1)
+            self.demoText[i] = fs
+        end
+        local e = st.ents[l.id]
+        if e then
+            local x, y = e.x, e.y + 0.6
+            if e.kind ~= "unit" then x, y = e.x + e.size / 2, e.y + e.size + 0.2 end
+            fs:ClearAllPoints()
+            fs:SetPoint("TOP", self.view, "TOPLEFT", x * TILE - self.camX, -(y * TILE - self.camY))
+            fs:SetText(l.text .. (casts[l.id] and ("\n|cff80c0ff" .. casts[l.id] .. "|r") or ""))
+            fs:Show()
+        else
+            fs:Hide()
+        end
+    end
+    for i = #(on or {}) + 1, #self.demoText do self.demoText[i]:Hide() end
+end
+
+do
+    local Draw = P.Draw
+    function P:Draw()
+        Draw(self)
+        self:DrawDemoLabels()
+    end
+end
+
+SLASH_FNGWCDEMO1 = "/wcdemo"
+SlashCmdList.FNGWCDEMO = function()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local page = ns.UI.pages.warcraft
+    if page and page.view then page.view:StartDemo() end
 end
 
 ns.CustomPages = ns.CustomPages or {}

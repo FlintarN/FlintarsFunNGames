@@ -265,3 +265,46 @@ function WcArmyPage()
     view:Draw()
     check(view.fx["b" .. foot.id .. "stun"] == nil, "wc fx: gone when the stun ends")
 end
+
+-- The showcase: everything on one map, heroes cast their spells in turn.
+function WcDemo()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    local saved = ns.db.warcraft.game
+    view.demoButton._scripts.OnClick()
+    local st = view.st
+    check(st and st.demo and not view.overlay:IsShown(), "wc demo: the showcase starts from the menu")
+    local types = {}
+    for _, id in ipairs(st.list) do if st.ents[id] then types[st.ents[id].type] = true end end
+    local missing = {}
+    for k in pairs(WC.Buildings) do if not types[k] then table.insert(missing, k) end end
+    for _, k in ipairs({ "footman", "knight", "gryphon_rider", "tauren", "wind_rider", "paladin", "shadow_hunter" }) do
+        if not types[k] then table.insert(missing, k) end
+    end
+    table.sort(missing)
+    check(#missing == 0, "wc demo: every building and the units are there (" .. table.concat(missing, ", ") .. ")")
+    local cast = {}
+    local real = ns.UI.pages.warcraft.view.SpellEvents
+    view.SpellEvents = function(self, events)
+        for _, ev in ipairs(events) do if ev.kind == "cast" then cast[ev.ability] = true end end
+        return real(self, events)
+    end
+    for _ = 1, 30 * 20 do view:Tick(0.05) end
+    view.SpellEvents = nil
+    local n, wanted, missed = 0, 0, {}
+    for _, h in ipairs({ "paladin", "archmage", "mountain_king", "blood_mage", "blademaster", "far_seer", "tauren_chieftain", "shadow_hunter" }) do
+        for _, key in ipairs(WC.Units[h].abilities) do
+            if not WC.Abilities[key].passive then
+                wanted = wanted + 1
+                if cast[key] then n = n + 1 else table.insert(missed, key) end
+            end
+        end
+    end
+    check(not st.over and n >= wanted - 2, "wc demo: 30 s in, still going; " .. n .. " of " .. wanted .. " spells cast (missed: "
+        .. table.concat(missed, ", ") .. ")")
+    check(ns.db.warcraft.game == saved, "wc demo: your saved game is left alone")
+    check(view.demoText[1] and view.demoText[1]:IsShown(), "wc demo: names under everything")
+    view:ShowMenu()
+end
