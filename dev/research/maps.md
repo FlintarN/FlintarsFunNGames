@@ -1,7 +1,9 @@
 # Standard map layouts for the Warcraft RTS
 
 Research for lobby map selection: a few "classic melee" style maps plus our own
-premade maps, from 1v1 up to 8-10 players (4v4, 5v5, 8-player FFA).
+premade maps. Target sizes: melee is 1v1 and 2v2, plus at most one 4v4 map.
+The engine's 8-10 player maximum is for other modes (co-op defence 4-5,
+Footmen 4, versus customs up to 4v4/5v5) and is not a melee target.
 
 Status of facts: sizes, player counts and spawn positions marked (src) come from
 the linked pages. Layout details marked (mem) are from general WC3 knowledge
@@ -41,7 +43,7 @@ tiles, roughly one base plus surroundings - about what WC3's camera shows.
 
 Grid cost: 128x80 = 10,240 tiles, 144x96 = 13,824 - fine for storage; the
 real cost is A* on long paths with many units. Expect to need path caching or
-a coarse "region graph" (hierarchical pathing) before 8-10 player maps.
+a coarse "region graph" (hierarchical pathing) before the 4v4 map.
 
 ---
 
@@ -173,7 +175,7 @@ Common vocabulary first:
 Today the map is a Lua table of rectangles (`halls`, `mines`, `expansions`,
 `forests`) mirrored by point reflection (`Mirror(st,x,y,w,h)` = 180-degree
 rotation), plus seeded random clumps. That works for one map but is hard to
-author and can't express water, cliffs, camps or 8-10 starts. Proposal: an
+author and can't express water, cliffs, camps or more than 2 starts. Proposal: an
 ASCII grid plus a small Lua table, stored in `Games/Warcraft/Maps/*.lua`.
 
 ### 3.1 Tile legend (one char = one tile)
@@ -362,7 +364,7 @@ TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
   (`X`) per side, Goblin Lab (`L`) behind a contested mine.
 - Teaches: middle control vs flank fords, the classic Echo Isles feel.
 
-### Map C - "Four Crowns" (4 players: 2v2 or FFA, 96x64, mirrorXY)
+### Map C - "Four Crowns" (2v2, 96x64, mirrorXY)
 
 ```
 2x scale (48x32 chars = 96x64 tiles)
@@ -403,7 +405,7 @@ TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
   down the side, central pond with a single Tavern on an island-free
   centre (swap for a Fountain of Health for the LT feel).
 - 2v2 as left (1+3) vs right (2+4): every player has an identical mirror on
-  the other team; allies share the side expansions. Also works as 4 FFA.
+  the other team; allies share the side expansions. (Could double as a 4-player FFA.)
 
 ### Map D - "Twin Valleys" (8 players, 4v4, 128x80, mirrorXY)
 
@@ -437,107 +439,38 @@ TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
   fine for our smaller armies. Variant: 4-player 2v2 version by cutting it
   in half (64x80).
 
-### Map E - "Five Lanes" (10 players, 5v5, 144x96, mirrorX)
+### Not proposed: 5v5 and 8-player FFA melee maps
 
-```
-4x scale (36x24 chars = 144x96 tiles)
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-T1G...TT....a..........a....TT...G6T
-T......T.......TT..TT.......T......T
-TT..b..TT....TTT....TTT....TT..b..TT
-T.......T..................T.......T
-T2G......G....c......c....G......G7T
-T.....TT........S..S........TT.....T
-TTT...T....TT..........TT....T...TTT
-T.........TTT..........TTT.........T
-T..b.....T....d......d....T.....b..T
-T3G.....TT....##....##....TT.....G8T
-T.......T.....#/.VV./#.....T.......T
-TT..........G....VV....G..........TT
-T..b.....T....d......d....T.....b..T
-T.........TTT..........TTT.........T
-TTT...T....TT..........TT....T...TTT
-T.....TT........S..S........TT.....T
-T4G......G....c......c....G......G9T
-T.......T..................T.......T
-TT..b..TT....TTT....TTT....TT..b..TT
-T......T.......TT..TT.......T......T
-T5G...TT....a..........a....TT...G0T
-T..................................T
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-```
-- Five bases down each edge (players 1-5 west, 6-10 east; `0` = player 10),
-  centre plateau with ramps and the Tavern. Player 3/8 is the exposed
-  "middle" seat, 1/5 and 6/10 are the safer corners - normal for big team
-  maps; mirrorX keeps opposite seats identical.
-- Also usable for 4v4 (leave the middle seats empty and their mines as
-  extra expansions) - the lobby just disables start slots.
-
-### Map F - "Crossroads" (8 players FFA, 120x120, d4)
-
-```
-4x scale (30x30 chars = 120x120 tiles)
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-TT.....1G..TT....TT..G4.....TT
-T...b.....TT......TT.....b...T
-T.......a............a.......T
-T.b....TT...G....G...TT....b.T
-T.....TT..............TT.....T
-T....T.T...c......c...T.T....T
-T2..TTT....TT....TT....TTT..3T
-TG.aT......T......T......Ta.GT
-T............d..d............T
-T.T...........##...........T.T
-TTT...cTT....#..#....TTc...TTT
-TT..G..T....S....S....T..G..TT
-T........d.#......#.d........T
-T.........#...FF...#.........T
-T.........#...FF...#.........T
-T........d.#......#.d........T
-TT..G..T....S....S....T..G..TT
-TTT...cTT....#..#....TTc...TTT
-T.T...........##...........T.T
-T............d..d............T
-TG.aT......T......T......Ta.GT
-T7..TTT....TT....TT....TTT..6T
-T....T.T...c......c...T.T....T
-T.....TT..............TT.....T
-T.b....TT...G....G...TT....b.T
-T.......a............a.......T
-T...b.....TT......TT.....b...T
-TT.....8G..TT....TT..G5.....TT
-TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
-```
-- Golems-in-the-Mist pattern: two starts per side of the square, a walled
-  centre arena (cliff ring with 4 gaps) holding a Fountain of Health and
-  four shops. d4 symmetry makes all 8 seats identical.
-- Also the 4-player FFA map: use only seats 1, 3, 5, 7.
+Melee stops at 4v4 (Map D). Bigger melee layouts (5 bases per edge on
+~144x96, or Golems-in-the-Mist-style 8 FFA on ~120x120 with `d4` symmetry)
+are possible with the same format but are not worth hand-making now. A 5v5
+*custom* game (Castle Fight, Hero Line Wars) gets its own purpose-built
+lane map instead.
 
 ### Build order recommendation
 
 1. **A (64x40, 1v1)** - port the current map to the new format first; it
    proves the loader, legend, symmetry and validator without needing a
    camera change.
-2. **C (96x64, 2v2/4 FFA)** - first map needing scrolling + minimap, and
+2. **C (96x64, 2v2)** - first map needing scrolling + minimap, and
    the planned 2v2 target.
 3. **B (80x56, 1v1)** - water/fords/ramps variety for 1v1 map choice.
-4. **D (128x80, 4v4)** and **E (144x96, 5v5)** - after pathing is
-   hierarchical and the net layer can carry 8-10 peers.
-5. **F (120x120, 8 FFA)** - last; FFA needs alliance/defeat handling and
-   is the heaviest on pathing.
+4. **D (128x80, 4v4)** - the one big melee map; only after pathing is
+   hierarchical and the net layer can carry 8 peers. Can be cut in half
+   (64x80) as a second 2v2 map.
 
-### Notes for 8-10 players beyond the map itself
-- **Networking**: with whispers, each command goes to N-1 peers, so 10
-  players at ~4 msgs/s each is ~36 outgoing whispers/s per client - well over
-  any sane budget. For 3+ players use one broadcast per lockstep turn on a
+### Notes for the 4v4 map (8 players) beyond the map itself
+- **Networking**: with whispers, each command goes to N-1 peers, so 8
+  players at ~4 msgs/s each is ~28 outgoing whispers/s per client - well over
+  any sane budget (2v2 is ~12/s, borderline). For 3+ players use one broadcast per lockstep turn on a
   group channel (`RAID`/`PARTY` addon messages, or a private chat channel
   for cross-group lobbies) and keep whispers for 1v1. Bundle all of a
   player's commands for a turn into one message and lengthen the turn (e.g.
   250 -> 400 ms) when the lobby has more than 4 players.
-- **Simulation cost**: at 10 players x ~40 units, per-tick A* needs
+- **Simulation cost**: at 8 players x ~40 units, per-tick A* needs
   path caching, a flow field per common target, or a region graph.
 - **Lobby**: map defines start slots and default teams; lobby lets the
-  host leave slots empty/AI and pick FFA vs teams when the map allows it.
+  host leave slots empty/AI (e.g. 2v2 with two AIs on Map D).
 
 ---
 

@@ -10,11 +10,14 @@ engine.
   state) - so games with few, coarse orders fit; twitch aiming/dodging fits
   badly because of input delay (one lockstep turn, ~250-500 ms);
 - ~740x460 window; small maps preferred, scrolling acceptable;
-- **must scale to 8-10 players** (new requirement). With whispers every order
-  fans out to N-1 peers, so 8-10 players need one broadcast per turn on a
-  group channel (RAID/PARTY addon messages or a private channel). That is the
-  same network work for every game below; the ratings assume it exists and
-  then judge how many orders/s the game *needs* per player.
+- **player counts**: the engine tops out at 8-10 players, but that is a
+  ceiling, not a target. Each game is judged at its natural size, capped at
+  our limits: co-op defence 4-5, Footmen 4, versus games 4v4 or 5v5 at most.
+  Games whose classic lobby was 12 get a "Our size" line with the cut-down
+  setup. Above ~4 players, whispers (each order to N-1 peers) stop scaling
+  and the game needs one broadcast per turn on a group channel (RAID/PARTY
+  addon messages or a private channel); ratings note when a game *needs*
+  that many players to work.
 
 Rating scale: **5** = natural fit, mostly reuses what we have; **3** =
 doable with a few new systems; **1** = wrong genre for this engine.
@@ -35,7 +38,8 @@ bonus for kills); you choose races (Human, Orc, Undead, Elf, Nature,
 Chaos...), unit-buildings, special buildings (auras, healing) and towers.
 Each player has one "rescue strike" that clears their half once. A round
 ends when a castle dies; matches are often best-of-several rounds.
-*Players:* 2-10. *Length:* 10-25 min per round.
+*Players:* 2-10 classic. *Our size:* 1v1 to 3v3 sweet spot, 4v4 max
+(5v5 possible). Plays well at 2v2 with AI teammates. *Length:* 10-25 min per round.
 *Why it fits:* almost no micro - orders are "build X here" every few
 seconds, so the network budget is trivial even at 10 players, and the
 sim is our existing combat AI with auto-attack-move. Units are WC3 units.
@@ -57,7 +61,9 @@ Builders harvest abundant wood and scarce gold, wall in with 1x1 gaps that
 let builders walk but block 2x2 Titans/minions, tech to towers and units
 and try to kill the Titan; the Titan feeds, levels and smashes bases, and
 killed builders **become Titan minions** (source: Hive/SC2 remake).
-*Players:* 10 (classic 9 vs 1). *Length:* 30-60 min.
+*Players:* 10 (classic 9 vs 1). *Our size:* 4-6 builders vs 1 Titan
+(5-7 players) - it only works with a crowd, so it needs the group-channel
+net layer. *Length:* 30-60 min.
 *Fit:* our pathing already treats unit sizes and footprints, and walls are
 just buildings. Low order rate for builders. The Titan player needs more
 micro but one unit only. *Needs:* per-unit-size pathing (2x2 movers vs 1x1
@@ -70,7 +76,8 @@ showcase.
 walls, gold mines/"wells" and towers inside a hiding spot and slowly earn
 gold; trolls level up by killing and buy items. Elves win by surviving
 to a timer (or, in some versions, killing the troll); trolls win by
-killing all elves. *Players:* 8-12. *Length:* 20-40 min.
+killing all elves. *Players:* 8-12 classic. *Our size:* 4-6 elves vs 1 troll.
+*Length:* 20-40 min.
 *Fit:* same building blocks as Island Defense but simpler economy (wood
 only + passive gold). *Needs:* wall/upgradable-wall buildings, tag-style
 win/timer, hunter hero with levelling, forest map with many hiding
@@ -80,7 +87,7 @@ pockets. Map 96x96-ish with dense trees.
 Ents/Infernals variant of the tag formula: **Ents** (many) hide in a huge
 forest, build walls, towers and "seed" buildings for income; **Infernals**
 (few) hunt and kill them; dead ents can be revived by teammates. *Players:*
-8-12. *Length:* 20-40 min. Same needs as Troll and Elves plus revive.
+8-12 classic; *our size* 5-7 (1 hunter). *Length:* 20-40 min. Same needs as Troll and Elves plus revive.
 Tree-heavy maps suit our tree tiles perfectly.
 
 ### Sheep Tag - fit 3
@@ -88,7 +95,8 @@ Tree-heavy maps suit our tree tiles perfectly.
 whole game: wall mazes, stack farms, upgrade to tougher/invisible farms -
 and must survive until a timer runs out; **Wolves** (2-4) chase, kill farms
 and tag sheep (tagged sheep become ghosts/spirits; teammates can save them
-in some versions). Rounds alternate roles. *Players:* 8-12. *Length:*
+in some versions). Rounds alternate roles. *Players:* 8-12 classic;
+*our size* 4-6 sheep vs 1-2 wolves. *Length:*
 10-25 min per round. *Fit:* trivial units, but **chasing and dodging is
 the whole game**, which suffers from lockstep input delay. Still very
 playable if movement orders are simple click-moves. *Needs:* tag/save
@@ -100,7 +108,8 @@ build walls, gold-income buildings and towers; 1-2 **Vampires** start in
 their own zone, feed on kills, buy items and break bases. Humans win by
 surviving to dawn / killing the vampires. Some versions: humans 10 vs
 vampires 2, rounds 25-45 min (Vampirism Beast/Fire variants; long versions
-2 h). *Players:* 10-12. *Fit/needs:* same family as Island Defense (walls,
+2 h). *Players:* 10-12 classic; *our size* 4-6 humans vs 1 vampire.
+*Fit/needs:* same family as Island Defense (walls,
 towers, income buildings, a hunter hero) plus a day/night timer.
 
 ### Hero Line Wars - fit 4
@@ -108,10 +117,11 @@ Two to four teams on parallel lanes; each player has **one hero** that
 defends their lane. You spend gold to **send creeps** to the enemy lane;
 each send raises your **income** (paid every ~20 s). Leaking creeps costs
 lives; lose all lives and you are out. Gold also buys hero items and
-skills. *Players:* 6-12 (classic 3v3 to 6v6). *Length:* 30-60 min.
+skills. *Players:* classic 3v3 to 6v6; *our size* 1v1 to 4v4 (5v5 max),
+2v2/3v3 sweet spot. *Length:* 30-60 min.
 *Fit:* hero + creep combat we already have; sends are low-rate orders.
 *Needs:* lanes, send menu with income formula, lives, hero shop, hero
-respawn. Map: one lane per player, 8-10 lanes need a wide map but only
+respawn. Map: one lane per player; 8 lanes (4v4) need a wide map but only
 the own lane needs the camera.
 
 ### Wintermaul Wars - fit 4
@@ -125,7 +135,8 @@ Free-for-all on a map of **territories** (Europe, Lordaeron...). Each owned
 territory and city adds to periodic income; you buy units in owned cities
 and march them to capture neighbouring territories (a unit standing in a
 region capture point flips it). Diplomacy (alliances, gold gifts) is a big
-part. *Players:* 8-12. *Length:* 45-120 min.
+part. *Players:* 8-12 classic FFA; *our size* 3-6 FFA (AI fills empty
+nations). *Length:* 45-120 min.
 *Fit:* slow, strategic, few orders - excellent for lockstep, and the
 "region capture" model is cheap to sim (thousands of small skirmishes,
 mostly melee). *Needs:* region/territory layer over the grid, capture
@@ -137,7 +148,8 @@ victory at 50%) helps.
 ### Elimination Tournament - fit 3
 Each player picks a hero; rounds of **arena duels / team fights** on a small
 arena; between rounds you buy items and skills. Losers are eliminated or
-lose lives. *Players:* 8-12. *Length:* 30-45 min. *Fit:* hero combat
+lose lives. *Players:* 8-12 classic; *our size* 4-8 (works with AI
+opponents and fewer players). *Length:* 30-45 min. *Fit:* hero combat
 exists; arenas are tiny maps; spectating while others fight solves the
 "waiting" problem. *Needs:* pick phase, arena rounds, between-round shop,
 spectator camera.
@@ -156,7 +168,7 @@ Dota-like needs (see DotA report); our engine handles creeps and heroes but
 not the ability depth. Covered by the DotA option.
 
 ### Enfo's Team Survival - fit 3
-Up to ~12 players, each picking a hero from many classes, defend a central
+Up to ~12 players classic (*our size*: two teams of 2-4, or 4-5 co-op), each picking a hero from many classes, defend a central
 position against escalating **waves** while two teams **race to survive**
 longer than the other (classic Enfo's is team vs team survival with
 shared waves; you can also send bonus creeps/spells at the other team).
@@ -169,7 +181,7 @@ via a skill tree; teams of murlocs fight on a mid-sized map; 30-45 min.
 Mostly hero/ability content; little RTS. Low priority.
 
 ### Cube Defense - fit 3
-Co-op defence: players (4-10) build towers and units around a shared
+Co-op defence: players (classic 4-10; *our size* 4-5) build towers and units around a shared
 "cube" in the centre while waves come from all sides; mazing
 is less important than coverage. 30-45 min. Reuses TD blocks; fine as a
 TD variant, see TD report.
@@ -179,7 +191,7 @@ Team games where each player controls **one vehicle** (ship or tank) and
 buys upgrades/weapons; teams fight over lanes or capture points (Battleships
 Crossfire is 3v3/6v6 sea combat with ships bought at harbours and
 continuous income; Battle Tanks is tank arena with upgrades). 30-60 min,
-8-12 players. *Fit:* one unit per player, simple combat - lockstep ok
+8-12 players classic; *our size* 3v3 to 5v5. *Fit:* one unit per player, simple combat - lockstep ok
 because weapons are auto-attacks with range. *Needs:* ship/tank units
 (not WC3 standard melee units - Battleships uses WC3 boats), capture
 points, upgrade shop, respawn. Water pathing for Battleships.
@@ -249,18 +261,20 @@ don't suit an in-WoW minigame. Not a fit.
 ## Ranking - top 8 for us
 
 Weighting: reuse of our engine (units, buildings, heroes, AI) >
-tolerance of lockstep delay > works at 8-10 players > content cost.
+tolerance of lockstep delay > works at small sizes / with AI fill-ins >
+content cost. Asymmetric "N vs 1" games rank lower because they need a
+crowd of 5+ to be fun.
 
-| # | Game | Players | Why |
+| # | Game | Our size | Why |
 |---|---|---|---|
-| 1 | **Castle Fight** | 2-10 | Auto-spawn buildings + our combat AI; nearly zero micro so lockstep at 10 players is easy; short rounds. Best value. |
-| 2 | **Hero Line Wars** | 6-10 | Our heroes and creeps + a send/income system; low order rate; clean scaling by adding lanes. |
-| 3 | **Island Defense** | 10 (9v1) | The definitive 10-player WC3 asymmetric game; walls + towers + one big hunter; reuses building/pathing; good AI-Titan fallback. |
-| 4 | **Risk-style territory game** | 8-10 FFA | Slow, strategic, latency-proof; territory layer is cheap; offer a short variant to keep games under ~45 min. |
-| 5 | **Legion TD** (with TD report) | 4-8 | Placement-only fighting; shares wave/lane code with #1 and #2. |
-| 6 | **Troll and Elves / Tree Tag** | 8-12 | Shares 90% with Island Defense (one tag-family framework: hunters vs builders, walls, timer). |
-| 7 | **Wintermaul Wars** | 4-8 | Versus TD with sends - reuses #2's send/income and the TD report's mazing. |
-| 8 | **Elimination Tournament** | 8-10 | Small arenas + hero pick/shop; spectating fills downtime; good use of our hero system once abilities are richer. |
+| 1 | **Castle Fight** | 1v1-4v4 (5v5 max) | Auto-spawn buildings + our combat AI; nearly zero micro so lockstep is easy; short rounds; AI teammates work. Best value. |
+| 2 | **Hero Line Wars** | 1v1-4v4 | Our heroes and creeps + a send/income system; low order rate; scales by adding lanes. |
+| 3 | **Legion TD** (with TD report) | 1v1-4v4 | Placement-only fighting; shares wave/lane code with #1 and #2. |
+| 4 | **Wintermaul Wars** | 1v1-4v4 | Versus TD with sends - reuses #2's send/income and the TD report's mazing. |
+| 5 | **Risk-style territory game** | 3-6 FFA | Slow, strategic, latency-proof; AI nations fill the map; offer a short variant (<45 min). |
+| 6 | **Island Defense** | 5-7 (N builders vs 1 Titan) | The best asymmetric WC3 game; walls + towers + one big hunter; needs a crowd but an AI Titan helps. |
+| 7 | **Troll and Elves / Tree Tag** | 5-7 | Shares ~90% with Island Defense (one tag-family framework). |
+| 8 | **Elimination Tournament** | 4-8 | Small arenas + hero pick/shop; spectating fills downtime; good once hero abilities are richer. |
 
 Honourable mentions: **Sheep Tag** and **Vampirism** (same tag framework as
 #3/#6 - cheap once that exists), **Battleships** (if we add water units).
@@ -268,7 +282,7 @@ Avoid: Warlock, Pudge Wars, Run Kitty Run (twitch aiming/dodging), ORPGs
 (content), Mafia (not an RTS).
 
 Shared building blocks, in the order they unlock the most games:
-1. Group-channel lockstep for 8-10 peers (needed by every entry above).
+1. Group-channel lockstep for more than ~4 peers (needed for 3v3+ and the tag games).
 2. Auto-spawn buildings + attack-move lane AI + interval income (#1, #2, #5, #7).
 3. Send-creeps-to-opponent with income bonus (#2, #5, #7).
 4. Walls, size-aware pathing (1x1 gaps vs 2x2 movers), repair (#3, #6, Sheep Tag, Vampirism).

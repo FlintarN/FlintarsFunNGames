@@ -2,7 +2,8 @@
 
 Goal: rebuild the classic WC3 custom game **Footmen Frenzy** (genre: "Footmen Wars", "footies")
 inside our deterministic Lua RTS (tile grid, now 64x40; Human + Orc units/heroes/items exist;
-2-player lockstep + computer AI). **Requirement: custom games must support up to 8–10 players.**
+2-player lockstep + computer AI). The engine allows up to 8–10 players; **this mode is designed
+for 4 players (one per corner)**, with a short note on a bigger version (§9.4).
 
 Legend: **[src]** = from a source listed in §11; **[conv]** = genre convention / widely remembered
 but not confirmed by a fetched source; **[ours]** = our proposal.
@@ -250,109 +251,107 @@ very strong towers placeable "almost anywhere" — cited as a balance problem [s
 
 ---
 
-## 9. Design for 2 / 4 / 8–10 players [ours]
+## 9. Main design: 4 players, 4 corners [ours]
 
-### 9.1 Layout model: "corners × slots"
+8–10 players is the engine's maximum, not this mode's target. **Footmen Frenzy is designed for
+4 players**: one player per corner, free-for-all by default, with 2v2 as an option. This keeps
+Frenzy's best feature (4 corners, fights on every edge and in the centre, third-party ganks)
+while staying within 4 heroes and 4 spawn streams.
 
-Use the Frenzy topology as a **parameter**, not a fixed 4×3:
+### 9.1 Layout (4 corners)
 
-- Square-ish map, **4 corner zones**, each with **up to 3 base slots** in a triangle (front-left,
-  front-right, rear). Rear slot is the "shielded" one.
-- A **team owns 1 or 2 corners**. That covers every count up to 12 with the same map art.
-- Neutral middle: **Archvault-style shop + mana aura** in the exact centre; weapon shops W/E,
-  armor shops N/S (reuse our existing Arcane Vault / Voodoo Lounge as the shop buildings).
-- Each corner: team-only shop at the back (reuse items we already have).
+- **Map 64x64** (square; 64x40 works for a 2-player test build). Every corner has one base
+  slot: the barracks sits behind a short choke, with a team-only shop behind it.
+- **Centre**: Archvault-style shop with a mana-regen aura (reuse Arcane Vault / Voodoo Lounge art).
+  Optional weapon shop W/E and armor shop N/S on the edges between corners (as in Frenzy).
+- Paths: each corner connects to **both neighbours along the edge** and **to the centre** on the
+  diagonal. This gives 3 fronts per base, which is what makes 4-corner FFA work.
+- Hero tavern: a panel at game start (no physical tavern area needed).
 
-| Players | Default teams | Corners used | Map | Notes |
-|---|---|---|---|---|
-| 2 | 1v1 | 2 opposite corners (or W vs E on 64x40) | **64x40** (current) | Works today; centre shop in the middle |
-| 3 | FFA 1v1v1 | 3 corners | 64x64 | 4th corner empty (or AI) |
-| 4 | **2v2** (or FFA 4) | 2v2: each team 2 adjacent corners? No — keep 1 corner/team, 2 slots each | 64x64 | FFA uses all 4 corners |
-| 6 | 3v3 or 2v2v2 | 2 or 3 corners | 96x96 | |
-| 8 | **4 teams × 2** (Frenzy feel) or 2×4 | 4 corners × 2 slots | 96x96 | StarCraft port proves 2v2v2v2 |
-| 9 | 3 × 3 | 3 corners × 3 slots | 96x96 | |
-| 10 | **2 × 5** (team = 2 adjacent corners, 3+2 slots) or 5 × 2 (needs 5 zones — avoid) | 4 corners | 96x96 (or 128x80) | 4 teams 3/3/2/2 also allowed with handicap gold |
-
-Uneven teams: give the short team **+30 % spawn rate per missing player** or let its players own
-an extra (AI-less) barracks [ours]. Original Frenzy just let empty slots be empty.
-
-### 9.2 Spawn / unit budget (lockstep performance)
-
-Free endless spawns are the main perf risk. 10 players × 1 unit / 10 s → +60 units/min.
-
-- **Per-player live-unit cap** for spawned units, scaled by player count:
-  `cap = clamp(floor(200 / players), 16, 40)` → 2p 40, 4p 40, 8p 25, 10p 20 [ours].
-  At the cap the barracks pauses (Frenzy's own map ran into this; WC3 used the food cap) [conv].
-- Spawns are deterministic from game time + tier table → zero network traffic except commands.
-- **Auto-send** option per player (units walk to a chosen enemy corner / the centre) because
-  Frenzy has no rally point and units piling up is a known newbie mistake — cheap QoL and
-  essential for AI and for 10-player games where you can't micro everything [ours].
-- Higher tiers spawn **fewer, stronger** units (already true in Frenzy) → late game gets cheaper
-  to simulate, not more expensive.
-
-### 9.3 What changes by size
-
-| | 2 players | 4 players | 8–10 players |
+| Mode | Teams | Corners | Notes |
 |---|---|---|---|
-| Teams | 1v1 | 2v2 / FFA | 4×2, 3×3, 2×5 |
-| Map | 64x40 | 64x64 | 96x96 |
-| Spawn interval | 10 s | 10 s | 10 s, cap 20–25 units/player |
-| Tier unlock times | Shortened ×0.6 (T1 at ~4 min) | ×0.8 | Frenzy timings (7/10/17/24 min) |
-| Game length target | 15–25 min | 25–40 min | 40–60 min |
-| Gold sharing | n/a | give-gold command | give-gold; dead/leaver gold split |
-| Leavers | AI takes over | AI takes over | AI takes over, else barracks dies (Frenzy) |
-| Base HP | Lower (shorter games) | normal | normal; Tier raises base HP |
+| **FFA (default)** | 1v1v1v1 | NW, NE, SE, SW | Last barracks standing wins |
+| 2v2 | NW+NE vs SW+SE (adjacent corners) | all 4 | Give-gold command; shared vision |
+| 3 players | 1v1v1 | 3 corners | Empty corner left open (or an AI) |
+| 2 players / test | 1v1 | opposite corners (or W vs E on 64x40) | Also vs AI |
+| Empty slots | — | — | Filled by our computer AI, or left empty |
+
+### 9.2 Numbers for 4 players
+
+| Item | Value | Why |
+|---|---|---|
+| Spawn interval | 10 s (tier tables in §3.3, simplified in §10) | Frenzy value |
+| Spawned-unit cap | **40 per player** (160 total) | Keeps lockstep cheap; WC3 used a food cap |
+| Tier unlock times | T1 4 min (free, race pick), T2 8, T3 13, T4 18 | Frenzy's 7/10/17/24 min, scaled for a 1-per-corner game |
+| Game length target | 25–40 min | Shorter than a 12-player Frenzy |
+| Start gold / hero | 2,000 / 1,900 | Frenzy values |
+| Barracks HP | ~3,000 fortified, +HP per tier | "Higher tier = tougher base" rule |
+| Leaver | AI takes over (our rule); Frenzy would destroy the barracks and split gold | |
+
+### 9.3 Spawn budget (lockstep)
+
+- Spawns are deterministic from game time + tier table → no network traffic beyond commands.
+- **Auto-send** option per player (units walk to a chosen corner or the centre). Frenzy has no
+  rally point and pile-ups are a known newbie mistake. Needed for the AI anyway.
+- Higher tiers spawn **fewer, stronger** units, so late game gets cheaper to simulate.
+
+### 9.4 Brief note: a bigger version (up to 8–10, later)
+
+Same map logic with **up to 3 base slots per corner** (Frenzy's triangle, rear slot shielded):
+8 players = 4 teams × 2, 9 = 3 × 3, 10 = 2 × 5 (each team owns 2 adjacent corners) or 4 teams
+3/3/2/2. That needs a **96x96** map, a per-player spawn cap of about `floor(200 / players)`
+(→ 20–25), Frenzy's original tier timers, and splitting a dead player's gold to their team.
+Not part of the first versions.
 
 ---
 
 ## 10. Minimal faithful first version (scope) [ours]
 
-**Mode: "Footmen Frenzy" — 2 players (1v1 or vs AI) on the current 64x40 map, built for 4 corners
-later.** Uses only units/heroes/items we already have.
+**Mode: "Footmen Frenzy", 4-player FFA on a 64x64 four-corner map (2-player 64x40 build first for
+testing), human players or AI in any slot.** Uses only units/heroes/items we already have.
 
-1. **Bases**: each player gets one **Barracks** (Human) / **Orc Barracks** (fortified, high HP,
-   say 3,000) and nothing else to build. No workers, no gold mines, no lumber.
-2. **Spawning**: every 10 s the barracks spawns its current tier unit next to itself; per-player
-   cap; optional **auto-send** toggle (to enemy base).
+1. **Bases**: each player gets one **Barracks** (Human) / **Orc Barracks** (fortified, ~3,000 HP)
+   and builds nothing else. No workers, no gold mines, no lumber.
+2. **Spawning**: every 10 s the barracks spawns its current tier unit next to itself; cap 40;
+   optional **auto-send** toggle (to a chosen enemy corner or the centre).
 3. **Tiers (2 races = our 2 factions, 4 tiers, mapped to existing units)**:
 
    | Tier | Human (have) | Orc (have) | Cost | Spawn |
    |---|---|---|---|---|
    | 0 | Footman | Footman (neutral start) | — | 1 / 10 s |
    | 1 | Rifleman | Grunt | free at 4 min (pick race) | 1 / 11 s |
-   | 2 | Militia ×2 (or Priest/Sorceress mix) | Troll Headhunter | 1,400 | 2 / 13 s · 1 / 8 s |
+   | 2 | Militia ×2 | Troll Headhunter | 1,400 | 2 / 13 s · 1 / 8 s |
    | 3 | Knight | Raider | 2,000 | 1 / 10 s |
    | 4 | Siege Engine (Steam Tank) | Tauren (or Kodo) | 4,000 | 1 / 12 s |
 
    Race switch at same tier: 100/400/700/1,000 g. No downgrades.
 4. **Upgrades** at the barracks: Weapons and Armor/HP, **5 levels** in v1 (Frenzy has 15),
-   each +10 % / cost 300·level; **one racial**: Human Evasion 20→40 %, Orc Critical 15 %×2→35 %×2.5,
-   3 levels at 500/1,000/1,500. Reuse our Blacksmith/War Mill upgrade code paths.
-5. **Hero**: start with 2,000 gold, hero costs 1,900 at a tavern panel listing our 8 heroes
-   (all four Human + four Orc, cross-race allowed as in Frenzy). One hero per player in v1.
+   each +10 %, cost 300 × level. **One racial**: Human Evasion 20→40 %, Orc Critical
+   15 %×2 → 35 %×2.5, 3 levels at 500/1,000/1,500. Reuse our Blacksmith/War Mill upgrade code.
+5. **Hero**: start with 2,000 gold; hero costs 1,900 from a tavern panel listing our 8 heroes
+   (all Human + Orc heroes, cross-race allowed as in Frenzy). One hero per player in v1.
    Revive at own barracks (WC3 revive cost/time). Hero bounty ~250.
 6. **Economy**: gold only from kills (unit bounty by unit level; footman ~38). No interest, no
-   lumber. "Give gold to ally" command (needed once teams exist).
-7. **Shops**: one centre shop (our existing items + potions + Town Portal) with a mana-regen
-   aura; Scroll of Speed / Roar-style army scrolls if cheap to add.
-8. **Win/lose**: barracks destroyed = out; last team standing wins. Leaver → AI (our rule) .
-9. **AI**: buys hero at start; tiers up when gold ≥ next tier + reserve; buys weapon/armor
-   levels otherwise; auto-send always on; hero follows its army and retreats/TPs at low HP.
-   Fully bot-testable (fits "bot-test now, group-test later").
+   lumber. "Give gold" command for 2v2.
+7. **Shops**: one centre shop (our existing items + potions + Town Portal) with a mana-regen aura.
+8. **Win/lose**: barracks destroyed = out; last player (or team) standing wins. Leaver → AI.
+9. **AI**: buys a hero at start; tiers up when gold ≥ next tier + reserve; otherwise buys
+   weapon/armor levels; auto-send at the weakest neighbour; hero follows its army and
+   retreats/TPs at low HP. Fully bot-testable: 4 AIs FFA is the main test.
 
 ### Later (in order)
 
-1. **4 corners + 64x64 map**, teams of 1–3 slots, FFA and 2v2 (§9).
-2. **96x96 + 8–10 players** with the per-player spawn cap and dead-player gold split.
-3. **Counter wheel** via per-race attack/armor types (150/100/75 %, 35 % vs fortified).
-4. Tier 5 (Kodo / Steam Tank-class) as a very expensive stalemate breaker.
-5. **Creep Shop**: our Priest, Sorceress, Shaman, Witch Doctor as 200–300 g mercenaries,
+1. 2v2 mode on the same map (shared vision, give gold).
+2. **Counter wheel** via per-race attack/armor types (150/100/75 %, 35 % vs fortified).
+3. Tier 5 (Kodo / Steam Tank class) as a very expensive stalemate breaker.
+4. **Creep Shop**: our Priest, Sorceress, Shaman, Witch Doctor as 200–300 g mercenaries,
    **3-food cap**, higher bounty.
-6. Team-only corner shops; Archvault scrolls (Roar, Speed, Darkness, mass teleport); Tank Token.
-7. Undead + Night Elf races once those units exist (Ghoul/Fiend/Mage/Abom; Archer/Huntress/DotT/Dryad).
-8. Hero pick modes: Random (+ small bonus ring), Random Draft (pool of N), -repick once.
-9. Hero level cap 18 / ability levels 6 (needs our ability data extended past WC3's 3).
-10. Altar-of-Legends-style late items; tower variant (4.2) as an optional rule.
+5. Team-only corner shops; Archvault scrolls (Roar, Speed, Darkness, mass teleport); Tank Token.
+6. Undead + Night Elf races once those units exist (Ghoul/Fiend/Mage/Abom; Archer/Huntress/DotT/Dryad).
+7. Hero pick modes: Random (+ small bonus ring), Random Draft (pool of N), -repick once.
+8. Hero level cap 18 / ability levels 6 (needs our ability data extended past WC3's 3).
+9. Altar-of-Legends-style late items; tower variant (4.2) as an optional rule.
+10. Bigger version, 8–10 players (§9.4).
 
 ---
 
