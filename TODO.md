@@ -4,7 +4,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 ## In progress
 
-- [ ] Warcraft III PvP (see "PvP for Hearthstone and Warcraft III"). Hearthstone PvP: built, needs a real test with a friend.
+- [ ] PvP for Hearthstone and Warcraft III: built; needs a real test with a friend (then the roadmap: step 1, tech and upgrades).
 - [ ] Try Poker, Settle up and the Slot Machine against bots in game (v0.4): looks, animations, flow.
 
 ## Next
@@ -58,12 +58,12 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [ ] Queue: also match through the guild; rank by PvP record later.
 
 ### Warcraft III PvP (second: real time)
-- [ ] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
-- [ ] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
-- [ ] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; drop and win after 30 s.
+- [x] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
+- [x] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
+- [x] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; claim victory after 45 s.
 - [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies. Use the realm queue (Core/Queue.lua) too.
-- [ ] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
-- [ ] Wins and losses in the stats and on a leaderboard.
+- [x] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
+- [x] Wins and losses in the stats and on a leaderboard (warcraftpvp; no board on the page yet).
 
 ## Warcraft III roadmap
 

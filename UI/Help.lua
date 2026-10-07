@@ -229,6 +229,14 @@ H.RULES = {
         { "Call to Arms", "Human Town Hall: Call to Arms (C) rings the alarm. Peasants nearby run to the hall and "
             .. "fight as Militia for 45 seconds. Orc: Battle Stations (B) sends peons into the burrows (4 each), "
             .. "and burrows with peons throw spears. Back to Work (W) ends it early." },
+        { "Fog of war", "You only see around your own units and buildings. Black is ground you've never "
+            .. "seen; dim is ground you've seen, but nothing of yours is there now. Enemy buildings you've found "
+            .. "stay on the map." },
+        { "PvP", "Play a friend opens a lobby (group, guild, realm or a private code); Find an opponent looks for "
+            .. "someone on your realm. You each pick a race. Both addons run the same game: your orders reach the "
+            .. "other side in a moment, so they take effect about half a second after you click. If the other "
+            .. "player's messages stop, the game waits (it says so); after 45 seconds you can claim the victory. "
+            .. "Surrender gives up. Keep the game running: switching tabs is fine, it carries on." },
         { "Difficulty", "Pick Easy, Normal or Hard on the start screen. Easy builds slowly and waits 10 minutes "
             .. "before attacking; Normal waits 6; Hard waits 4, builds more and gets 25% more per trip." },
         { "Economy", "Workers carry 10 gold or lumber a trip. Every unit needs food: a hall gives 12, each farm or "
