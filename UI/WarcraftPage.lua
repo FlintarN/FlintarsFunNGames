@@ -1385,12 +1385,16 @@ function P:SelectAt(x, y, add)
     local last = self.lastClick
     local double = last and last.type == e.type and last.id == e.id and Now() - last.t < 0.4
     self.lastClick = { id = e.id, type = e.type, t = Now() }
-    if e.owner == ME and e.kind == "unit" and (double or (IsControlKeyDown and IsControlKeyDown())) then
+    if e.owner == ME and (e.kind == "unit" or e.kind == "building") and (double or (IsControlKeyDown and IsControlKeyDown())) then
         self:SelectType(e.type, add)
         self:Voice(e, "what")
         return
     end
-    if add and e.owner == ME and e.kind == "unit" then
+    -- Shift adds (units to units, buildings to buildings of the same kind).
+    local first = self:Selected()[1]
+    local fits = first == nil or (e.kind == "unit" and first.kind == "unit")
+        or (e.kind == "building" and first.kind == "building" and first.type == e.type)
+    if add and e.owner == ME and fits then
         for i, id in ipairs(self.sel) do
             if id == e.id then table.remove(self.sel, i) return end
         end
@@ -1417,7 +1421,7 @@ function P:SelectType(utype, add)
     for _, id in ipairs(picked) do have[id] = true end
     for _, id in ipairs(self.st.list) do
         local e = self.st.ents[id]
-        if e and e.owner == ME and e.kind == "unit" and e.type == utype and not have[id]
+        if e and e.owner == ME and (e.kind == "unit" or e.kind == "building") and e.type == utype and not have[id]
             and e.x >= x0 and e.x <= x1 and e.y >= y0 and e.y <= y1 then
             table.insert(picked, id)
         end
@@ -1484,12 +1488,12 @@ function P:Smart(x, y)
     self:Mark(x, y)
     if #units == 0 then
         -- A building of yours: set its rally point.
-        local b = self:Selected()[1]
-        if b and b.owner == ME and b.kind == "building" then
+        local list = self:MyBuildings()
+        for _, b in ipairs(list) do
             self:Cmd({ type = "rally", building = b.id, x = x, y = y,
                 target = target and target.kind == "mine" and target.id or nil, tree = tree })
-            self:Say("Rally point set")
         end
+        if #list > 0 then self:Say("Rally point set") end
         return
     end
     local q = Shift()
@@ -1584,10 +1588,9 @@ function P:TargetAt(x, y)
     elseif mode == "gather" then
         self:Smart(x, y)
     elseif mode == "rally" then
-        local b = self:Selected()[1]
         local target = E().At(st, x, y)
         local i = math.floor(y) * st.w + math.floor(x)
-        if b then
+        for _, b in ipairs(self:MyBuildings()) do -- (every selected building of the kind)
             self:Cmd({ type = "rally", building = b.id, x = x, y = y,
                 target = target and target.kind == "mine" and target.id or nil, tree = st.trees[i] and i or nil })
         end
@@ -1642,18 +1645,39 @@ function P:StartPlace(btype)
     self:Say("Click where to build (right-click cancels)")
 end
 
-function P:Research(key)
-    local b = self:Selected()[1]
-    if not b then return end
-    local ok, why = self:Cmd({ type = "research", building = b.id, key = key })
-    if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+-- Your selected buildings of the first one's kind (a group of barracks...),
+-- the least busy first.
+function P:MyBuildings()
+    local sel = self:Selected()
+    local first = sel[1]
+    local out = {}
+    if not (first and first.owner == ME and first.kind == "building") then return out end
+    for _, e in ipairs(sel) do
+        if e.owner == ME and e.kind == "building" and e.type == first.type and e.progress >= 1 then table.insert(out, e) end
+    end
+    table.sort(out, function(a, b) if #a.queue ~= #b.queue then return #a.queue < #b.queue end return a.id < b.id end)
+    return out
 end
 
+function P:Research(key)
+    local why
+    for _, b in ipairs(self:MyBuildings()) do
+        local ok
+        ok, why = self:Cmd({ type = "research", building = b.id, key = key })
+        if ok then return end
+    end
+    if why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+end
+
+-- Train: at the selected building with the shortest queue.
 function P:Train(utype)
-    local b = self:Selected()[1]
-    if not b then return end
-    local ok, why = self:Cmd({ type = "train", building = b.id, utype = utype })
-    if not ok then self:Say(why and (why:sub(1, 1):upper() .. why:sub(2)) or "Can't train that") end
+    local why
+    for _, b in ipairs(self:MyBuildings()) do
+        local ok
+        ok, why = self:Cmd({ type = "train", building = b.id, utype = utype })
+        if ok then return end
+    end
+    self:Say(why and (why:sub(1, 1):upper() .. why:sub(2)) or "Can't train that")
 end
 
 function P:CancelTrain()
@@ -2855,7 +2879,11 @@ function P:DrawCommands(sel)
                 action = function() self.menu = "build" end })
         end
     end
-    local b = #mine == 1 and mine[1].kind == "building" and mine[1].progress >= 1 and mine[1]
+    local same = #mine >= 1
+    for _, e in ipairs(mine) do
+        if e.kind ~= "building" or e.type ~= mine[1].type then same = false end
+    end
+    local b = same and mine[1].progress >= 1 and mine[1]
     -- A neutral building (Goblin Merchant, Mercenary Camp): its wares.
     if not b and #sel == 1 and sel[1].kind == "building" and sel[1].owner == 0 and E().Def(sel[1]).neutral then b = sel[1] end
     if b then

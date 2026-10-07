@@ -180,3 +180,32 @@ function WcSubgroupTests()
     check(#view.sel == 1 and view.sel[1] == pal.id, "wc subgroup: double-click: just the hero")
     view:Quit()
 end
+
+-- Buildings in groups: double-click selects all barracks; training spreads
+-- over them; one rally point for all.
+function WcBuildingGroupTests()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 33)
+    local st = view.st
+    st.players[1].gold, st.players[1].lumber = 5000, 5000
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local b1 = E.SpawnBuilding(st, 1, "barracks", math.floor(hx) + 5, math.floor(hy) + 2, true)
+    local b2 = E.SpawnBuilding(st, 1, "barracks", math.floor(hx) + 5, math.floor(hy) + 6, true)
+    view.camX, view.camY = hx * 20 - 300, hy * 20 - 150
+    view.lastClick = nil
+    local x1, y1 = E.Center(b1)
+    view:SelectAt(x1, y1)
+    view:SelectAt(x1, y1) -- double-click
+    check(#view.sel == 2, "groups: double-click a barracks: both selected (" .. #view.sel .. ")")
+    view:Train("footman")
+    view:Train("footman")
+    check(#b1.queue == 1 and #b2.queue == 1, "groups: two footmen, one at each barracks")
+    view.targeting = "rally"
+    view:TargetAt(hx + 10, hy + 10)
+    check(b1.rally and b2.rally and b1.rally.x == b2.rally.x, "groups: one rally point for both")
+    view:Quit()
+end
