@@ -156,3 +156,8 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [x] Death Roll and High-Low with real /rolls, host-verified and player-checked (2026-10-06)
 - [x] Practice with bots, + Bot button (2026-10-06)
 - [x] Forever-style look: portrait window, side tabs, marble panels with bronze borders, green felt table, tumbling die and spinning numbers (2026-10-06)
+
+## Sound (next, after the looks)
+- Warcraft III: the real Warcraft III unit voices that are in WoW's files (sound/creature/peasant, peon, footman, grunt, rifleman, tauren...: "yes", "what", "ready", attack, warcry, pissed when clicked a lot); WoW NPC voices for the rest. Ready-when-trained, "work complete", "we're under attack", "not enough gold/lumber", building/construction and death sounds, spell sounds from sound/spells, weapon hits, gold mining and chopping, victory/defeat music.
+- Hearthstone: card play and draw, minion attack/death sounds from each creature's own WoW sounds, spell sounds, hero emotes/lines, turn start and timer warning, victory/defeat, a menu/queue sound.
+- A volume slider and separate switches (voices, effects, music) in Settings.
