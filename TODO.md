@@ -168,4 +168,10 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
 - Player counts: 10 is the cap, not the target. Each mode at its natural size: co-op defense 4–5 players, Footmen 4, versus 4v4 or 5v5, melee 1v1/2v2. Tower Defense: free-for-all (2 up to 8 players, each sending to the next) or team-based.
 - [ ] Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
 - [ ] Map selection in the lobby: standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
+- Suggested order (from the research, not decided):
+  1. Maps as data (ASCII grid + legend, symmetry, a validator); our map as "Riverford"; a map picker in the lobby.
+  2. More players: seats and teams, one broadcast per turn on the group channel, the AI fills empty seats, bigger maps with a scrolling camera.
+  3. Shared building blocks: buildings that spawn units on a timer, income on a timer, sending creeps.
+  4. Hero Defense (co-op 4–5, reuses heroes/items/shops), then Footmen (4 corners), Tower Defense (free-for-all up to 8, or teams; Line Tower Wars style), then DotA (5v5 on 96x96).
+  5. Later picks from other_customs.md: Castle Fight, Hero Line Wars, Legion TD, Wintermaul Wars, a Risk-style game, Island Defense, Troll and Elves.
 - [ ] Custom games, in order to be decided after the research: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.
