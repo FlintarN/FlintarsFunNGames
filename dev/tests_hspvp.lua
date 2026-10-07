@@ -293,3 +293,17 @@ function HsQueueAlone()
     v:Refresh()
     check(v.menu:IsShown() and v.friendButton:IsShown(), "hs menu: Play a Friend is back after a lobby")
 end
+
+-- Your own "I'm looking" coming back from the channel, under any form of
+-- your name (or someone else's name but your tag), is never a match.
+function HsQueueEcho()
+    HsQueueJoin("jaina")
+    local Q = ns.Queue
+    local me = ns.Me()
+    for _, from in ipairs({ me, me .. "-SomeRealm", me .. " SomeRealm", "Stranger" }) do
+        ns.Net.Receive(from, "MQ:1:1/1:hearthstone\t" .. Q.tag)
+    end
+    Advance(1)
+    check(S.Get("hearthstone") == nil and Q.Partner("hearthstone") == nil, "hs queue: never matched with yourself")
+    View().queueFrame.cancel._scripts.OnClick()
+end

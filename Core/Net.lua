@@ -121,9 +121,20 @@ function Net.Whisper(cmd, data, target)
     return SendParts(cmd, data, "WHISPER", target)
 end
 
+-- Is this sender me? Channels can give the name with the realm in other
+-- forms ("Name-Realm", "Name Realm"), so compare without them.
+local function Squash(s) return (s or ""):lower():gsub("[%s%-']", "") end
+function Net.IsMe(sender)
+    if not sender then return false end
+    if ns.Short(sender) == ns.Me() then return true end
+    local name, realm = UnitName("player"), GetRealmName and GetRealmName() or ""
+    local s = Squash(sender)
+    return s == Squash(name) or s == Squash(name .. realm)
+end
+
 function Net.Receive(sender, message)
+    if Net.IsMe(sender) then return end
     sender = ns.Short(sender)
-    if sender == ns.Me() then return end
     local cmd, id, i, n, data = message:match("^(%w+):(%d+):(%d+)/(%d+):(.*)$")
     if not cmd then return end
     i, n = tonumber(i), tonumber(n)

@@ -552,6 +552,7 @@ await Section('Hearthstone PvP', async () => {
   await p.run('HsPvpPractice()');
   await p.run('HsMenuTests()');
   await p.run('HsQueueAlone()');
+  await p.run('HsQueueEcho()');
 });
 
 await Section('Hearthstone PvP over a code lobby', async () => {

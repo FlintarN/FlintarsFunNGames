@@ -9,8 +9,9 @@
 -- queueing. If the invite isn't taken within a few seconds, both keep
 -- looking.
 --
--- Messages: MQ = "kind" (I'm looking, realm channel), MI = "kind\tcode"
--- (join my lobby, whisper).
+-- Messages: MQ = "kind\ttag" (I'm looking, realm channel; the tag is made once
+-- per login, so your own message is never taken for someone else's),
+-- MI = "kind\tcode" (join my lobby, whisper).
 local ADDON, ns = ...
 
 local Q = {}
@@ -21,6 +22,7 @@ Q.SEEN = 15       -- someone counts as looking for this long after their last me
 Q.INVITE = 12     -- seconds an invite waits for its answer
 
 Q.queued = {}     -- kind -> { since, hosting = name, invited = time }
+Q.tag = tostring(math.random(100000, 999999)) .. tostring(math.random(100000, 999999))
 Q.seen = {}       -- kind -> name -> last time they said they're looking
 
 local function Now() return ns.Now() end
@@ -45,7 +47,7 @@ end
 
 local function Ping(kind)
     local q = Q.queued[kind]
-    if q and not q.hosting and not q.joining then ns.Net.Send("MQ", kind, "realm") end
+    if q and not q.hosting and not q.joining then ns.Net.Send("MQ", kind .. "\t" .. Q.tag, "realm") end
 end
 
 -- Join the queue (false, why if the realm channel can't be used).
@@ -123,8 +125,9 @@ function Q.Check(kind)
 end
 
 -- Someone else is looking: the name that sorts first hosts.
-ns.Net.On("MQ", function(sender, kind)
-    if not ns.Games[kind] or sender == ns.Me() then return end
+ns.Net.On("MQ", function(sender, data)
+    local kind, tag = data:match("^(%w+)\t?(%w*)$")
+    if not kind or not ns.Games[kind] or tag == Q.tag or ns.Net.IsMe(sender) then return end
     Q.seen[kind] = Q.seen[kind] or {}
     Q.seen[kind][sender] = Now()
     local q = Q.queued[kind]
