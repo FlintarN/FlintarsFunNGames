@@ -240,6 +240,10 @@ H.RULES = {
             .. "on the board) and spells, paid for with mana: one crystal on your first turn, one more every "
             .. "turn, up to 10. You draw a card every turn; the player going second gets The Coin (one extra "
             .. "mana, once)." },
+        { "Play a friend", "On the start screen, Play a friend opens a lobby: your group, guild, realm or a private "
+            .. "code (or practice against a bot). When you're both in, the host clicks Start and you each pick a hero "
+            .. "and deck. You never see each other's hand. A turn lasts 75 seconds (the End Turn button counts down "
+            .. "at the end); Concede gives up, and the host can offer a rematch." },
         { "Playing", "Drag a card from your hand onto the board to play it: minions land where you drop them, "
             .. "spells can be dropped right on their target. Or click a card, then its target (right-click "
             .. "cancels). Click one of your minions, then an enemy, to attack. Minions can't attack the turn "

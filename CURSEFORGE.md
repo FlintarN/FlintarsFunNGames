@@ -1,6 +1,6 @@
 # Flintar's Fun 'n' Games
 
-A whole games room in one window, styled like WoW's own. A **Casino** for your group, where every number comes from the game's own `/roll` so nobody can fake a result, and an **Arcade** of just-for-fun games: Hearthstone against the computer, Tetris, Battleship, Agar.io and more, with guild and realm leaderboards.
+A whole games room in one window, styled like WoW's own. A **Casino** for your group, where every number comes from the game's own `/roll` so nobody can fake a result, and an **Arcade** of just-for-fun games: Hearthstone against the computer or a friend, Warcraft III, Tetris, Battleship, Agar.io and more, with guild and realm leaderboards.
 
 Type `/fng` to open it, or click the dice on your minimap.
 
@@ -26,12 +26,13 @@ No betting, just games. Open a lobby to your group, your guild, the whole realm,
 
 ### Hearthstone
 
-The card game, in WoW, against the computer.
+The card game, in WoW, against the computer or **a friend (PvP)**.
 
 - Play **all nine classes**: Jaina, Thrall, Garrosh, Malfurion, Rexxar, Uther, Anduin, Valeera and Gul'dan, each with the original basic cards (real costs, stats and text) and their hero power.
 - Minions show their **WoW creature** as a live 3D model: Murloc Raider, Boulderfist Ogre, Core Hound, War Golem and more.
 - Taunt, Charge, Divine Shield, Windfury, Freeze, Spell Damage, Battlecries, Overload, hero powers and fatigue.
 - **Build your own decks**: class and neutral cards, two copies each, 30 cards.
+- **PvP**: open a lobby for your group, guild, realm or a private code, pick your heroes and decks and play. Nobody sees the other hand, there's a turn timer, concede and rematch.
 - A Hearthstone-style board: tavern table, hero portraits in gold frames, the oval End Turn button. Drag cards onto the board, watch spells fly and minions lunge.
 
 ### Warcraft III

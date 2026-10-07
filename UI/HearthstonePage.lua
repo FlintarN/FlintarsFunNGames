@@ -1,10 +1,13 @@
 -- HearthstonePage: the board. Everything it shows comes from the engine's
 -- state (ns.HS.Engine); every action goes through E.Apply and the events
 -- that come back are played as animations (lunges, numbers, fades, cards
--- flying). Player 1 is you; player 2 is the AI (or, later, another player).
+-- flying). Player 1 is you; player 2 is the AI or, in PvP, the other player:
+-- the host's game is shown mirrored to whoever sits in chair 2, so "you"
+-- are always player 1 here (see P:PvpView).
 local ADDON, ns = ...
 
 local W = ns.Widgets
+local A = ns.Arcade
 local K = ns.Kit
 local C = ns.Cards
 local P = {}
@@ -515,8 +518,15 @@ end
 ---------------------------------------------------------------------------
 function P.New(parent, kind)
     local self = setmetatable({ kind = kind, G = ns.Games[kind], minions = {}, handCards = {}, free = {} }, P)
-    self.setup = CreateFrame("Frame", nil, parent)
+    -- PvP: the Arcade lobby panel (who can join, create, practice, join by code).
+    A.BuildSetup(self, parent)
     self.setup:Hide()
+    local back = W.Button(self.setup, "Back", 90, function()
+        self.setupOpen = false
+        self:ShowStart()
+        self:Refresh()
+    end, 22)
+    back:SetPoint("BOTTOMLEFT", 10, 10)
     local v = CreateFrame("Frame", nil, parent)
     v:SetAllPoints()
     self.game = v
@@ -642,6 +652,13 @@ function P.New(parent, kind)
         end
     end
 
+    -- PvP: give up this game.
+    self.concede = W.Button(b, "Concede", 76, function()
+        W.Confirm("Concede this game?", function() ns.Session.Act(self.kind, "concede") end)
+    end, 20)
+    self.concede:SetPoint("TOPLEFT", 8, -8)
+    self.concede:Hide()
+
     -- Where a dragged minion will land.
     self.marker = b:CreateTexture(nil, "OVERLAY")
     self.marker:SetColorTexture(1, 0.82, 0.2, 0.9)
@@ -730,7 +747,10 @@ function P.New(parent, kind)
         row.name:SetWordWrap(false)
         row.count = W.Label(row, "", "GameFontNormalSmall")
         row.count:SetPoint("LEFT", 214, 0)
-        row.play = W.Button(row, "Play", 60, function() self:NewGame(self.deckHero, nil, row.deck.cards) end, 22)
+        row.play = W.Button(row, "Play", 60, function()
+            if self.pvp then return self:PvpDeck(self.deckHero, row.deck) end
+            self:NewGame(self.deckHero, nil, row.deck.cards)
+        end, 22)
         row.play:SetPoint("RIGHT", -128, 0)
         row.edit = W.Button(row, "Edit", 56, function()
             self.overlay:Hide()
@@ -755,6 +775,32 @@ function P.New(parent, kind)
     self.newDeckButton:SetPoint("BOTTOM", -56, 30)
     self.backButton = W.Button(o, "Back", 100, function() self:ShowStart() end, 24)
     self.backButton:SetPoint("LEFT", self.newDeckButton, "RIGHT", 12, 0)
+
+    self.friendButton = W.Button(o, "Play a friend", 140, function()
+        self.setupOpen = true
+        self:Refresh()
+    end, 24)
+    self.friendButton:SetPoint("BOTTOM", 0, 30)
+    W.Tooltip(self.friendButton, "Play a friend", "Open a lobby for your group, guild, realm or a private code, "
+        .. "or join someone else's. You each pick a hero and a deck.")
+    -- PvP lobby: who's in, and the buttons for what you can do now.
+    self.lobbyText = W.Label(o, "", "GameFontHighlight")
+    self.lobbyText:SetPoint("TOP", self.overSub, "BOTTOM", 0, -16)
+    self.lobbyText:SetWidth(BW - 120)
+    self.pvpButtons = {}
+    local S = ns.Session
+    local function PvpButton(key, label, width, fn, tip)
+        local btn = W.Button(o, label, width, fn, 24)
+        if tip then W.Tooltip(btn, label, tip) end
+        btn:Hide()
+        self.pvpButtons[key] = btn
+    end
+    PvpButton("start", "Start", 100, function() S.Start(self.kind) end)
+    PvpButton("bot", "Add bot", 100, function() S.AddBot(self.kind) end)
+    PvpButton("rematch", "Rematch", 100, function() S.Act(self.kind, "rematch") end, "Play again, same opponent.")
+    PvpButton("leave", "Leave", 100, function() S.Leave(self.kind) S.Dismiss(self.kind) self:Refresh() end)
+    PvpButton("close", "Close lobby", 110, function() A.CloseLobby(self) self:Refresh() end)
+    PvpButton("done", "Back", 100, function() S.Dismiss(self.kind) self:Refresh() end)
 
     self.againButton = W.Button(o, "Play again", 110, function() self:ShowStart() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
@@ -791,13 +837,17 @@ function P:ShowStart()
     self.overlay:Show()
     self.overTitle:SetText("Choose your hero")
     self.overTitle:SetTextColor(1, 0.82, 0)
-    self.overSub:SetText("You play against the computer with each hero's basic deck. Your opponent is picked at random.")
+    self.overSub:SetText(self.pvp and "Pick your hero, then a deck. Your opponent does the same."
+        or "Play the computer (your opponent is picked at random), or a friend.")
+    self:PvpButtons({})
+    self.lobbyText:SetText("")
+    self.friendButton:SetShown(not self.pvp)
     for _, b in ipairs(self.pick) do b:Show() end
     for _, r in ipairs(self.deckRows) do r:Hide() end
     self.newDeckButton:Hide()
     self.backButton:Hide()
     self.againButton:Hide()
-    self.resumeButton:SetShown(self.st ~= nil and not self.st.over)
+    self.resumeButton:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
 end
 
 -- Step two: the hero's decks (the basic one, then yours).
@@ -811,6 +861,7 @@ function P:ShowDecks(heroKey)
     for _, b in ipairs(self.pick) do b:Hide() end
     self.againButton:Hide()
     self.resumeButton:Hide()
+    self.friendButton:Hide()
     local decks = ns.HearthstoneDecks.For(heroKey)
     for i, row in ipairs(self.deckRows) do
         local d = decks[i]
@@ -858,6 +909,7 @@ end
 
 -- Stop without counting it (closing the tab).
 function P:Quit()
+    if self.pvp then return self:LeavePvp() end
     if not self.st then return end
     self.st = nil
     Save().game = nil
@@ -912,6 +964,7 @@ function P:MyTurn()
 end
 
 function P:Do(action)
+    if self.pvp then return self:PvpDo(action) end
     local st = self.st
     local before = self:Positions()
     local ok, events = E().Apply(st, action)
@@ -1116,6 +1169,7 @@ function P:Tick()
         self.endButton:SetEnabled(can)
         if st then self:Draw() end -- playable cards light up again
     end
+    if self.pvp then return self:PvpTick() end
     if not st or st.over or self.overlay:IsShown() then return end
     if st.active == AIP and not self:Busy() then
         local wait = self.aiWait or 0
@@ -1751,9 +1805,253 @@ function P:HoverPower(i)
 end
 
 function P:Refresh()
+    local s = ns.Session.Get(self.kind)
+    if s or self.setupOpen or self.pvp then return self:RefreshPvp(s) end
     if not self.st then return end
     if self.st.over and not self.overlay:IsShown() then self:GameOver() end
     self:Draw()
+end
+
+---------------------------------------------------------------------------
+-- PvP (a Session lobby; the host runs the engine: Games\Hearthstone.lua)
+---------------------------------------------------------------------------
+-- Which buttons the overlay shows (keys of self.pvpButtons), in a row.
+function P:PvpButtons(keys)
+    for _, b in pairs(self.pvpButtons) do b:Hide() end
+    local width = 0
+    for _, key in ipairs(keys) do width = width + self.pvpButtons[key]:GetWidth() + 8 end
+    local x = -width / 2
+    for _, key in ipairs(keys) do
+        local b = self.pvpButtons[key]
+        b:ClearAllPoints()
+        b:SetPoint("BOTTOMLEFT", self.overlay, "BOTTOM", x, 30)
+        b:Show()
+        x = x + b:GetWidth() + 8
+    end
+end
+
+-- Hide the start screen's own buttons (the PvP screens use their own).
+function P:PvpScreen(title, sub, lobby, keys)
+    self.overlay:Show()
+    for _, b in ipairs(self.pick) do b:Hide() end
+    for _, r in ipairs(self.deckRows) do r:Hide() end
+    for _, b in ipairs({ self.newDeckButton, self.backButton, self.againButton, self.resumeButton, self.friendButton }) do
+        b:Hide()
+    end
+    self.overTitle:SetText(title)
+    self.overTitle:SetTextColor(1, 0.82, 0)
+    self.overSub:SetText(sub or "")
+    self.lobbyText:SetText(lobby or "")
+    self:PvpButtons(keys or {})
+end
+
+-- Your hand from the host's whisper (by card id); the cards not here yet are
+-- left out until it comes.
+local function MyKeys(s)
+    local keyOf = {}
+    for _, c in ipairs(ns.Session.MyCards(s) or {}) do keyOf[c.id] = c.key end
+    return keyOf
+end
+
+-- The game as you may see it, with you as player 1.
+function P:PvpView(s)
+    local v = E().Copy(s.view)
+    local seat = self.G.Seat(s, ns.Me()) or 1
+    local keyOf = MyKeys(s)
+    local hand = {}
+    for _, c in ipairs(v.players[seat].hand) do
+        c.key = keyOf[c.id]
+        if c.key then table.insert(hand, c) end
+    end
+    v.players[seat].hand = hand
+    if seat == 2 then v = E().Mirror(v) end
+    return v
+end
+
+function P:PvpEvents(s)
+    local seat = self.G.Seat(s, ns.Me()) or 1
+    local keyOf = MyKeys(s)
+    local out = {}
+    for i, ev in ipairs(s.events or {}) do
+        local c = E().Copy(ev)
+        if c.kind == "draw" and c.owner == seat then c.key = keyOf[c.id] end
+        out[i] = c
+    end
+    if seat == 2 then out = E().Mirror(out) end
+    return out
+end
+
+function P:PvpDeck(heroKey, deck)
+    local text = "deck:" .. heroKey
+    if not deck.basic then text = text .. ":" .. table.concat(deck.cards, ",") end
+    local ok, why = ns.Session.Act(self.kind, text)
+    if ok == false then self:Say(why or "The host didn't take it") end
+    self:Refresh()
+end
+
+function P:PvpDo(action)
+    local s = ns.Session.Get(self.kind)
+    if not (s and self:MyTurn()) then return false end
+    local seat = self.G.Seat(s, ns.Me())
+    local a = seat == 2 and E().Mirror(action) or action
+    local ok, why = ns.Session.Act(self.kind, "do:" .. self.G.EncodeAction(a))
+    if ok == false then
+        self:Say(why or "Can't do that")
+        return false
+    end
+    self.sel = nil
+    if self.arrow then self.arrow:Hide() end
+    self.busyUntil = Now() + 0.25 -- until the host's answer comes back
+    return true
+end
+
+-- Leave PvP for the solo game again.
+function P:LeavePvp()
+    self.pvp, self.pvpGame, self.pvpStep, self.setupOpen = nil, nil, nil, false
+    self.concede:Hide()
+    local saved = Save().game
+    self.st = (saved and saved.players and not saved.over) and saved or nil
+    self:ShowStart()
+    if self.st then self:Draw() end
+end
+
+function P:RefreshPvp(s)
+    local S, me = ns.Session, ns.Me()
+    if not s then
+        -- The lobby panel (or back from a game).
+        if self.pvp then self:LeavePvp() end
+        self.setup:SetShown(self.setupOpen)
+        self.game:SetShown(not self.setupOpen)
+        if self.setupOpen then A.RefreshSetup(self) end
+        return
+    end
+    self.setupOpen = false
+    self.setup:Hide()
+    self.game:Show()
+    if not self.pvp then
+        self.pvp = true
+        self.pvpGame, self.pvpStep = nil, nil
+    end
+    local host, seated = S.IsHost(s), S.Find(s, me) ~= nil
+    local names = {}
+    for _, p in ipairs(s.players) do table.insert(names, p.name .. (p.name == s.host and " (host)" or "")) end
+    local who = "Players: " .. table.concat(names, ", ")
+    self.concede:SetShown(s.phase == "rolling" and s.stage == "play" and seated)
+
+    if s.phase == "lobby" then
+        local keys = {}
+        if host then
+            if s.test and S.CanAddBot(s) then table.insert(keys, "bot") end
+            table.insert(keys, "start")
+            table.insert(keys, "close")
+        elseif seated then
+            table.insert(keys, "leave")
+        end
+        self:PvpScreen("Hearthstone: lobby", A.ScopeLine(s), who .. "\n\n"
+            .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
+            keys)
+        self.pvpButtons.start:SetEnabled(#s.players >= 2)
+        return
+    elseif s.phase == "cancelled" then
+        self:PvpScreen("The lobby is closed", s.banner or "", "", { "done" })
+        return
+    end
+
+    if s.stage == "decks" then
+        if seated and not (s.chosen and s.chosen[me]) then
+            -- Pick a hero and deck (the normal start screen, sent to the host).
+            if not self.picking then
+                self.picking = true
+                self:ShowStart()
+            end
+        else
+            self.picking = false
+            local waiting = {}
+            for _, p in ipairs(s.players) do
+                if not (s.chosen and s.chosen[p.name]) then table.insert(waiting, p.name) end
+            end
+            self:PvpScreen("Ready", "Waiting for " .. table.concat(waiting, ", ") .. " to choose a deck...", who,
+                host and { "close" } or { "leave" })
+        end
+        return
+    end
+    self.picking = false
+
+    -- The game itself.
+    if s.view then
+        if s.recordId ~= self.pvpGame then
+            self.pvpGame, self.pvpStep, self.counted = s.recordId, nil, false
+            local keys = {}
+            for i = 1, 2 do
+                for _, c in ipairs(s.view.players[i].hand) do if c.key then table.insert(keys, c.key) end end
+            end
+            P.Preload(P.CreaturesFor(keys, { s.view.players[1].heroKey, s.view.players[2].heroKey }), true)
+        end
+        local cards = S.MyCards(s)
+        if s.step ~= self.pvpStep then
+            local first = self.pvpStep == nil
+            local before = not first and self:Positions() or nil
+            self.pvpStep, self.pvpCards = s.step, cards
+            self.st = self:PvpView(s)
+            if s.view.turn ~= self.pvpTurn then
+                self.pvpTurn, self.turnSeen = s.view.turn, Now()
+            end
+            if not (s.phase == "done" and first) then self.overlay:Hide() end
+            if first then
+                self:Draw()
+                self:Banner(self.st.active == ME and "You go first" or "Your opponent goes first", 1.2)
+            else
+                self:Animate(self:PvpEvents(s), before)
+            end
+        elseif cards ~= self.pvpCards then
+            -- Your hand arrived after the board.
+            self.pvpCards = cards
+            self.st = self:PvpView(s)
+            self:Draw()
+        end
+    end
+    if s.phase == "done" then self:PvpOver(s) end
+end
+
+-- The game is over: who won, the score in this lobby, rematch or leave.
+function P:PvpOver(s)
+    local S, me = ns.Session, ns.Me()
+    if self:Busy() then return end -- let the last blows land first
+    local won = s.result and s.result.winner == me
+    local draw = s.result and not s.result.winner
+    if not self.counted and not s.test and S.Find(s, me) then
+        self.counted = true
+        local rec = Save()
+        rec.pvpWins, rec.pvpLosses = rec.pvpWins or 0, rec.pvpLosses or 0
+        if won then rec.pvpWins = rec.pvpWins + 1 elseif not draw then rec.pvpLosses = rec.pvpLosses + 1 end
+        W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+    end
+    local score = {}
+    for _, p in ipairs(s.players) do table.insert(score, p.name .. " " .. ((s.score and s.score[p.name]) or 0)) end
+    local rec = Save()
+    local keys = S.IsHost(s) and { "rematch", "close" } or { "leave" }
+    self:PvpScreen(won and "Victory!" or (draw and "Draw" or "Defeat"), s.banner or "",
+        "Score: " .. table.concat(score, "  -  ") .. string.format("\nYour PvP record: %d wins, %d losses.",
+            rec.pvpWins or 0, rec.pvpLosses or 0), keys)
+    self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
+end
+
+-- Every frame in PvP: the turn clock on the End Turn button.
+function P:PvpTick()
+    local s = ns.Session.Get(self.kind)
+    if s and s.phase == "done" and s.view and not self.overlay:IsShown() and not self:Busy() then
+        return self:PvpOver(s)
+    end
+    local st = self.st
+    if not st or st.over or self.overlay:IsShown() or not self.turnSeen then return end
+    local left = math.ceil(self.G.TURN_TIME - (Now() - self.turnSeen))
+    if left <= 20 and left >= 0 and st.active == ME then
+        self.endButton:SetText("END TURN (" .. left .. ")")
+        self.ticking = true
+    elseif self.ticking then
+        self.ticking = false
+        self:Draw()
+    end
 end
 
 function P:FlashRoll() end

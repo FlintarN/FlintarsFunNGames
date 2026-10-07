@@ -843,8 +843,24 @@ local function Copy(t)
 end
 E.Copy = Copy
 
--- What player `i` may see (for PvP later): the other hand's cards and
--- both decks are hidden.
+-- The same game from the other chair: players swapped (and every player
+-- index and hero id with them), so player 2 can be shown by board code that
+-- always puts "you" at index 1. Works on states, events and actions; card ids
+-- start at 3, so only the heroes' ids 1 and 2 change.
+local SWAP = { owner = true, active = true, winner = true, doomedBy = true, index = true,
+    id = true, target = true, attacker = true, source = true }
+function E.Mirror(t)
+    if type(t) ~= "table" then return t end
+    local out = {}
+    for k, v in pairs(t) do
+        if SWAP[k] and (v == 1 or v == 2) then out[k] = 3 - v else out[k] = E.Mirror(v) end
+    end
+    if type(t.players) == "table" and #t.players == 2 then out.players = { out.players[2], out.players[1] } end
+    return out
+end
+
+-- What player `i` may see (for PvP): the other hand's cards and both decks
+-- are hidden (i = 0: both hands).
 function E.View(st, i)
     local v = Copy(st)
     for j, p in ipairs(v.players) do

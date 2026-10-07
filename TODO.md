@@ -4,7 +4,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 ## In progress
 
-- [ ] Hearthstone PvP (see "PvP for Hearthstone and Warcraft III"), then Warcraft III PvP.
+- [ ] Warcraft III PvP (see "PvP for Hearthstone and Warcraft III"). Hearthstone PvP: built, needs a real test with a friend.
 - [ ] Try Poker, Settle up and the Slot Machine against bots in game (v0.4): looks, animations, flow.
 
 ## Next
@@ -47,12 +47,12 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 (Session/Live), like Tic-Tac-Toe and Battleship.
 
 ### Hearthstone PvP (first: turn-based, little data)
-- [ ] Lobby: invite a friend or group member, both pick a deck (class + saved deck); the host deals.
-- [ ] The host runs the engine and sends each player their view (`E.View`): your own hand, the opponent's hand only as card backs; hidden cards go by whisper, like poker hole cards.
-- [ ] Moves go to the host as commands (play card, attack, hero power, end turn); the host checks them with the same rules as against the computer.
-- [ ] A turn timer (75 s, with the rope at the end), concede, and a win if the other player disconnects.
+- [x] Lobby: group, guild, realm or code (Arcade lobbies), practice vs bot; both pick a hero and deck; the host deals.
+- [x] The host runs the engine and sends each player their view (`E.View`): your own hand, the opponent's hand only as card backs; hidden cards go by whisper, like poker hole cards.
+- [x] Moves go to the host as commands (play card, attack, hero power, end turn); the host checks them with the same rules as against the computer.
+- [x] A turn timer (75 s, counting down on End Turn), concede. - [ ] A win if the other player disconnects (Session drop handling only so far).
 - [ ] Mulligan at the start (needed for PvP fairness).
-- [ ] Wins and losses in the stats, separate from games against the computer; a guild/realm leaderboard.
+- [x] Wins and losses in the stats (history + your PvP record). - [ ] A guild/realm PvP leaderboard.
 
 ### Warcraft III PvP (second: real time)
 - [ ] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
