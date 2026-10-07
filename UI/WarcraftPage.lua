@@ -53,6 +53,17 @@ end
 local function Now() return GetTime and GetTime() or 0 end
 local ATAN2 = math.atan2 or math.atan
 
+-- What a ranged attack throws (WoW models: arrows, spears, boulders, spells).
+local ARROW, SPEAR, BULLET, BOULDER = 137240, 144326, 137245, 165756
+local MISSILE = {
+    rifleman = BULLET, flying_machine = BULLET, headhunter = SPEAR, wind_rider = SPEAR, kodo = ARROW,
+    mortar_team = BOULDER, catapult = BOULDER, siege_engine = BOULDER, gryphon_rider = 166323, dragonhawk_rider = 166129,
+    batrider = 166129, priest = 166331, sorceress = 165569, shaman = 166497, witch_doctor = 166815,
+    archmage = 165569, blood_mage = 166129, far_seer = 166497, shadow_hunter = 166815, phoenix1 = 166129,
+    serpent_ward1 = 166815, serpent_ward2 = 166815, serpent_ward3 = 166815,
+}
+local ARC = { mortar_team = 1, catapult = 1.3, siege_engine = 0.4 }
+
 -- Shift held: orders go after the current one (Warcraft III's order queue).
 local function Shift() return IsShiftKeyDown and IsShiftKeyDown() and true or nil end
 
@@ -1068,7 +1079,11 @@ function P:Events(events)
                 local tx, ty
                 if t then tx, ty = E().Center(t) end
                 local ax, ay = E().Center(a)
-                if tx then self:Shot(ax, ay, tx, ty) end
+                local base = WC().BaseOf(a.type)
+                local file = MISSILE[a.type] or MISSILE[base] or (a.kind == "building" and (a.type == "orc_burrow" and SPEAR or ARROW))
+                    or ARROW
+                local seen = self:OnScreen(ax, ay) or (tx and self:OnScreen(tx, ty))
+                if tx and seen and not self:Missile(file, ax, ay, tx, ty, 1, ARC[base]) then self:Shot(ax, ay, tx, ty) end
             end
         elseif ev.kind == "death" then
             if ev.owner == ME and ev.what == "building" then self:Say("One of your buildings was destroyed!") end
@@ -3499,7 +3514,7 @@ end
 ---------------------------------------------------------------------------
 local YARD_PX = UNIT_PX / 2.2 -- a unit is about 2.2 yards tall
 local FX_SIZE = 150
-local FX_MAX = 40
+local FX_MAX = 60
 
 -- One-shot effects when a spell is cast: file, where (target, caster or
 -- point), scale, how long it shows (area spells: as long as they last).
@@ -3578,6 +3593,13 @@ local function MakeFx(parent)
             self:Aim()
         end
     end
+    -- Turn the model to fly towards a screen direction (0 right, pi/2 down).
+    function sc:SetYaw(phi)
+        local view = ns.WC.ART.view
+        local f = CameraDirs(self, view.yaw, view.bpitch)
+        local toCamera = ATAN2(-f[2], -f[1])
+        if actor.SetYaw then actor:SetYaw(toCamera + math.pi / 2 - phi) end
+    end
     function sc:Play(file, scale, z, restart)
         self.scale, self.z = scale or 1, z or 1
         if self.file ~= file or restart then
@@ -3589,6 +3611,21 @@ local function MakeFx(parent)
         self:Aim()
     end
     return sc
+end
+
+
+P.MISSILE = MISSILE
+
+-- A missile from a spot to a spot (a shot's flight; the damage is already done).
+function P:Missile(file, x1, y1, x2, y2, scale, arc)
+    self.fxN = (self.fxN or 0) + 1
+    local d = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+    local dur = math.max(0.12, math.min(0.8, d / (arc and 8 or 14)))
+    local fx = self:FxStart("m" .. self.fxN, file, { x = x1, y = y1, scale = scale or 1, z = 1, untilT = Now() + dur })
+    if not fx then return false end
+    fx.move = { x1, y1, x2, y2, Now(), dur, arc or 0 }
+    fx.sc:SetYaw(ATAN2(y2 - y1, x2 - x1))
+    return true
 end
 
 -- Start an effect: on a unit (follows it) or on a spot.
@@ -3606,7 +3643,7 @@ function P:FxStart(key, file, opts)
         self.fx[key] = fx
         opts.restart = true
     end
-    fx.id, fx.x, fx.y, fx.untilT, fx.seen = opts.id, opts.x, opts.y, opts.untilT, true
+    fx.id, fx.x, fx.y, fx.untilT, fx.seen, fx.move = opts.id, opts.x, opts.y, opts.untilT, true, nil
     fx.sc:Show()
     if fx.file ~= file or opts.restart then
         fx.file = file
@@ -3690,8 +3727,14 @@ function P:DrawFx()
     local gone = {}
     for key, fx in pairs(self.fx) do
         local e = fx.id and st.ents[fx.id]
-        local x, y
-        if fx.id then
+        local x, y, arcUp
+        if fx.move then
+            -- In flight: along the line (an arc for siege).
+            local m = fx.move
+            local k = math.max(0, math.min(1, (now - m[5]) / m[6]))
+            x, y = m[1] + (m[3] - m[1]) * k, m[2] + (m[4] - m[2]) * k
+            arcUp = m[7] * math.sin(math.pi * k) * 40
+        elseif fx.id then
             if e then x, y = e.x, e.y end
         else
             x, y = fx.x, fx.y
@@ -3701,12 +3744,12 @@ function P:DrawFx()
         else
             local sc = fx.sc
             local lift = e and WC().Units[e.type] and WC().Units[e.type].air and 18 or 0
-            local up = (sc.z or 1) * YARD_PX * (sc.scale or 1) * 0.85
+            local up = (sc.z or 1) * YARD_PX * (sc.scale or 1) * 0.85 + (arcUp or 0)
             sc:ClearAllPoints()
             sc:SetPoint("CENTER", self.view, "TOPLEFT", x * TILE - cx, -(y * TILE - cy - lift) + up)
             sc:SetFrameLevel(self:Depth(y) + 2)
             sc:SetDepth(self:DepthAt(y, 6))
-            if fx.untilT then sc:SetAlpha(math.min(1, (fx.untilT - now) / 0.4)) else sc:SetAlpha(1) end
+            if fx.untilT and not fx.move then sc:SetAlpha(math.min(1, (fx.untilT - now) / 0.4)) else sc:SetAlpha(1) end
         end
     end
     for _, key in ipairs(gone) do self:FxStop(key) end

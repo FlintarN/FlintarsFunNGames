@@ -509,5 +509,17 @@ function WcCasterTests()
     for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Dispel Magic (D)" then disp = c end end
     disp._scripts.OnClick(disp, "LeftButton")
     check(view.targeting == "cast" and view.castKey == "dispel", "casters card: Dispel Magic asks where")
+    -- Projectiles: a rifleman's shot flies as a bullet, a mortar's in an arc.
+    local rf = E.Spawn(s2, 1, "rifleman", 21, 22)
+    local mt = E.Spawn(s2, 1, "mortar_team", 21, 24)
+    local tg = E.Spawn(s2, 2, "grunt", 25, 22)
+    view.camX, view.camY = 21 * 20 - 300, 22 * 20 - 150
+    view:Events({ { kind = "hit", id = rf.id, target = tg.id, ranged = true }, { kind = "hit", id = mt.id, target = tg.id, ranged = true } })
+    local bullet, boulder
+    for _, fx in pairs(view.fx or {}) do
+        if fx.move and fx.file == view.MISSILE.rifleman then bullet = fx end
+        if fx.move and fx.file == view.MISSILE.mortar_team and fx.move[7] > 0 then boulder = fx end
+    end
+    check(bullet and boulder, "projectiles: a bullet, and a boulder in an arc")
     view:Quit()
 end
