@@ -1638,12 +1638,6 @@ local GALLERY = {
     { 2321276, "arathi windmill 03" }, { 1709395, "kultiras_chickencoop" }, { 948466, "garrison_farm_well" },
     { 198672, "wreckedbuilding base01" }, { 198673, "wreckedbuilding base02" }, { 198674, "wreckedbuilding base03" },
     { 929365, "garrison blacksmith forge" }, { 1958817, "kultiras blacksmith forge" }, { 959598, "salvageyard forge" },
-    -- Real Elwynn/Stormwind houses are WMO files: these may show nothing (a test).
-    { 106851, "WMO goldshireinn" }, { 106973, "WMO humantwostory" }, { 106907, "WMO human_barracks" },
-    { 107029, "WMO lumbermill" }, { 106848, "WMO goldshireblacksmith" }, { 106882, "WMO guardtower_intact" },
-    { 106965, "WMO human farm" }, { 106899, "WMO barn" }, { 106685, "WMO castle01" },
-    { 1830539, "WMO warfront altarofkings" }, { 2198682, "WMO warfront armory (human)" }, { 2053758, "WMO warfront workshop (human)" },
-    { 1846142, "WMO warfront altarofstorms" }, { 1851982, "WMO warfront tower (orc)" }, { 1915564, "WMO warfront barracks (orc)" },
 }
 local COLS, ROWS = 6, 3
 
