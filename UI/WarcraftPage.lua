@@ -861,6 +861,23 @@ function P:ShowMenu()
 end
 
 -- Everything the overlay can show, off.
+-- Night: a dark blue veil over the map, fading in at dusk and out at dawn.
+function P:DrawNight(st)
+    if not self.nightTex then
+        local t = self.fogLayer:CreateTexture(nil, "BACKGROUND")
+        t:SetAllPoints(self.view)
+        t:SetColorTexture(0.02, 0.04, 0.16, 1)
+        self.nightTex = t
+    end
+    local d = (st.time % E().DAY) / E().DAY -- 0..1 over the day
+    -- Dusk at 0.5 (fade over 0.04), dawn at 1.0.
+    local a = 0
+    if d >= 0.5 then a = math.min(1, (d - 0.5) / 0.04) end
+    if d > 0.96 then a = math.max(0, (1 - d) / 0.04) end
+    self.nightTex:SetAlpha(a * 0.32)
+    self.nightTex:SetShown(a > 0)
+end
+
 -- The score table: every player's units, buildings, resources and hero.
 function P:ShowScore(st, names)
     local sf = self.scoreFrame
@@ -1751,7 +1768,7 @@ function P:UpdateFog()
         if e and E().Ally(st, e.owner, ME) and not e.inside then -- allies share their sight
             local cx, cy = e.x, e.y
             if e.kind ~= "unit" then cx, cy = e.x + e.size / 2, e.y + e.size / 2 end
-            local r = ViewOf(e)
+            local r = ViewOf(e) * (E().IsNight(st) and 0.75 or 1) -- (less far at night)
             for ty = math.max(0, math.floor(cy - r)), math.min(st.h - 1, math.floor(cy + r)) do
                 for tx = math.max(0, math.floor(cx - r)), math.min(st.w - 1, math.floor(cx + r)) do
                     if (tx + 0.5 - cx) ^ 2 + (ty + 0.5 - cy) ^ 2 <= r * r then
@@ -2458,7 +2475,11 @@ function P:DrawPanel()
     self.foodText:SetText(pl.food .. "/" .. pl.foodCap .. (upkeep and ("  |cffffd100" .. (upkeep == "high" and "High" or "Low")
         .. " upkeep|r") or ""))
     if pl.food >= pl.foodCap then self.foodText:SetTextColor(1, 0.3, 0.3) else self.foodText:SetTextColor(1, 1, 1) end
-    self.clock:SetText(string.format("%d:%02d", math.floor(st.time / 60), math.floor(st.time % 60)))
+    -- The game time, and the time of day (night: darker).
+    local hour = E().Hour(st)
+    self.clock:SetText(string.format("%s %d:%02d   %d:%02d", E().IsNight(st) and "|cff8899ffNight|r" or "|cffffd100Day|r",
+        math.floor(hour), math.floor((hour % 1) * 60), math.floor(st.time / 60), math.floor(st.time % 60)))
+    self:DrawNight(st)
     local rec = Save()
     self.statsText:SetText(string.format("Wins %d, losses %d", rec.wins, rec.losses))
 

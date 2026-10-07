@@ -97,3 +97,28 @@ function WcNeutralTests()
     ns.db.warcraft.lobby = nil
     view:ShowMenu()
 end
+
+-- Day and night: an 8-minute day; creeps sleep at night unless hurt.
+function WcNightTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 2, map = "riverford", creeps = true })
+    check(not E.IsNight(st) and math.floor(E.Hour(st)) == 6, "night: the game starts at 6:00 in the morning")
+    st.time = 250
+    check(E.IsNight(st) and E.Sight(st) < WC.SIGHT, "night: after 4 minutes it's night, and units see less far")
+    local camp = st.camps[1]
+    local fm = E.Spawn(st, 1, "footman", camp.x + 3, camp.y)
+    fm.order = { type = "hold" }
+    for _ = 1, 10 do E.Step(st, 0.05) end
+    local awake
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.camp == 1 and e.order and e.order.type == "attack" then awake = true end
+    end
+    check(not awake, "night: the creeps sleep")
+    st.time = 480 + 10
+    for _ = 1, 10 do E.Step(st, 0.05) end
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.camp == 1 and e.order and e.order.type == "attack" then awake = true end
+    end
+    check(awake and not E.IsNight(st), "night: morning: they wake and fight")
+end

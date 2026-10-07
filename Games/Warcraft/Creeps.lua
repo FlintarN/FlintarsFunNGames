@@ -148,8 +148,9 @@ function E.CreepTick(st, dt)
                 if home2 < 2.5 then u.order = { type = "hold" } end
             elseif home2 > LEASH * LEASH then
                 E.Order(st, u, { type = "move", x = camp.x, y = camp.y, home = true })
-            elseif not o or o.type == "hold" then
-                -- Whoever comes near the camp (the nearest one).
+            elseif (not o or o.type == "hold") and (not E.IsNight(st) or u.hp < u.maxHp) then
+                -- Whoever comes near the camp (the nearest one). At night they
+                -- sleep, unless someone hurts them.
                 local best, bd
                 for _, id2 in ipairs(st.list) do
                     local e = st.ents[id2]

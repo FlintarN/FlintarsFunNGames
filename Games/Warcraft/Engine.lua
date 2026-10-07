@@ -428,6 +428,15 @@ end
 ---------------------------------------------------------------------------
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
+-- Day and night, as in Warcraft III: an 8-minute day, half of it night.
+-- Units see less far at night; creeps sleep.
+E.DAY = 480
+function E.IsNight(st) return (st.time % E.DAY) >= E.DAY / 2 end
+-- The hour (6:00 at the start; night from 18:00 to 6:00).
+function E.Hour(st) return (6 + (st.time % E.DAY) / E.DAY * 24) % 24 end
+-- How far units notice enemies.
+function E.Sight(st) return D().SIGHT * (E.IsNight(st) and 0.75 or 1) end
+
 -- The score (for the end of the game): per player, what they made, killed,
 -- lost and gathered.
 function E.Score(st, p, field, n)
@@ -1129,7 +1138,7 @@ local function UnitStep(st, u, dt)
             if u.scan <= 0 and not (E.CantAttack and E.CantAttack(u)) then
                 u.scan = ACQUIRE
                 -- (wards can't walk: only what's in range)
-                local t = Nearest(st, u, d.speed > 0 and D().SIGHT or E.Range(st, u))
+                local t = Nearest(st, u, d.speed > 0 and E.Sight(st) or E.Range(st, u))
                 if t then u.order = { type = "attack", target = t.id, auto = true, homeX = u.x, homeY = u.y } end
             end
         end
@@ -1144,7 +1153,7 @@ local function UnitStep(st, u, dt)
             u.order, u.path = nil, nil
             -- Auto targets: look for the next one nearby.
             if o.auto or o.resume then
-                local n = Nearest(st, u, D().SIGHT)
+                local n = Nearest(st, u, E.Sight(st))
                 if n then
                     u.order = { type = "attack", target = n.id, auto = o.auto, resume = o.resume }
                 elseif o.resume then
@@ -1156,7 +1165,7 @@ local function UnitStep(st, u, dt)
         u.scan = (u.scan or 0) - dt
         if u.scan <= 0 then
             u.scan = ACQUIRE
-            local t = Nearest(st, u, D().SIGHT)
+            local t = Nearest(st, u, E.Sight(st))
             if t then
                 u.order = { type = "attack", target = t.id, resume = o }
                 u.path = nil

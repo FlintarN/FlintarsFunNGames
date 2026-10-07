@@ -84,7 +84,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 
 ### 6. The map and the match
 - [x] Shared sight for allies.
-- [ ] Day and night cycle (shorter sight at night, Night Elf bonuses).
+- [x] Day and night cycle (shorter sight at night, creeps sleep). [ ] Night Elf bonuses (with Night Elves).
 - [x] Creep camps (Creeps.lua): guard, leash, XP, gold, item drops. [x] Goblin Merchant, Mercenary Camp, a lobby switch. [ ] The AI creeping on purpose.
 - [x] Bigger maps, five maps, map picker; up to 4 players on Four Crowns.
 - [x] Choose your race and the computer's (Human, Orc, Random). Night Elf and Undead later.
