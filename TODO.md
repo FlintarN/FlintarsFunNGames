@@ -4,6 +4,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 ## In progress
 
+- [ ] Hearthstone PvP (see "PvP for Hearthstone and Warcraft III"), then Warcraft III PvP.
 - [ ] Try Poker, Settle up and the Slot Machine against bots in game (v0.4): looks, animations, flow.
 
 ## Next
@@ -58,12 +59,13 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [ ] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
 - [ ] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; drop and win after 30 s.
 - [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies.
-- [ ] Fog of war (roadmap step 6) before PvP goes live, so you can't see the other base.
+- [ ] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
 - [ ] Wins and losses in the stats and on a leaderboard.
 
 ## Warcraft III roadmap
 
-Goal: play like Warcraft III (The Frozen Throne melee), one step at a time, top to bottom. Every step
+Goal: play like Warcraft III (The Frozen Throne melee). Order (user, 2026-10-07): PvP first (above),
+then steps 1, 2, 3, 6, 7; Night Elf and Undead at the very end. Every step
 comes with engine tests, the AI using it, the Rules text and docs. Models come from the game files
 (M2 only), picked by the user from /wcgallery.
 
@@ -95,19 +97,6 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Air units and what can hit them (air vs ground attacks).
 - [ ] Upkeep: less gold per trip above 50 and 80 food, shown in the resource bar.
 
-### 4. Night Elf
-- [ ] Wisps: gather lumber without cutting the trees down, gold from an entangled mine, are used up when they build.
-- [ ] Ancients that walk and fight (Tree of Life > Ages > Eternity, Ancient of War, Ancient of Lore, Ancient of Wind, Ancient Protector), Moon Wells (food, refill mana and health), Hunter's Hall.
-- [ ] Units: Archer, Huntress, Glaive Thrower, Dryad, Druid of the Claw, Druid of the Talon, Mountain Giant, Hippogryph, Faerie Dragon, Chimaera.
-- [ ] Shadowmeld at night (needs a day/night cycle), Altar of Elders heroes: Demon Hunter, Keeper of the Grove, Priestess of the Moon, Warden.
-
-### 5. Undead
-- [ ] Acolytes summon buildings (they don't stay), Ghouls gather lumber, the Necropolis > Halls of the Dead > Black Citadel, Haunted Gold Mine on top of the mine.
-- [ ] Blight: Undead build only on blight; it spreads around their buildings; Ziggurats (food, can become Spirit Towers).
-- [ ] Units: Ghoul, Crypt Fiend, Gargoyle, Necromancer (raise skeletons from corpses), Banshee, Meat Wagon, Abomination, Obsidian Statue, Frost Wyrm, Shade.
-- [ ] Corpses that stay on the ground for a while (needed for Raise Dead, Cannibalize, Meat Wagon).
-- [ ] Altar of Darkness heroes: Death Knight, Lich, Dreadlord, Crypt Lord.
-
 ### 6. The map and the match
 - [ ] Fog of war and the black mask (explored / seen), unit sight ranges, shared sight for allies.
 - [ ] Day and night cycle (shorter sight at night, Night Elf bonuses).
@@ -121,6 +110,19 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Attack and spell projectiles from the game files (arrows, spears, cannon balls, fireballs).
 - [ ] Select and command buildings in groups; rally points for several buildings; Tab between unit types in a selection; a multi-unit selection panel with portraits.
 - [ ] Score screen at the end (units, buildings, resources, heroes).
+
+### 8. Night Elf (at the very end)
+- [ ] Wisps: gather lumber without cutting the trees down, gold from an entangled mine, are used up when they build.
+- [ ] Ancients that walk and fight (Tree of Life > Ages > Eternity, Ancient of War, Ancient of Lore, Ancient of Wind, Ancient Protector), Moon Wells (food, refill mana and health), Hunter's Hall.
+- [ ] Units: Archer, Huntress, Glaive Thrower, Dryad, Druid of the Claw, Druid of the Talon, Mountain Giant, Hippogryph, Faerie Dragon, Chimaera.
+- [ ] Shadowmeld at night (needs a day/night cycle), Altar of Elders heroes: Demon Hunter, Keeper of the Grove, Priestess of the Moon, Warden.
+
+### 9. Undead (at the very end)
+- [ ] Acolytes summon buildings (they don't stay), Ghouls gather lumber, the Necropolis > Halls of the Dead > Black Citadel, Haunted Gold Mine on top of the mine.
+- [ ] Blight: Undead build only on blight; it spreads around their buildings; Ziggurats (food, can become Spirit Towers).
+- [ ] Units: Ghoul, Crypt Fiend, Gargoyle, Necromancer (raise skeletons from corpses), Banshee, Meat Wagon, Abomination, Obsidian Statue, Frost Wyrm, Shade.
+- [ ] Corpses that stay on the ground for a while (needed for Raise Dead, Cannibalize, Meat Wagon).
+- [ ] Altar of Darkness heroes: Death Knight, Lich, Dreadlord, Crypt Lord.
 
 ## Done
 
