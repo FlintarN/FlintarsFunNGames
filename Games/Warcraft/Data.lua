@@ -64,18 +64,19 @@ ns.WC.ART = {
     ground = 187126, -- tileset/elwynn/elwynngrassbase.blp
     groundRepeat = 4, -- tiles per texture repeat
     trees = { 189923, 189927, 189923, 189928 }, -- elwynnfirtree01, elwynntreecanopy01/02
+    forestFloor = 187130, forestShade = 0.5, -- tileset/elwynn/elwynnleaf.blp, darkened under trees
     treeGrow = 1.6, treeY = 8,
     -- The camera: from yaw (around), pitch (down), with this field of view;
     -- margin > 1 leaves room around the model.
     view = { yaw = math.pi, pitch = 0.75, fov = 0.6, margin = 1.0 },
     models = {
         gold_mine = { file = 189620, grow = 1.4, y = 4 },      -- elwynn/buildings/goldmine
-        town_hall = { file = 190505, grow = 1.5, y = 8 },      -- westfall/buildings/church
-        farm = { file = 190519, grow = 1.7, y = 10 },          -- westfall/buildings/windmill
-        barracks = { file = 189601, grow = 1.5, y = 6 },       -- elwynn/buildings/blacksmith
-        great_hall = { file = 199384, grow = 1.4, y = 6 },     -- generic/orc/tents/durotarorctent01
-        orc_burrow = { file = 199387, grow = 1.5, y = 6 },     -- generic/orc/tents/orctent01
-        orc_barracks = { file = 199385, grow = 1.4, y = 6 },   -- generic/orc/tents/durotarorctent02
+        town_hall = { file = 189629, grow = 1.6, y = 12 },     -- elwynn/buildings/humanguardtower
+        farm = { file = 190519, grow = 1.8, y = 12 },          -- westfall/buildings/windmill
+        barracks = { file = 189445, grow = 1.5, y = 6 },       -- duskwood/duskwoodbarn
+        great_hall = { file = 189200, grow = 1.6, y = 8 },     -- burningsteppes/orctents/orctent
+        orc_burrow = { file = 199389, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent02
+        orc_barracks = { file = 190175, grow = 1.6, y = 12 },  -- stranglethorn/buildings/trollwatchtower
     },
 }
 

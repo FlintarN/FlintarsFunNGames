@@ -998,6 +998,30 @@ function P:DrawTrees()
     local x1, y1 = x0 + math.ceil(BW / TILE) + 4, y0 + math.ceil(VIEW_H / TILE) + 4
     x0, y0 = x0 - x0 % 2, y0 - y0 % 2
     self.treeModels = self.treeModels or {}
+    self.floorTex = self.floorTex or {}
+    self.shadeTex = self.shadeTex or {}
+    -- The forest floor: dark leaf ground under every tree tile, so forests read as walls.
+    local floors = 0
+    for y = math.max(0, y0), math.min(st.h - 1, y1 + 1) do
+        for x = math.max(0, x0), math.min(st.w - 1, x1 + 1) do
+            if st.trees[y * st.w + x] then
+                floors = floors + 1
+                local f = self.floorTex[floors]
+                if not f then
+                    f = self.treeLayer:CreateTexture(nil, "BACKGROUND")
+                    pcall(f.SetTexture, f, art.forestFloor, "REPEAT", "REPEAT")
+                    f:SetVertexColor(art.forestShade, art.forestShade, art.forestShade)
+                    f:SetSize(TILE + 1, TILE + 1)
+                    self.floorTex[floors] = f
+                end
+                f:SetTexCoord((x % 4) / 4, (x % 4 + 1) / 4, (y % 4) / 4, (y % 4 + 1) / 4)
+                f:Show()
+                f:ClearAllPoints()
+                f:SetPoint("TOPLEFT", self.view, "TOPLEFT", x * TILE - self.camX, -(y * TILE - self.camY))
+            end
+        end
+    end
+    for j = floors + 1, #self.floorTex do self.floorTex[j]:Hide() end
     local used = 0
     for by = math.max(0, y0), math.min(st.h - 1, y1), 2 do
         for bx = math.max(0, x0), math.min(st.w - 1, x1), 2 do
@@ -1020,10 +1044,23 @@ function P:DrawTrees()
                 if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], (bx * 7 + by * 3) % 6) end
                 t:Show()
                 Place(t, self.view, (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY)
+                -- A soft shadow at its foot.
+                local sh = self.shadeTex[used]
+                if not sh then
+                    sh = self.treeLayer:CreateTexture(nil, "BORDER")
+                    sh:SetTexture(ART .. "Blob")
+                    sh:SetVertexColor(0, 0, 0)
+                    sh:SetAlpha(0.45)
+                    self.shadeTex[used] = sh
+                end
+                sh:SetSize(size * 0.8, size * 0.45)
+                sh:Show()
+                Place(sh, self.view, (bx + 1) * TILE - self.camX + 4, (by + 1) * TILE - self.camY + 4)
             end
         end
     end
     for j = used + 1, #self.treeModels do self.treeModels[j]:Hide() end
+    for j = used + 1, #self.shadeTex do self.shadeTex[j]:Hide() end
 end
 
 function P:UnitFrame(id, utype)
@@ -1134,6 +1171,15 @@ function P:Draw()
             local look = ns.WC.ART.models[e.type]
             if t.model == nil then t.model = MakeDoodad(self.buildLayer) or false end
             local alpha = (e.progress or 1) < 1 and 0.45 + 0.55 * e.progress or 1
+            if not t.shadow then
+                t.shadow = self.buildLayer:CreateTexture(nil, "BACKGROUND")
+                t.shadow:SetTexture(ART .. "Blob")
+                t.shadow:SetVertexColor(0, 0, 0)
+                t.shadow:SetAlpha(0.5)
+            end
+            t.shadow:SetSize(size * 1.25, size * 0.8)
+            Place(t.shadow, self.view, px + size / 2 + 4, py + size / 2 + 6)
+            t.shadow:Show()
             if t.model and look then
                 local ms = size * look.grow
                 t.model:SetSize(ms, ms)
@@ -1191,6 +1237,7 @@ function P:Draw()
         local t = self.buildTex[j]
         t.art:Hide() t.sel:Hide() t.bar:Hide() t.barBg:Hide() t.team:Hide()
         if t.model then t.model:Hide() end
+        if t.shadow then t.shadow:Hide() end
     end
     -- Units.
     local seen = {}
