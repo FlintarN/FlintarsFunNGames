@@ -86,26 +86,51 @@ local function MakeDoodad(parent)
     if sc.SetCameraFieldOfView then sc:SetCameraFieldOfView(view.fov) end
     if sc.SetCameraNearClip then sc:SetCameraNearClip(0.1) end
     if sc.SetCameraFarClip then sc:SetCameraFarClip(5000) end
-    function sc:Fit()
-        local x1, y1, z1, x2, y2, z2 = actor:GetActiveBoundingBox()
-        if not x1 or not x2 then return false end
-        local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
-        local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
-        if r <= 0 then return false end
+    -- Place the camera for a model of radius r around (cx, cy, cz).
+    function sc:Aim(cx, cy, cz, r)
         self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
         local fx, fy, fz = 1, 0, 0
         if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
         local dist = r / math.tan(view.fov / 2) * view.margin
         self:SetCameraPosition(cx - fx * dist, cy - fy * dist, cz - fz * dist)
+    end
+    function sc:Fit()
+        local x1, y1, z1, x2, y2, z2
+        if actor.GetActiveBoundingBox then x1, y1, z1, x2, y2, z2 = actor:GetActiveBoundingBox() end
+        if not x1 or not x2 then
+            self:Aim(0, 0, 5, 20) -- size unknown yet: look from far away
+            return false
+        end
+        local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
+        local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
+        local sig = string.format("%.2f %.2f %.2f %.2f", cx, cy, cz, r)
+        if r <= 0.01 then
+            self:Aim(0, 0, 5, 20)
+            return false
+        end
+        if sig == self.sig then return true end
+        self.sig = sig
+        self:Aim(cx, cy, cz, r)
         self.fitted = true
         return true
     end
+    -- Models load in steps: keep checking their size for a few seconds and
+    -- refit whenever it changes.
+    sc:SetScript("OnUpdate", function(self, elapsed)
+        if not self.file then return end
+        self.watch = (self.watch or 0) + elapsed
+        if self.watch > 4 then return end
+        self.tick = (self.tick or 0) + elapsed
+        if self.tick < 0.1 then return end
+        self.tick = 0
+        self:Fit()
+    end)
     function sc:Use(file, facing)
         if self.file == file then
             if not self.fitted then self:Fit() end
             return
         end
-        self.file, self.fitted = file, false
+        self.file, self.fitted, self.sig, self.watch = file, false, nil, 0
         if actor.SetOnModelLoadedCallback then
             actor:SetOnModelLoadedCallback(function() sc:Fit() end)
         end
@@ -1670,6 +1695,7 @@ SlashCmdList.FNGWCVIEW = function(msg)
     local function Refit(m)
         if m and m.Fit then
             if m.SetCameraFieldOfView then m:SetCameraFieldOfView(view.fov) end
+            m.sig = nil
             m:Fit()
         end
     end
