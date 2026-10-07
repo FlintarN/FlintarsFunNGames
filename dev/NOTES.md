@@ -77,7 +77,7 @@ How Flintar's Fun 'n' Games is built, the conventions to keep, and what we learn
 ## Release checklist
 
 1. `node dev/run.mjs` passes, a few times in a row.
-2. Bump `## Version` in all TOC files: `FlintarsFunNGames_Forever.toc` (WoW Forever, Interface 16001; Forever runs on the retail engine with its own `_Forever` suffix) and the base `FlintarsFunNGames.toc` are identical; `_Mainline.toc` (Retail, Interface 120100 for 12.1) differs only in `## Interface`. Add new files to all three (a test checks they match).
+2. Bump `## Version` in both TOC files: `FlintarsFunNGames.toc` (`## Interface: 16001, 120100`: WoW Forever and Retail in one file) and `FlintarsFunNGames_Forever.toc` (16001) are the same apart from that line. **No `_Mainline.toc`**: Forever runs on the Retail engine, picks `_Mainline` over everything and then calls the addon incompatible. A test checks the TOCs match.
 3. Add the version to `CHANGELOG.md`; update `README.md` and `CURSEFORGE.md`.
 4. Full client restart, then try each game in practice.
 5. Package: `.pkgmeta` leaves out `dev/`, `TODO.md`, `README.md` and `CURSEFORGE.md`.

@@ -552,11 +552,11 @@ await Section('Warcraft III engine and AI', async () => {
   await p.run('WcPageTests()');
 });
 
-// The three TOC files (base, Forever, Retail) list the same files and version.
+// The TOC files (base: Forever and Retail; _Forever) list the same files and version.
 {
   const body = n => readFileSync(join(addon, n), 'utf8').split(/\r?\n/).filter(l => !l.startsWith('## Interface'));
   const base = body('FlintarsFunNGames.toc').join('\n');
-  for (const n of ['FlintarsFunNGames_Forever.toc', 'FlintarsFunNGames_Mainline.toc']) {
+  for (const n of ['FlintarsFunNGames_Forever.toc']) {
     if (body(n).join('\n') === base) passes++; else { failures++; console.log(`  FAIL ${n} differs from FlintarsFunNGames.toc`); }
   }
 }
