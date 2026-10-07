@@ -17,6 +17,7 @@ local G = {
     rules = "Gather gold and lumber, build farms and barracks, train an army and destroy every enemy building.",
     scoreLabel = "Wins",
     window = { 760, 560 },
+    fullscreen = true, -- offers a Fullscreen button
     fields = {},
 }
 ns.Games.warcraft = G

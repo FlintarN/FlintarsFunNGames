@@ -66,6 +66,8 @@ function methods:SetWidth(w) self._w = w end
 function methods:SetHeight(h) self._h = h end
 function methods:GetCenter() return 0, 0 end
 function methods:GetEffectiveScale() return 1 end
+function methods:SetScale(k) self._scale = k end
+function methods:GetScale() return self._scale or 1 end
 function methods:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
 function methods:RegisterEvent(e)
     EVENTS[e] = EVENTS[e] or {}
@@ -107,6 +109,7 @@ CreateFrame = function(kind, name, parent, template)
     return f
 end
 UIParent = new("Frame", "UIParent")
+UIParent:SetSize(1920, 1080)
 Minimap = new("Frame", "Minimap")
 GameTooltip = new("GameTooltip", "GameTooltip")
 GameTooltip_Hide = function() end

@@ -179,6 +179,7 @@ function UI:ApplySize(key, instant)
     if G and G.window then w, h = G.window[1], G.window[2] end
     local cw, ch = f:GetWidth() or w, f:GetHeight() or h
     if math.abs(cw - w) < 1 and math.abs(ch - h) < 1 then return end
+    if self.full then return f:SetSize(w, h) end -- fullscreen: centred by ApplyFull
     local left, top = f:GetLeft(), f:GetTop()
     if left and top then
         f:ClearAllPoints()
@@ -198,6 +199,7 @@ end
 function UI:SelectTab(key)
     self.tab = key
     self:ApplySize(key)
+    self:ApplyFull()
     if ns.Help then ns.Help:Hide() end
     for k, page in pairs(self.pages) do page.frame:SetShown(k == key) end
     for _, tab in ipairs(self.tabs) do tab:SetSelected(tab.key == key) end
@@ -208,7 +210,51 @@ end
 -- Main frame
 ---------------------------------------------------------------------------
 function UI:ApplyScale()
-    if self.frame then self.frame:SetScale(ns.db.scale or 1) end
+    if self.frame and not self.full then self.frame:SetScale(ns.db.scale or 1) end
+end
+
+-- Fullscreen (games with G.fullscreen): the window is scaled up to fill the
+-- screen, centred, over a dark backdrop. Remembered; other tabs go back to
+-- the normal window.
+function UI:ApplyFull()
+    local f = self.frame
+    if not f then return end
+    local G = ns.Games[self.tab or ""]
+    local on = ns.db.fullscreen and G ~= nil and G.fullscreen == true
+    if not self.backdrop then
+        local bd = CreateFrame("Frame", nil, UIParent)
+        bd:SetAllPoints(UIParent)
+        bd:SetFrameStrata("MEDIUM")
+        bd:SetFrameLevel(500)
+        bd:EnableMouse(true) -- no clicking the world behind it
+        local t = bd:CreateTexture(nil, "BACKGROUND")
+        t:SetAllPoints()
+        t:SetColorTexture(0, 0, 0, 0.92)
+        bd:Hide()
+        self.backdrop = bd
+    end
+    self.full = on
+    self.backdrop:SetShown(on and f:IsShown())
+    if self.fullButton then self.fullButton:SetText(on and "Window" or "Fullscreen") end
+    if on then
+        self.sizing = {} -- stop a running grow animation
+        local w, h = G.window[1], G.window[2]
+        local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+        f:SetSize(w, h)
+        f:SetScale(math.min(sw / w, sh / h) * 0.98)
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", UIParent, "CENTER")
+    else
+        f:SetScale(ns.db.scale or 1)
+        local pos = ns.db.windowPos
+        f:ClearAllPoints()
+        if pos then f:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4]) else f:SetPoint("CENTER") end
+    end
+end
+
+function UI:ToggleFull()
+    ns.db.fullscreen = not ns.db.fullscreen
+    self:ApplyFull()
 end
 
 function UI:ResetPosition()
@@ -228,9 +274,10 @@ function UI:Build()
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStart", function(s) if not UI.full then s:StartMoving() end end)
     f:SetScript("OnDragStop", function(s)
         s:StopMovingOrSizing()
+        if UI.full then return end
         local point, _, relPoint, x, y = s:GetPoint()
         ns.db.windowPos = { point, relPoint, x, y }
     end)
@@ -244,9 +291,13 @@ function UI:Build()
     f:Hide()
     f:SetScript("OnShow", function()
         W.PlaySound("IG_CHARACTER_INFO_OPEN")
+        UI:ApplyFull()
         UI:Refresh()
     end)
-    f:SetScript("OnHide", function() W.PlaySound("IG_CHARACTER_INFO_CLOSE") end)
+    f:SetScript("OnHide", function()
+        W.PlaySound("IG_CHARACTER_INFO_CLOSE")
+        if UI.backdrop then UI.backdrop:Hide() end
+    end)
 
     W.SetTitle(f, ns.TITLE)
     W.SetPortrait(f, ns.ICON)
@@ -296,6 +347,9 @@ function UI:Build()
         ns.Help:ShowHands(UI:MyPokerHand())
     end, 22)
     self.handsButton:SetPoint("RIGHT", self.rulesButton, "LEFT", -4, 0)
+    self.fullButton = W.Button(f, "Fullscreen", 90, function() UI:ToggleFull() end, 22)
+    self.fullButton:SetPoint("RIGHT", self.rulesButton, "LEFT", -4, 0)
+    W.Tooltip(self.fullButton, "Fullscreen", "Fill the screen with this game (click again for the normal window).")
     W.Tooltip(self.handsButton, "Hand rankings", "Every poker hand from best to worst, with examples. "
         .. "During a hand, yours is highlighted.")
 
@@ -347,6 +401,7 @@ function UI:Refresh()
     self.subtitle:SetText(G and G.name or SUBTITLES[self.tab] or "")
     self.rulesButton:SetShown(G ~= nil)
     self.handsButton:SetShown(self.tab == "poker")
+    self.fullButton:SetShown(G ~= nil and G.fullscreen == true)
     -- Keep the highlighted hand current while the rankings are open.
     if ns.Help:IsShown() and ns.Help.mode == "hands" then ns.Help:ShowHands(self:MyPokerHand()) end
     if self.tab == "home" then

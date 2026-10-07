@@ -17,6 +17,7 @@ local G = {
     rules = "Bring the enemy hero from 30 Health to 0 with minions, spells and your hero power.",
     scoreLabel = "Wins",
     window = { 760, 560 }, -- the main window grows for this game
+    fullscreen = true, -- offers a Fullscreen button
     fields = {},
 }
 ns.Games.hearthstone = G
