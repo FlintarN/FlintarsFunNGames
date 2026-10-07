@@ -467,7 +467,8 @@ local function MakeHero(parent)
     f.armor:SetPoint("BOTTOM", f.hp, "TOP", 0, -4)
     f.atk = Badge(f, "HsAttack", 32, 16)
     f.atk:SetPoint("CENTER", f, "BOTTOMLEFT", 4, 10)
-    for _, x in ipairs({ f.hp, f.armor, f.atk }) do x:SetFrameLevel(f:GetFrameLevel() + 8) end
+    -- Health, armor and attack stay readable above the hand of cards.
+    for _, x in ipairs({ f.hp, f.armor, f.atk }) do x:SetFrameLevel(parent:GetFrameLevel() + 66) end
     -- The weapon, left of the portrait.
     local wpn = CreateFrame("Frame", nil, f)
     wpn:SetSize(46, 46)
@@ -642,7 +643,7 @@ function P.New(parent, kind)
     -- The mulligan: your opening cards, big; click the ones to swap.
     local mull = CreateFrame("Frame", nil, b)
     mull:SetAllPoints()
-    mull:SetFrameLevel(b:GetFrameLevel() + 45)
+    mull:SetFrameLevel(b:GetFrameLevel() + 80)
     mull:EnableMouse(true)
     local mshade = mull:CreateTexture(nil, "BACKGROUND")
     mshade:SetAllPoints()
@@ -675,7 +676,7 @@ function P.New(parent, kind)
 
     self.preview = MakeCard(b, 150, 209)
     self.preview:SetPoint("LEFT", 6, 8)
-    self.preview:SetFrameLevel(b:GetFrameLevel() + 40)
+    self.preview:SetFrameLevel(b:GetFrameLevel() + 75)
     self.preview:EnableMouse(false)
     self.preview:Hide()
 
@@ -683,7 +684,7 @@ function P.New(parent, kind)
     -- It lives on its own frame above minions, heroes and cards.
     local arrowLayer = CreateFrame("Frame", nil, b)
     arrowLayer:SetAllPoints()
-    arrowLayer:SetFrameLevel(b:GetFrameLevel() + 55)
+    arrowLayer:SetFrameLevel(b:GetFrameLevel() + 90)
     if arrowLayer.CreateLine then
         local ok, l = pcall(arrowLayer.CreateLine, arrowLayer, nil, "OVERLAY")
         if ok and l then
@@ -710,7 +711,7 @@ function P.New(parent, kind)
     -- Floating numbers and banners sit above everything.
     self.fx = CreateFrame("Frame", nil, b)
     self.fx:SetAllPoints()
-    self.fx:SetFrameLevel(b:GetFrameLevel() + 50)
+    self.fx:SetFrameLevel(b:GetFrameLevel() + 85)
     self.numFree, self.ghostFree, self.fxFree = {}, {}, {}
     self.banner = W.BigLabel(self.fx, 26, "GameFontNormalHuge")
     self.banner:SetPoint("CENTER", b, "TOPLEFT", CX, -Y.mid)
@@ -719,7 +720,7 @@ function P.New(parent, kind)
     -- Start / game over panel.
     local o = CreateFrame("Frame", nil, b)
     o:SetAllPoints()
-    o:SetFrameLevel(b:GetFrameLevel() + 60)
+    o:SetFrameLevel(b:GetFrameLevel() + 95)
     o:EnableMouse(true)
     local shade = o:CreateTexture(nil, "BACKGROUND")
     shade:SetAllPoints()
@@ -1386,7 +1387,7 @@ function P:DragMove(x, y)
         self.sel = nil
     end
     if not d.moved then return end
-    d.f:SetFrameLevel(self.board:GetFrameLevel() + 45)
+    d.f:SetFrameLevel(self.board:GetFrameLevel() + 72)
     K.Place(d.f, self.board, x, y)
     -- A minion over the board: show where it will go.
     local c = E().Find(self.st, d.id)
@@ -1819,14 +1820,14 @@ function P:HandFrame(id)
     end)
     f:SetScript("OnEnter", function()
         if not f.mine then return end
-        f:SetFrameLevel(self.board:GetFrameLevel() + 35)
+        f:SetFrameLevel(self.board:GetFrameLevel() + 68)
         K.Place(f, self.board, f.x, f.y - 14)
         self.preview:SetCard(f.key)
         self.preview:Show()
     end)
     f:SetScript("OnLeave", function()
         if self.drag and self.drag.f == f and self.drag.moved then return end
-        f:SetFrameLevel(self.board:GetFrameLevel() + 20 + (f.slot or 0))
+        f:SetFrameLevel(self.board:GetFrameLevel() + 20 + (f.slot or 0) * 4)
         K.Place(f, self.board, f.x, f.y)
         self:HoverEnd()
     end)
@@ -2013,7 +2014,9 @@ function P:Draw(animate, before)
                 f:SetCard(nil, true)
                 f.ready:Hide()
             end
-            f:SetFrameLevel(self.board:GetFrameLevel() + 20 + j)
+            -- Each card gets its own band of 4 levels (card, portrait, frame, gems),
+            -- so neighbours lie wholly on top of each other.
+            f:SetFrameLevel(self.board:GetFrameLevel() + 20 + j * 4)
             local x = mine and RowX(j, n, w, gap, centre) or RowX(j, n, w, gap, 230)
             local y = mine and Y.hand or Y.enemyHand
             if self.drag and self.drag.f == f and self.drag.moved then
