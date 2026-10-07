@@ -133,7 +133,7 @@ function WcAIGames()
     local wins, minutes = { 0, 0, [0] = 0 }, 0
     for seed = 1, 3 do
         local st = E.New({ factions = seed % 2 == 0 and { "orc", "human" } or { "human", "orc" }, seed = seed * 31 })
-        Run(st, 40 * 60, 0.2, { 1, 2 })
+        Run(st, 75 * 60, 0.2, { 1, 2 })
         check(st.over, "wc: AI game " .. seed .. " ends (" .. math.floor(st.time / 60) .. " min)")
         local c = E.Count(st, st.winner or 1)
         check((c.buildings.farm or 0) + (c.buildings.orc_burrow or 0) >= 1, "wc: the winner built farms")
@@ -447,4 +447,45 @@ function WcAlarmTests()
     check(foe.hp < foe.maxHp, "wc: the burrow shoots")
     E.Command(st, 2, { type = "backToWork" })
     check(#burrow.garrison == 0, "wc: back to work empties it")
+end
+
+-- Difficulty and the walk animation flag.
+function WcDifficultyTests()
+    local D = WC.DIFFICULTY
+    check(D.easy.workers < D.normal.workers and D.normal.workers < D.hard.workers, "wc: difficulty: more workers on harder levels")
+    check(D.easy.firstAttack > D.normal.firstAttack and D.normal.firstAttack > D.hard.firstAttack, "wc: difficulty: earlier attacks on harder levels")
+    local st = E.New({ factions = { "human", "orc" }, seed = 51, difficulty = "hard" })
+    check(st.difficulty == "hard", "wc: the game keeps its difficulty")
+    WC.AI.Think(st, 2)
+    check(st.players[2].income == 1.25 and (st.players[1].income or 1) == 1, "wc: hard gives the computer more per trip, not you")
+    -- No attack before the first-attack time, whatever the army.
+    st = E.New({ factions = { "human", "orc" }, seed = 52, difficulty = "easy" })
+    for i = 1, 10 do E.Spawn(st, 2, "grunt", 50 + (i % 3), 30 + math.floor(i / 3)) end
+    for _ = 1, 3 do WC.AI.Think(st, 2) WC.AI.Think(st, 2) end
+    local attacking = false
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 2 and e.order and e.order.type == "attackMove" then attacking = true end
+    end
+    check(not attacking, "wc: easy waits before its first attack")
+    -- Walking units are marked for the walk animation.
+    local fm = E.Spawn(st, 1, "footman", 30, 20)
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 34, y = 20 })
+    E.Step(st, 0.05)
+    check(fm.walkT == st.time, "wc: a walking unit is flagged as walking")
+end
+
+-- Games on each difficulty finish.
+function WcDifficultyGames()
+    for _, key in ipairs({ "easy", "hard" }) do
+        local st = E.New({ factions = { "human", "orc" }, seed = 77, difficulty = key })
+        local t, think = 0, 0
+        while t < 45 * 60 and not st.over do
+            E.Step(st, 0.2)
+            t = t + 0.2
+            think = think + 0.2
+            if think >= 1 then think = 0 WC.AI.Think(st, 1) WC.AI.Think(st, 2) end
+        end
+        check(st.over, "wc: an AI game on " .. key .. " ends (" .. math.floor(st.time / 60) .. " min)")
+    end
 end

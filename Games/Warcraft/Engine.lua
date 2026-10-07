@@ -277,11 +277,11 @@ end
 ---------------------------------------------------------------------------
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
--- opts: factions = { "human", "orc" }, seed
+-- opts: factions = { "human", "orc" }, seed, difficulty ("easy", "normal", "hard"; the AI side)
 function E.New(opts)
     local map = D().MAP
     local st = { rng = math.floor(opts.seed or 1) % 2147483646 + 1, time = 0, nextId = 0, w = map.w, h = map.h,
-        trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false }
+        trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false, difficulty = opts.difficulty or "normal" }
     for p = 1, 2 do
         local f = D().Factions[opts.factions[p]]
         st.players[p] = { faction = opts.factions[p], gold = D().START.gold, lumber = D().START.lumber,
@@ -295,6 +295,14 @@ function E.New(opts)
         if p == 2 then mx, my = Mirror(st, mx, my, 3, 3) end
         local mine = NewBuilding(st, 0, "gold_mine", mx, my, true)
         mine.gold = D().MINE_GOLD
+    end
+    for _, m in ipairs(map.expansions or {}) do
+        for side = 1, 2 do
+            local mx, my = m[1], m[2]
+            if side == 2 then mx, my = Mirror(st, mx, my, 3, 3) end
+            local mine = NewBuilding(st, 0, "gold_mine", mx, my, true)
+            mine.gold = D().MINE_GOLD
+        end
     end
     -- Forests (and their mirror), keeping clear of bases and mines.
     local function Clear(x, y)
@@ -535,6 +543,7 @@ local function Follow(st, u, dt)
         local dx, dy = wx - u.x, wy - u.y
         local d = math.sqrt(dx * dx + dy * dy)
         if d > 0.001 then u.facing = ATAN2(dy, dx) end
+        if d > 0.001 then u.walkT = st.time end -- for the walk animation
         if d <= left then
             u.x, u.y = wx, wy
             left = left - d
@@ -616,7 +625,8 @@ E.Nearest = Nearest
 local function Deposit(st, u)
     local pl = st.players[u.owner]
     if u.carry and u.carry.n > 0 then
-        if u.carry.res == "gold" then pl.gold = pl.gold + u.carry.n else pl.lumber = pl.lumber + u.carry.n end
+        local n = math.floor(u.carry.n * (pl.income or 1) + 0.5)
+        if u.carry.res == "gold" then pl.gold = pl.gold + n else pl.lumber = pl.lumber + n end
         Emit("deposit", { id = u.id, owner = u.owner, res = u.carry.res, n = u.carry.n })
     end
     u.carry = nil

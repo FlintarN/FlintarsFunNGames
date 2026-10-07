@@ -223,6 +223,8 @@ H.RULES = {
         { "Call to Arms", "Human Town Hall: Call to Arms (C) rings the alarm. Peasants nearby run to the hall and "
             .. "fight as Militia for 45 seconds. Orc: Battle Stations (B) sends peons into the burrows (4 each), "
             .. "and burrows with peons throw spears. Back to Work (W) ends it early." },
+        { "Difficulty", "Pick Easy, Normal or Hard on the start screen. Easy builds slowly and waits 10 minutes "
+            .. "before attacking; Normal waits 6; Hard waits 4, builds more and gets 25% more per trip." },
         { "Economy", "Workers carry 10 gold or lumber a trip. Every unit needs food: a hall gives 12, each farm or "
             .. "burrow 6. The Idle button at the top right finds workers with nothing to do." },
     },

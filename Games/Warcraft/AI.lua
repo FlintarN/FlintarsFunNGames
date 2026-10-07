@@ -33,8 +33,13 @@ end
 
 function AI.Think(st, p)
     st.ai = st.ai or {}
-    local mem = st.ai[p] or { wave = 5, waves = 0 }
+    local diff = D().DIFFICULTY[st.difficulty or "normal"] or D().DIFFICULTY.normal
+    local mem = st.ai[p] or { wave = diff.wave, waves = 0 }
     st.ai[p] = mem
+    st.players[p].income = diff.income
+    -- Easy thinks less often.
+    mem.tick = (mem.tick or 0) + 1
+    if mem.tick % diff.think ~= 0 then return end
     local E_ = E()
     local pl = st.players[p]
     local f = D().Factions[pl.faction]
@@ -100,15 +105,15 @@ function AI.Think(st, p)
     if pl.foodCap < D().FOOD_MAX and pl.foodCap - pl.food <= 4 and building == 0 then
         if Build(f.farm) then return end
     end
-    -- Workers, up to ten.
-    if count.workers < 10 and #hall.queue == 0 then
+    -- Workers.
+    if count.workers < diff.workers and #hall.queue == 0 then
         E_.Command(st, p, { type = "train", building = hall.id, utype = f.worker })
     end
     -- A barracks, then a second one later.
     local barracks = (count.buildings[f.barracks] or 0) + (count.building[f.barracks] or 0)
     if barracks == 0 and count.workers >= 6 then
         if Build(f.barracks) then return end
-    elseif barracks == 1 and st.time > 300 and pl.gold > 450 then
+    elseif barracks == 1 and diff.secondRax and st.time > diff.secondRax and pl.gold > 450 then
         Build(f.barracks)
     end
     -- Soldiers: melee and ranged in turn.
@@ -133,7 +138,7 @@ function AI.Think(st, p)
     end
     local ids = {}
     for _, u in ipairs(army) do table.insert(ids, u.id) end
-    if threat and not mem.alarm and #army < 4 then
+    if diff.alarm and threat and not mem.alarm and #army < 4 then
         if E_.Command(st, p, { type = f.alarm, building = hall.id }) then mem.alarm = st.time end
     elseif not threat and mem.alarm and st.time - mem.alarm > 8 then
         E_.Command(st, p, { type = "backToWork" })
@@ -145,7 +150,11 @@ function AI.Think(st, p)
         return
     end
     -- Attack in waves that grow each time.
-    if #army >= mem.wave then
+    -- Out of money for more soldiers for a while: go with what we have.
+    local cheapest = math.min(D().Units[f.melee].cost[1], D().Units[f.ranged].cost[1])
+    if pl.gold >= cheapest then mem.broke = nil elseif not mem.broke then mem.broke = st.time end
+    local stuck = mem.broke and st.time - mem.broke > 45 and #army >= 3
+    if (#army >= mem.wave or stuck) and st.time >= diff.firstAttack then
         local target = E_.Hall(st, 3 - p)
         local tx, ty
         if target then
@@ -159,7 +168,7 @@ function AI.Think(st, p)
         if tx then
             E_.Command(st, p, { type = "attackMove", units = ids, x = tx, y = ty })
             mem.waves = mem.waves + 1
-            mem.wave = math.min(14, mem.wave + 2)
+            mem.wave = math.min(diff.waveMax, mem.wave + diff.waveGrow)
         end
     elseif mem.defending then
         mem.defending = false

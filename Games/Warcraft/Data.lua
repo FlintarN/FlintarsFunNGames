@@ -63,6 +63,18 @@ ns.WC.MINE_TIME = 1.0     -- seconds inside the mine
 ns.WC.CHOP_TIME = 4.0     -- seconds to chop a load of lumber
 ns.WC.FOOD_MAX = 100
 ns.WC.SIGHT = 7           -- how far units notice enemies
+-- Computer difficulty. think: seconds between decisions; workers: how many
+-- it trains; secondRax: when it builds a second barracks (nil: never);
+-- firstAttack: earliest attack (seconds); wave/waveGrow/waveMax: army size
+-- per wave; alarm: uses Call to Arms; income: gold/lumber per trip multiplier.
+ns.WC.DIFFICULTY = {
+    easy = { name = "Easy", think = 2, workers = 7, firstAttack = 600, wave = 6, waveGrow = 1, waveMax = 8,
+        alarm = false, income = 1 },
+    normal = { name = "Normal", think = 1, workers = 10, secondRax = 420, firstAttack = 360, wave = 6, waveGrow = 2,
+        waveMax = 12, alarm = true, income = 1 },
+    hard = { name = "Hard", think = 1, workers = 12, secondRax = 200, firstAttack = 240, wave = 5, waveGrow = 2,
+        waveMax = 16, alarm = true, income = 1.25 },
+}
 ns.WC.MILITIA_TIME = 45   -- Call to Arms lasts this long
 ns.WC.ALARM_RADIUS = 22   -- workers this close to the hall answer the alarm
 
@@ -72,6 +84,7 @@ ns.WC.MAP = {
     w = 64, h = 40,
     halls = { { 6, 6 }, nil },            -- player 2's is mirrored
     mines = { { 14, 4 } },                 -- per side, mirrored for the other
+    expansions = { { 12, 30 } },           -- extra mines in the open corners (mirrored too)
     -- Forest rectangles per side { x, y, w, h }, mirrored for the other side.
     forests = {
         { 0, 0, 64, 2 }, { 0, 0, 2, 40 },  -- the map edge (both halves come from mirroring)

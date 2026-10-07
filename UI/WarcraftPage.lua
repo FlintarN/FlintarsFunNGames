@@ -330,6 +330,20 @@ function P.New(parent, kind)
         btn.faction = f
         self.picks[i] = btn
     end
+    self.diffButtons = {}
+    local diffLabel = W.Label(o, "Computer:", "GameFontNormal")
+    diffLabel:SetPoint("TOP", -150, -322)
+    self.diffLabel = diffLabel
+    for i, key in ipairs({ "easy", "normal", "hard" }) do
+        local d = WC().DIFFICULTY[key]
+        local btn = W.Button(o, d.name, 80, function()
+            Save().difficulty = key
+            self:ShowStart()
+        end, 22)
+        btn:SetPoint("LEFT", diffLabel, "RIGHT", 10 + (i - 1) * 86, 0)
+        btn.key = key
+        self.diffButtons[i] = btn
+    end
     self.againButton = W.Button(o, "Play again", 110, function() self:ShowStart() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self:Resume() end, 22)
@@ -365,13 +379,20 @@ function P:ShowStart()
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText("Build up your base, train an army and destroy every enemy building. The computer plays the other side.")
     for _, p in ipairs(self.picks) do p:Show() end
+    local chosen = Save().difficulty or "normal"
+    self.diffLabel:Show()
+    for _, b in ipairs(self.diffButtons) do
+        b:Show()
+        b:SetEnabled(b.key ~= chosen) -- the chosen one is greyed out
+    end
     self.againButton:Hide()
     self.resumeButton:SetShown(self.st ~= nil and not self.st.over)
 end
 
 function P:NewGame(faction, seed)
     local other = faction == "human" and "orc" or "human"
-    self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000) })
+    self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000),
+        difficulty = Save().difficulty or "normal" })
     Save().game = self.st
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted = false
@@ -426,11 +447,14 @@ function P:GameOver()
     self:Pause()
     self.overlay:Show()
     for _, p in ipairs(self.picks) do p:Hide() end
+    self.diffLabel:Hide()
+    for _, b in ipairs(self.diffButtons) do b:Hide() end
     self.resumeButton:Hide()
     self.againButton:Show()
     self.overTitle:SetText(won and "Victory!" or "Defeat")
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
-    self.overSub:SetText(string.format("%d:%02d played. Wins %d, losses %d.", math.floor(st.time / 60),
+    self.overSub:SetText(string.format("%s, %d:%02d played. Wins %d, losses %d.",
+        WC().DIFFICULTY[st.difficulty or "normal"].name, math.floor(st.time / 60),
         math.floor(st.time % 60), rec.wins, rec.losses))
     W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
     ns.Changed()
@@ -1141,7 +1165,9 @@ function P:Draw()
                     f.icon:Hide()
                     f.ring:Hide()
                     if m.SetFacing then m:SetFacing(math.pi / 2 - (e.facing or 0)) end
-                    local moved = f.lastX and (math.abs(f.lastX - e.x) + math.abs(f.lastY - e.y)) > 0.005
+                    -- Walking: it moved within the last few engine steps (frames come
+                    -- faster than steps, so a per-frame check would flicker).
+                    local moved = e.walkT and st.time - e.walkT < 0.16
                     local anim = AnimFor(e, moved)
                     if m.anim ~= anim and m.SetAnimation then
                         m:SetAnimation(anim)

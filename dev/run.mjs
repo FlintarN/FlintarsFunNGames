@@ -552,6 +552,8 @@ await Section('Warcraft III engine and AI', async () => {
   await p.run('WcCommandTests()');
   await p.run('WcBuildTests()');
   await p.run('WcAlarmTests()');
+  await p.run('WcDifficultyTests()');
+  await p.run('WcDifficultyGames()');
   await p.run('WcAIGames()');
   await p.run('WcPageTests()');
 });
