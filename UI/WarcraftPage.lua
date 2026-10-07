@@ -207,7 +207,7 @@ function P.New(parent, kind)
     barFrame:SetPoint("TOPLEFT")
     barFrame:SetPoint("TOPRIGHT")
     barFrame:SetHeight(BAR)
-    barFrame:SetFrameLevel(b:GetFrameLevel() + 30)
+    barFrame:SetFrameLevel(b:GetFrameLevel() + 150)
     local bar = barFrame:CreateTexture(nil, "BACKGROUND")
     bar:SetPoint("TOPLEFT")
     bar:SetPoint("TOPRIGHT")
@@ -261,10 +261,13 @@ function P.New(parent, kind)
         f:SetFrameLevel(view:GetFrameLevel() + level)
         return f
     end
+    -- Buildings get a level each (their bottom row on the map, see DrawBuildings),
+    -- so the ones lower on the screen stand in front: room for 60 rows.
     self.treeLayer = Layer(1)
     self.buildLayer = Layer(2)
-    self.unitLayer = Layer(4)
-    self.fxLayer = Layer(8)
+    self.buildTop = Layer(64) -- building health bars and team flags, above the models
+    self.unitLayer = Layer(70)
+    self.fxLayer = Layer(90)
     self.box = self.fxLayer:CreateTexture(nil, "OVERLAY")
     self.box:SetColorTexture(0.3, 1, 0.3, 0.18)
     self.box:Hide()
@@ -292,7 +295,7 @@ function P.New(parent, kind)
     local hud = CreateFrame("Frame", nil, b)
     hud:SetPoint("TOPLEFT", 0, -(BAR + VIEW_H))
     hud:SetPoint("BOTTOMRIGHT")
-    hud:SetFrameLevel(view:GetFrameLevel() + 20)
+    hud:SetFrameLevel(view:GetFrameLevel() + 120)
     hud:EnableMouse(true)
     local hbg = hud:CreateTexture(nil, "BACKGROUND")
     hbg:SetAllPoints()
@@ -399,7 +402,7 @@ function P.New(parent, kind)
     -- Start / game over overlay.
     local o = CreateFrame("Frame", nil, b)
     o:SetAllPoints()
-    o:SetFrameLevel(b:GetFrameLevel() + 80)
+    o:SetFrameLevel(b:GetFrameLevel() + 200)
     o:EnableMouse(true)
     local shade = o:CreateTexture(nil, "BACKGROUND")
     shade:SetAllPoints()
@@ -1215,8 +1218,8 @@ function P:Draw()
             local t = self.buildTex[bi]
             if not t then
                 t = { art = self.buildLayer:CreateTexture(nil, "ARTWORK"), sel = self.buildLayer:CreateTexture(nil, "BORDER"),
-                    bar = self.buildLayer:CreateTexture(nil, "OVERLAY"), barBg = self.buildLayer:CreateTexture(nil, "OVERLAY", nil, -1),
-                    team = self.buildLayer:CreateTexture(nil, "OVERLAY", nil, 1) }
+                    bar = self.buildTop:CreateTexture(nil, "OVERLAY"), barBg = self.buildTop:CreateTexture(nil, "OVERLAY", nil, -1),
+                    team = self.buildTop:CreateTexture(nil, "OVERLAY", nil, 1) }
                 t.sel:SetTexture(ART .. "WcSelect")
                 t.sel:SetVertexColor(0.3, 1, 0.3)
                 t.barBg:SetColorTexture(0, 0, 0, 0.8)
@@ -1240,6 +1243,8 @@ function P:Draw()
                 -- A big frame centred on the footprint: the model stands at its centre.
                 local fs = size * 2 * ((look.tall or ns.WC.ART.view.tall) + 0.6)
                 t.model:SetSize(fs, fs)
+                -- Lower on the map (bigger bottom row): in front.
+                t.model:SetFrameLevel(self.buildLayer:GetFrameLevel() + 1 + math.min(60, e.y + e.size))
                 t.model:Ground(size, look)
                 t.model:Use(look.file, look.facing)
                 Place(t.model, self.view, px + size / 2, py + size / 2)

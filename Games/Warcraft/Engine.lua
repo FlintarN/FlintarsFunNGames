@@ -936,6 +936,8 @@ local function BuildingStep(st, b, dt)
         b.progress = math.min(1, b.progress + dt / d.time)
         b.hp = math.min(b.maxHp, b.hp + (b.progress - before) * b.maxHp * 0.9)
         if b.progress >= 1 then
+            -- Fractions add up to 999.99...: an undamaged building ends at full health.
+            b.hp = math.min(b.maxHp, math.floor(b.hp + 0.5))
             Emit("built", { id = b.id, owner = b.owner, type = b.type })
             local u = st.ents[b.builder or 0]
             if u and u.order and u.order.site == b.id then

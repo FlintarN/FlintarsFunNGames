@@ -73,6 +73,10 @@ function WcEngineTests()
     check(not E.Command(st, 1, { type = "build", unit = w.id, btype = "orc_burrow", x = spot[1], y = spot[2] }), "wc: humans can't build orc burrows")
     Run(st, 40)
     check(E.Count(st, 1).buildings.farm == 1 and st.players[1].foodCap == 18, "wc: the farm is up, food 18")
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.type == "farm" then check(e.hp == e.maxHp, "wc: a finished farm has full health (not 499/500)") end
+    end
     check(w.order and w.order.type == "gather", "wc: the builder goes back to work")
     -- Food limit.
     st.players[1].gold = 99999

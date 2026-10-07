@@ -85,7 +85,7 @@ ns.WC.ART = {
     view = { yaw = math.pi, pitch = 0.75, bpitch = 0.55, fov = 0.6, margin = 1.0, tall = 1.6 },
     models = {
         gold_mine = { file = 189620, fill = 1.1 },                -- elwynn/buildings/goldmine
-        town_hall = { file = 189629, fill = 1.0, tall = 1.5 },    -- elwynn/buildings/humanguardtower
+        town_hall = { file = 190505 },                            -- westfall/buildings/westfallchurch (gallery 8)
         farm = { file = 242696 },                                 -- redridge_human_farm_closed (gallery 16)
         barracks = { file = 189445 },                             -- duskwood/duskwoodbarn
         lumber_mill = { file = 242697, fill = 0.95 },             -- redridge_lumbermill (gallery 44)
