@@ -31,6 +31,133 @@ local function Mine(st, p)
     return E().NearestMine(st, E().Center(hall))
 end
 
+-- Heroes the computer likes, in order; how many per difficulty.
+AI.HEROES = { human = { "mountain_king", "paladin", "archmage", "blood_mage" },
+    orc = { "blademaster", "far_seer", "tauren_chieftain", "shadow_hunter" } }
+AI.HERO_COUNT = { easy = 1, normal = 2, hard = 3 }
+
+local function Dist2(a, b) return (a.x - b.x) ^ 2 + (a.y - b.y) ^ 2 end
+
+-- Enemy units (not buildings) within r of (x, y).
+local function EnemiesNear(st, p, x, y, r)
+    local out = {}
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind == "unit" and e.owner > 0 and e.owner ~= p and not (E().Untouchable(e) or E().Hidden(e))
+            and (e.x - x) ^ 2 + (e.y - y) ^ 2 <= r * r then
+            table.insert(out, e)
+        end
+    end
+    return out
+end
+
+-- Spend skill points: the ultimate when allowed, else the lowest of the
+-- first three (in order).
+function AI.Learn(st, p, h)
+    local list = D().Units[h.type].abilities
+    while (h.points or 0) > 0 do
+        local pick
+        if h.level >= 6 and E().Skill(h, list[4]) == 0 then pick = list[4] end
+        if not pick then
+            local best
+            for i = 1, 3 do
+                local lv = E().Skill(h, list[i])
+                if lv < 3 and h.level >= lv * 2 + 1 and (not best or lv < best) then pick, best = list[i], lv end
+            end
+        end
+        if not pick or not E().Command(st, p, { type = "learn", unit = h.id, ability = pick }) then return end
+    end
+end
+
+-- One spell a second, when it helps.
+function AI.HeroCast(st, p, h)
+    if h.order and h.order.type == "cast" then return end
+    local A = D().Abilities
+    for _, key in ipairs(D().Units[h.type].abilities) do
+        local a = A[key]
+        local lv = E().Skill(h, key)
+        local mana = a.mana and (a.mana[lv] or a.mana[#a.mana]) or 0
+        if lv > 0 and not a.passive and not (h.cds and h.cds[key]) and (h.mana or 0) >= mana then
+            local range = (a.range or 0) + 1
+            local cmd
+            if a.target == "ally" then
+                local worst, best
+                for _, id in ipairs(st.list) do
+                    local e = st.ents[id]
+                    if e and e.kind == "unit" and e.owner == p and e.hp < e.maxHp * 0.55 and Dist2(e, h) <= range * range then
+                        local missing = e.maxHp - e.hp
+                        if not best or missing > best then worst, best = e, missing end
+                    end
+                end
+                if worst then cmd = { target = worst.id } end
+            elseif a.target == "enemy" or a.target == "unit" then
+                local foes = EnemiesNear(st, p, h.x, h.y, range)
+                local pick
+                for _, e in ipairs(foes) do
+                    local hero = E().IsHero(e)
+                    if key == "siphon_mana" then
+                        if hero and (e.mana or 0) > 50 then pick = e end
+                    elseif hero then
+                        pick = e
+                    elseif not pick and (key == "storm_bolt" or key == "chain_lightning") then
+                        pick = e
+                    end
+                end
+                if pick then cmd = { target = pick.id } end
+            elseif a.target == "point" then
+                if key == "earthquake" then
+                    for _, id in ipairs(st.list) do
+                        local e = st.ents[id]
+                        if e and e.kind == "building" and e.owner > 0 and e.owner ~= p and Dist2(e, h) <= range * range then
+                            local cx, cy = E().Center(e)
+                            cmd = { x = cx, y = cy }
+                            break
+                        end
+                    end
+                elseif key == "serpent_ward" then
+                    if #EnemiesNear(st, p, h.x, h.y, 6) > 0 then cmd = { x = h.x + 1, y = h.y } end
+                elseif key ~= "far_sight" then
+                    for _, e in ipairs(EnemiesNear(st, p, h.x, h.y, range)) do
+                        if #EnemiesNear(st, p, e.x, e.y, a.radius or 2) >= 3 then
+                            cmd = { x = e.x, y = e.y }
+                            break
+                        end
+                    end
+                end
+            elseif a.target == "friend" then
+                if h.hp < h.maxHp * 0.25 and #EnemiesNear(st, p, h.x, h.y, 6) > 0 then
+                    local hall = E().Hall(st, p)
+                    if hall then cmd = { target = hall.id } end
+                end
+            elseif a.target == "self" then
+                local close = #EnemiesNear(st, p, h.x, h.y, 3.5)
+                local around = #EnemiesNear(st, p, h.x, h.y, 8)
+                if key == "divine_shield" then
+                    if h.hp < h.maxHp * 0.3 and around > 0 then cmd = {} end
+                elseif key == "thunder_clap" or key == "war_stomp" or key == "bladestorm" then
+                    if close >= 3 then cmd = {} end
+                elseif key == "avatar" or key == "big_bad_voodoo" then
+                    if around >= 5 then cmd = {} end
+                elseif key == "resurrection" then
+                    local n = 0
+                    for _, c in ipairs(st.corpses or {}) do
+                        if c.owner == p and (c.x - h.x) ^ 2 + (c.y - h.y) ^ 2 <= 81 then n = n + 1 end
+                    end
+                    if n >= 3 then cmd = {} end
+                elseif key == "wind_walk" then
+                    if h.hp < h.maxHp * 0.25 and around > 0 then cmd = {} end
+                elseif a.summon or key == "mirror_image" then
+                    if around > 0 then cmd = {} end
+                end
+            end
+            if cmd then
+                cmd.type, cmd.unit, cmd.ability = "cast", h.id, key
+                if E().Command(st, p, cmd) then return end
+            end
+        end
+    end
+end
+
 -- What the computer researches, in order of preference.
 AI.RESEARCH = { "keep", "stronghold", "guard_tower", "swords", "melee_o", "gunpowder", "ranged_o", "plating",
     "armor_o", "harvest", "long_rifles", "berserker", "regeneration", "masonry", "defenses", "castle", "fortress" }
@@ -130,6 +257,48 @@ function AI.Think(st, p)
         local mill = (count.buildings[f.mill] or 0) + (count.building[f.mill] or 0)
         if smith >= 1 and mill == 0 and st.time > 240 and pl.gold > 180 then
             if Build(f.mill) then return end
+        end
+    end
+    -- An altar, heroes (revived when they fall), skills and spells.
+    if f.altar then
+        local altars = (count.buildings[f.altar] or 0) + (count.building[f.altar] or 0)
+        if barracks >= 1 and smith >= 1 and altars == 0 and pl.gold > 250 then
+            if Build(f.altar) then return end
+        end
+        local altar
+        for _, id in ipairs(st.list) do
+            local b = st.ents[id]
+            if b and b.owner == p and b.type == f.altar and b.progress >= 1 then altar = b end
+        end
+        local heroes = 0
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e and e.owner == p and E_.IsHero(e) and not e.illusion then
+                heroes = heroes + 1
+                AI.Learn(st, p, e)
+                AI.HeroCast(st, p, e)
+            end
+        end
+        if altar and #altar.queue == 0 then
+            local revived = false
+            for ut, fallen in pairs(pl.fallen or {}) do
+                if not fallen.reviving and not revived then
+                    revived = E_.Command(st, p, { type = "revive", building = altar.id, utype = ut })
+                end
+            end
+            if not revived and heroes < (AI.HERO_COUNT[st.difficulty or "normal"] or 2) then
+                for _, ut in ipairs(AI.HEROES[pl.faction] or {}) do
+                    if E_.CanTrainHero(st, p, ut) then
+                        if E_.Command(st, p, { type = "train", building = altar.id, utype = ut }) then
+                            mem.save = nil
+                        elseif not mem.save then
+                            -- Save up for the hero: soldiers wait a little.
+                            mem.save = { gold = D().Units[ut].cost[1], since = st.time }
+                        end
+                        break
+                    end
+                end
+            end
         end
     end
     -- Research (not on Easy): the hall's next tier after a while, then

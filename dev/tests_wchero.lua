@@ -292,3 +292,38 @@ function WcHeroRevive()
     check(back and back.level == 3 and back.skills.storm_bolt == 2 and back.hp == back.maxHp,
         "wc hero: back at level 3 with his skills, full health")
 end
+
+-- The computer trains heroes and casts their spells.
+function WcHeroAI()
+    local st = E.New({ factions = { "human", "orc" }, seed = 12, difficulty = "normal" })
+    local casts, heroes = 0, {}
+    for _ = 1, 20 * 60 * 16 do -- 16 minutes
+        local events = E.Step(st, 0.05)
+        for _, ev in ipairs(events) do
+            if ev.kind == "cast" then casts = casts + 1 end
+        end
+        if math.floor(st.time * 20 + 0.5) % 20 == 0 then
+            WC.AI.Think(st, 1)
+            WC.AI.Think(st, 2)
+        end
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e and E.IsHero(e) then heroes[e.type] = math.max(heroes[e.type] or 0, e.level) end
+        end
+        if st.over then break end
+    end
+    local names = {}
+    for k, v in pairs(heroes) do table.insert(names, k .. " " .. v) end
+    table.sort(names)
+    local info = {}
+    for p = 1, 2 do
+        local c = E.Count(st, p)
+        local b = {}
+        for k, n in pairs(c.buildings) do table.insert(b, k .. "=" .. n) end
+        table.sort(b)
+        table.insert(info, "p" .. p .. ": " .. table.concat(b, ","))
+    end
+    check(#names >= 2, "wc hero AI: both sides got heroes (" .. table.concat(names, ", ") .. "; " .. table.concat(info, "; ") .. ")")
+    check(casts > 0, "wc hero AI: and cast spells (" .. casts .. ")")
+    print("  wc hero AI: " .. table.concat(names, ", ") .. "; " .. casts .. " spells")
+end

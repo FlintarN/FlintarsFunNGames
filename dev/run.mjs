@@ -601,6 +601,7 @@ await Section('Warcraft III heroes', async () => {
   await p.run('WcHeroTests()');
   await p.run('WcHeroAbilities()');
   await p.run('WcHeroRevive()');
+  await p.run('WcHeroAI()');
 });
 
 await Section('Warcraft III lockstep', async () => {
