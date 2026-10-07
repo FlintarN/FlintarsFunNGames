@@ -29,6 +29,7 @@ local BUILDING_ART = {
 local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
 local function Now() return GetTime and GetTime() or 0 end
+local ATAN2 = math.atan2 or math.atan
 
 -- Shift held: orders go after the current one (Warcraft III's order queue).
 local function Shift() return IsShiftKeyDown and IsShiftKeyDown() and true or nil end
@@ -41,40 +42,16 @@ local function Save()
 end
 
 ---------------------------------------------------------------------------
--- Unit models: each unit is its WoW creature. A creature's look is saved
--- the first time it loads, so every copy matches and later loads are quick.
+-- Unit models: each unit is its WoW creature, shown in the map's 3D scene by
+-- its display id (found once per creature, then saved: see P:Probe).
 ---------------------------------------------------------------------------
-local MODEL_W, MODEL_H = 40, 48
+local MODEL_H = 48 -- a unit's height on screen (its health bar sits on top)
 local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
 
 local function Looks()
     local rec = Save()
     rec.looks = rec.looks or {}
     return rec.looks
-end
-
-local function LoadModel(m)
-    local look = Looks()[m.npc]
-    if look and m.SetDisplayInfo then m:SetDisplayInfo(look) else m:SetCreature(m.npc) end
-    m.anim = nil
-    m.tried = Now()
-end
-
-local function MakeModel(parent)
-    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
-    if not ok or not m or not m.SetCreature then return nil end
-    m:SetSize(MODEL_W, MODEL_H)
-    m.waits = pcall(m.SetScript, m, "OnModelLoaded", function(self)
-        self.loaded = true
-        if self.npc and not Looks()[self.npc] and self.GetDisplayInfo then
-            local look = self:GetDisplayInfo()
-            if look and look > 0 then Looks()[self.npc] = look end
-        end
-        if self.SetPortraitZoom then self:SetPortraitZoom(0) end
-        self.anim = nil
-    end)
-    m:SetScript("OnShow", function(self) if self.npc then LoadModel(self) end end)
-    return m
 end
 
 -- A world object (building, tree, mine) from its file id, in a ModelScene:
@@ -109,7 +86,10 @@ local function MakeDoodad(parent)
         local dist = fh / (2 * math.tan(view.fov / 2) * scale)
         self:SetCameraOrientationByYawPitchRoll(view.yaw, view.bpitch, 0)
         local fx, fy, fz = 1, 0, 0
-        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
+        if self.GetCameraForward then
+            local x, y, z = self:GetCameraForward()
+            if x then fx, fy, fz = x, y, z end
+        end
         local cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
         self:SetCameraPosition(cx - fx * dist, cy - fy * dist, z1 - fz * dist)
         return true
@@ -117,7 +97,10 @@ local function MakeDoodad(parent)
     function sc:Aim(cx, cy, cz, r)
         self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
         local fx, fy, fz = 1, 0, 0
-        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
+        if self.GetCameraForward then
+            local x, y, z = self:GetCameraForward()
+            if x then fx, fy, fz = x, y, z end
+        end
         local fit = ns.WC.ART.fit[self.file] or {}
         cz = cz + r * (fit.up or 0)
         local dist = r / math.tan(view.fov / 2) * view.margin * (fit.margin or 1)
@@ -172,6 +155,111 @@ local function MakeDoodad(parent)
         if actor.SetYaw then actor:SetYaw(facing or 0) end
         self:Fit()
     end
+    return sc
+end
+
+-- The map's 3D scene: every building, unit and tree is an actor in ONE
+-- ModelScene. Separate model frames share the screen's depth buffer and cut
+-- into each other whatever their frame level, so instead each actor is put
+-- exactly where its 2D spot is on screen, at a distance from the camera set
+-- by its row on the map: lower on the map = nearer = in front, like 2D
+-- layering. Its size is corrected for that distance, so it looks the same.
+local DEPTH_NEAR, DEPTH_GROW = 1500, 1.06 -- distance of the bottom rows, growth per quarter row up
+
+local function MakeWorld(parent)
+    local ok, sc = pcall(CreateFrame, "ModelScene", nil, parent)
+    if not ok or not sc or not sc.CreateActor or not sc.SetCameraPosition then return nil end
+    local probe = sc:CreateActor()
+    if not probe or not probe.SetPosition or not probe.SetScale then return nil end
+    sc:SetAllPoints(parent)
+    sc:EnableMouse(false)
+    probe:Hide()
+    sc.pool = { probe }
+    -- Camera and the directions on screen (forward, right, up, in the world).
+    function sc:Setup()
+        local v = ns.WC.ART.view
+        if self.SetCameraFieldOfView then self:SetCameraFieldOfView(v.wfov) end
+        if self.SetCameraNearClip then self:SetCameraNearClip(1000) end
+        if self.SetCameraFarClip then self:SetCameraFarClip(4000000) end
+        self:SetCameraPosition(0, 0, 0)
+        self:SetCameraOrientationByYawPitchRoll(v.yaw, v.bpitch, 0)
+        local cy, sy, cp, sp = math.cos(v.yaw), math.sin(v.yaw), math.cos(v.bpitch), math.sin(v.bpitch)
+        local f = { cp * cy, cp * sy, -sp }
+        local r = { sy, -cy, 0 }
+        if self.GetCameraForward then
+            local x, y, z = self:GetCameraForward()
+            if x then f = { x, y, z } end
+        end
+        if self.GetCameraRight then
+            local x, y, z = self:GetCameraRight()
+            if x then r = { x, y, z } end
+        end
+        if v.flipX == 1 then r = { -r[1], -r[2], -r[3] } end
+        local u = { r[2] * f[3] - r[3] * f[2], r[3] * f[1] - r[1] * f[3], r[1] * f[2] - r[2] * f[1] }
+        if self.GetCameraUp then
+            local x, y, z = self:GetCameraUp()
+            if x then u = { x, y, z } end
+        end
+        if v.flipY == 1 then u = { -u[1], -u[2], -u[3] } end
+        self.f, self.r, self.u = f, r, u
+        local fl = math.max(math.sqrt(f[1] * f[1] + f[2] * f[2]), 0.0001)
+        self.fh = { f[1] / fl, f[2] / fl }
+        local rl = math.max(math.sqrt(r[1] * r[1] + r[2] * r[2]), 0.0001)
+        self.rh = { r[1] / rl, r[2] / rl }
+        self.yaw0 = ATAN2(-self.fh[2], -self.fh[1]) -- a model looking at the viewer
+        self.w, self.h = self:GetWidth(), self:GetHeight()
+        self.F = (self.h / 2) / math.tan(v.wfov / 2) -- pixels per unit at distance 1
+    end
+    function sc:Acquire()
+        local a = table.remove(self.pool) or self:CreateActor()
+        a.file, a.disp, a.box, a.anim, a.t0 = nil, nil, nil, nil, nil
+        a:Show()
+        return a
+    end
+    function sc:Model(a, file)
+        if a.file == file then return end
+        a.file, a.disp, a.box, a.anim, a.t0 = file, nil, nil, nil, Now()
+        a:SetModelByFileID(file)
+    end
+    function sc:Creature(a, disp)
+        if a.disp == disp then return end
+        a.disp, a.file, a.box, a.anim, a.t0 = disp, nil, nil, nil, Now()
+        a:SetModelByCreatureDisplayID(disp)
+    end
+    -- The model's bounding box, read again while it loads (it grows in steps).
+    function sc:Box(a)
+        if a.box and not self:Loading(a) then return a.box end
+        if not a.GetActiveBoundingBox then return nil end
+        local x1, y1, z1, x2, y2, z2 = a:GetActiveBoundingBox()
+        if x1 and x2 and (x2 - x1) + (z2 - z1) > 0.01 then a.box = { x1, y1, z1, x2, y2, z2 } end
+        return a.box
+    end
+    function sc:Loading(a) return a.t0 ~= nil and Now() - a.t0 <= 4 end
+    -- A model turned by `turn` from looking at the viewer.
+    function sc:Yaw(turn) return self.yaw0 + (turn or 0) end
+    -- A model looking along a screen direction (0 right, pi/2 down/towards the viewer).
+    function sc:FacingYaw(phi)
+        local c, s = math.cos(phi), math.sin(phi)
+        return ATAN2(c * self.rh[2] - s * self.fh[2], c * self.rh[1] - s * self.fh[1])
+    end
+    -- Put model point (mx, my, mz) at view pixel (px, py) (from the top
+    -- left), k screen pixels per model unit, at depth row `row` (map tiles
+    -- from the top of the view; bigger = nearer).
+    function sc:Put(a, px, py, row, k, mx, my, mz, yaw)
+        local q = math.max(-4, math.min(30, row))
+        local t = DEPTH_NEAR * DEPTH_GROW ^ ((30 - q) * 4)
+        local F = self.F
+        local sx, sy = (px - self.w / 2) / F, (self.h / 2 - py) / F
+        local f, r, u = self.f, self.r, self.u
+        local s = k * t / F
+        local c, si = math.cos(yaw), math.sin(yaw)
+        local rx, ry = mx * c - my * si, mx * si + my * c
+        a:SetYaw(yaw)
+        a:SetScale(s)
+        a:SetPosition((f[1] + r[1] * sx + u[1] * sy) * t - s * rx, (f[2] + r[2] * sx + u[2] * sy) * t - s * ry,
+            (f[3] + r[3] * sx + u[3] * sy) * t - s * mz)
+    end
+    sc:Setup()
     return sc
 end
 
@@ -267,8 +355,11 @@ function P.New(parent, kind)
     -- Buildings and units share one depth order: whatever stands lower on the
     -- map (its feet, a building's bottom edge) is drawn in front (see Depth).
     self.treeLayer = Layer(1)
-    self.buildLayer = Layer(2)
-    self.unitLayer = Layer(2)
+    self.buildLayer = Layer(2) -- shadows, selection circles, planned buildings
+    self.unitLayer = Layer(3)  -- units' circles (and their icons until the model is ready)
+    self.world = MakeWorld(self.view)
+    if self.world then self.world:SetFrameLevel(self.view:GetFrameLevel() + 5) end
+    self.unitTop = Layer(400)  -- units' health bars and loads
     self.buildTop = Layer(410) -- building health bars and team flags, above everything on the map
     self.fxLayer = Layer(420)
     self.box = self.fxLayer:CreateTexture(nil, "OVERLAY")
@@ -624,9 +715,9 @@ function P:Events(events)
                 self.unitFrames[ev.id] = nil
                 f.corpseUntil = Now() + 2.5
                 table.insert(self.corpses, f)
-                if f.model and f.model:IsShown() then
-                    f.model:SetAnimation(ANIM.death)
-                    f.model.anim = ANIM.death
+                if f.actor then
+                    f.actor:SetAnimation(ANIM.death)
+                    f.actor.anim = ANIM.death
                 end
                 f.hp:Hide() f.hpBg:Hide() f.sel:Hide() f.carry:Hide()
             end
@@ -1175,15 +1266,31 @@ function P:DrawTrees()
                 used = used + 1
                 local t = self.treeModels[used]
                 if not t then
-                    t = MakeDoodad(self.treeLayer) or self.treeLayer:CreateTexture(nil, "ARTWORK")
-                    if not t.Use then t:SetTexture(ART .. "WcTree") end
+                    t = self.world and self.world:Acquire() or self.treeLayer:CreateTexture(nil, "ARTWORK")
+                    if not self.world then t:SetTexture(ART .. "WcTree") end
                     self.treeModels[used] = t
                 end
                 local size = TILE * 2 * art.treeGrow * (n >= 3 and 1 or 0.8)
-                t:SetSize(size, size)
-                if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], (bx * 7 + by * 3) % 6) end
-                t:Show()
-                Place(t, self.view, (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY)
+                local tx, ty = (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY
+                if self.world then
+                    -- Fitted whole (its bounding sphere fills `size`), in the scene.
+                    local w = self.world
+                    w:Model(t, art.trees[(bx / 2 + by / 2) % #art.trees + 1])
+                    local box = w:Box(t)
+                    if w:Loading(t) then self.treesLoading = true end
+                    if box then
+                        local r = math.sqrt((box[4] - box[1]) ^ 2 + (box[5] - box[2]) ^ 2 + (box[6] - box[3]) ^ 2) / 2
+                        w:Put(t, tx, ty, by + 2 - self.camY / TILE, size / (2 * math.max(r, 0.01)), (box[1] + box[4]) / 2,
+                            (box[2] + box[5]) / 2, (box[3] + box[6]) / 2, w:Yaw((bx * 7 + by * 3) % 6))
+                        t:Show()
+                    else
+                        t:Hide()
+                    end
+                else
+                    t:SetSize(size, size)
+                    t:Show()
+                    Place(t, self.view, tx, ty)
+                end
                 -- A soft shadow at its foot.
                 local sh = self.shadeTex[used]
                 if not sh then
@@ -1201,12 +1308,6 @@ function P:DrawTrees()
     end
     for j = used + 1, #self.treeModels do self.treeModels[j]:Hide() end
     for j = used + 1, #self.shadeTex do self.shadeTex[j]:Hide() end
-end
-
--- The frame level for something standing at map row y (half-tile steps,
--- four levels each: a unit's frame, model and health bar fit in one step).
-function P:Depth(y)
-    return self.buildLayer:GetFrameLevel() + 1 + math.max(0, math.min(100, math.floor(y * 2))) * 4
 end
 
 function P:UnitFrame(id, utype)
@@ -1246,15 +1347,8 @@ function P:UnitFrame(id, utype)
         f.ring = f:CreateTexture(nil, "OVERLAY")
         f.ring:SetAllPoints(f.icon)
         f.ring:SetTexture(ART .. "WcRing")
-        f.model = MakeModel(f)
-        if f.model then
-            f.model:SetPoint("BOTTOM", f, "CENTER", 0, -8)
-            f.model.npc = WC().Units[utype].npc
-            f.model:SetFrameLevel(f:GetFrameLevel() + 1)
-        end
-        local top = CreateFrame("Frame", nil, f)
-        top:SetAllPoints()
-        top:SetFrameLevel(f:GetFrameLevel() + 3)
+        local top = CreateFrame("Frame", nil, self.unitTop)
+        top:SetAllPoints(f)
         f.top = top
         f.hpBg = top:CreateTexture(nil, "OVERLAY", nil, 1)
         f.hpBg:SetColorTexture(0, 0, 0, 0.8)
@@ -1270,12 +1364,84 @@ function P:UnitFrame(id, utype)
     end
     f.corpseUntil = nil
     f:SetAlpha(1)
+    f.top:Show()
+    if f.actor then f.actor:SetAlpha(1) end
     self.unitFrames[id] = f
     return f
 end
 
+-- A unit's creature in the 3D scene; false while it isn't ready (no display
+-- id yet, or still loading).
+local UNIT_FEET = 6 -- pixels below the unit's spot where its feet are
+function P:UnitActor(f, e)
+    local w = self.world
+    if not w then return false end
+    local npc = WC().Units[e.type].npc
+    local disp = Looks()[npc]
+    if not disp then
+        self:Probe(npc)
+        return false
+    end
+    f.actor = f.actor or w:Acquire()
+    local a = f.actor
+    w:Creature(a, disp)
+    local box = w:Box(a)
+    if not box then
+        a:Hide()
+        return false
+    end
+    a:Show()
+    local k = ns.WC.ART.view.unit / math.max(box[6] - box[3], 0.01)
+    local yaw = w:FacingYaw(e.facing or math.pi / 2)
+    f.put = { x = e.x, y = e.y, k = k, z = box[3], yaw = yaw }
+    w:Put(a, e.x * TILE - self.camX, e.y * TILE - self.camY + UNIT_FEET, e.y - self.camY / TILE, k, 0, 0, box[3], yaw)
+    -- Walking: it moved within the last few engine steps (frames come faster
+    -- than steps, so a per-frame check would flicker).
+    local moved = e.walkT and self.st.time - e.walkT < 0.16
+    local anim = AnimFor(e, moved)
+    if a.anim ~= anim then
+        a:SetAnimation(anim)
+        a.anim = anim
+    end
+    return true
+end
+
+-- A creature's display id (the 3D scene needs it): load the creature once in
+-- a tiny model frame and read it; saved for next time.
+function P:Probe(npc)
+    local m = self.prober
+    if m == false then return end
+    if not m then
+        local ok
+        ok, m = pcall(CreateFrame, "PlayerModel", nil, self.view)
+        if not ok or not m or not m.SetCreature or not m.GetDisplayInfo then
+            self.prober = false
+            return
+        end
+        m:SetSize(8, 8)
+        m:SetPoint("TOPLEFT", 0, 0)
+        m:SetAlpha(0.01)
+        pcall(m.SetScript, m, "OnModelLoaded", function(s)
+            local d = s:GetDisplayInfo()
+            if s.npc and d and d > 0 then Looks()[s.npc] = d end
+        end)
+        self.prober = m
+    end
+    if m.npc and not Looks()[m.npc] then
+        local d = m:GetDisplayInfo()
+        if d and d > 0 then Looks()[m.npc] = d end
+    end
+    -- One creature at a time; give each a couple of seconds to load.
+    if m.npc and not Looks()[m.npc] and Now() - (m.t or 0) < 2 then return end
+    if m.npc == npc and Looks()[npc] then return end
+    m.npc, m.t = npc, Now()
+    m:SetCreature(npc)
+end
+
 function P:FreeFrame(f)
     f:Hide()
+    if f.top then f.top:Hide() end
+    if f.actor then f.actor:Hide() end
     local pool = self.framePool[f.type] or {}
     self.framePool[f.type] = pool
     table.insert(pool, f)
@@ -1289,7 +1455,8 @@ function P:Draw()
     -- Ground scrolls with the camera.
     local rep = TILE * ns.WC.ART.groundRepeat
     self.ground:SetTexCoord(cx / rep, (cx + BW) / rep, cy / rep, (cy + VIEW_H) / rep)
-    if self.treeDirty or self.lastCamX ~= cx or self.lastCamY ~= cy then
+    if self.treeDirty or self.treesLoading or self.lastCamX ~= cx or self.lastCamY ~= cy then
+        self.treesLoading = false
         self:DrawTrees()
         self.treeDirty = false
         self.lastCamX, self.lastCamY = cx, cy
@@ -1334,7 +1501,6 @@ function P:Draw()
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             local size = e.size * TILE
             local look = ns.WC.ART.models[e.type]
-            if t.model == nil then t.model = MakeDoodad(self.buildLayer) or false end
             local alpha = (e.progress or 1) < 1 and 0.45 + 0.55 * e.progress or 1
             if not t.shadow then
                 t.shadow = self.buildLayer:CreateTexture(nil, "BACKGROUND")
@@ -1345,18 +1511,22 @@ function P:Draw()
             t.shadow:SetSize(size * 1.25, size * 0.8)
             Place(t.shadow, self.view, px + size / 2 + 4, py + size / 2 + 6)
             t.shadow:Show()
-            if t.model and look then
-                -- A big frame centred on the footprint: the model stands at its centre.
-                local fs = size * 2 * ((look.tall or ns.WC.ART.view.tall) + 0.6)
-                t.model:SetSize(fs, fs)
-                -- Lower on the map (bigger bottom row): in front.
-                local lv = self:Depth(e.y + e.size)
-                if t.model:GetFrameLevel() ~= lv then t.model:SetFrameLevel(lv) end
-                t.model:Ground(size, look)
-                t.model:Use(look.file, look.facing)
-                Place(t.model, self.view, px + size / 2, py + size / 2)
-                t.model:SetAlpha(alpha)
-                t.model:Show()
+            local box
+            if self.world and look then
+                t.actor = t.actor or self.world:Acquire()
+                self.world:Model(t.actor, look.file)
+                box = self.world:Box(t.actor)
+            end
+            if box then
+                -- Standing at the footprint's centre, its width filling it (not too tall).
+                local a = t.actor
+                local w = math.max(box[4] - box[1], box[5] - box[2], 0.01)
+                local h = math.max(box[6] - box[3], 0.01)
+                local k = math.min((look.fill or 1) * size / w, (look.tall or ns.WC.ART.view.tall) * size / h)
+                self.world:Put(a, px + size / 2, py + size / 2, e.y + e.size - cy / TILE, k, (box[1] + box[4]) / 2,
+                    (box[2] + box[5]) / 2, box[3], self.world:Yaw(look.facing))
+                a:SetAlpha(alpha)
+                a:Show()
                 t.art:Hide()
             else
                 t.art:SetTexture(ART .. BUILDING_ART[e.type])
@@ -1406,7 +1576,7 @@ function P:Draw()
     for j = bi + 1, #self.buildTex do
         local t = self.buildTex[j]
         t.art:Hide() t.sel:Hide() t.bar:Hide() t.barBg:Hide() t.team:Hide()
-        if t.model then t.model:Hide() end
+        if t.actor then t.actor:Hide() end
         if t.shadow then t.shadow:Hide() end
     end
     -- Units.
@@ -1444,33 +1614,11 @@ function P:Draw()
                 end
                 f:ClearAllPoints()
                 f:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
-                local lv = self:Depth(e.y)
-                if f.depth ~= lv then
-                    f.depth = lv
-                    f:SetFrameLevel(lv)
-                    if f.model then f.model:SetFrameLevel(lv + 1) end
-                    if f.top then f.top:SetFrameLevel(lv + 3) end
-                end
-                -- Always the model (the panels above the map hide anything poking out).
-                local m = f.model
-                if m then
-                    if not m:IsShown() then m:Show() end
-                    if m.waits and not m.loaded and now - (m.tried or 0) > 2 then LoadModel(m) end
-                    f.icon:Hide()
-                    f.ring:Hide()
-                    if m.SetFacing then m:SetFacing(math.pi / 2 - (e.facing or 0)) end
-                    -- Walking: it moved within the last few engine steps (frames come
-                    -- faster than steps, so a per-frame check would flicker).
-                    local moved = e.walkT and st.time - e.walkT < 0.16
-                    local anim = AnimFor(e, moved)
-                    if m.anim ~= anim and m.SetAnimation then
-                        m:SetAnimation(anim)
-                        m.anim = anim
-                    end
-                else
-                    f.icon:Show()
-                    f.ring:Show()
-                end
+                f.top:Show()
+                -- The creature in the 3D scene (its icon until the model is ready).
+                local ready = self:UnitActor(f, e)
+                f.icon:SetShown(not ready)
+                f.ring:SetShown(not ready)
                 f.lastX, f.lastY = e.x, e.y
             end
         end
@@ -1490,9 +1638,18 @@ function P:Draw()
             self:FreeFrame(f)
         else
             f:SetAlpha(math.min(1, left / 1.2))
-            if f.model and f.model.anim == ANIM.death and left < 1.6 and f.model.SetAnimation then
-                f.model:SetAnimation(ANIM.dead)
-                f.model.anim = ANIM.dead
+            local a = f.actor
+            if a and self.world and f.put then
+                local p = f.put
+                f:ClearAllPoints()
+                f:SetPoint("CENTER", self.view, "TOPLEFT", p.x * TILE - self.camX, -(p.y * TILE - self.camY))
+                self.world:Put(a, p.x * TILE - self.camX, p.y * TILE - self.camY + 6, p.y - self.camY / TILE, p.k, 0, 0,
+                    p.z, p.yaw)
+                a:SetAlpha(math.min(1, left / 1.2))
+                if a.anim == ANIM.death and left < 1.6 then
+                    a:SetAnimation(ANIM.dead)
+                    a.anim = ANIM.dead
+                end
             end
         end
     end
@@ -1896,8 +2053,8 @@ SlashCmdList.FNGWCVIEW = function(msg)
     local key, value = (msg or ""):match("^(%a+)%s+([%-%d%.]+)")
     local view = ns.WC.ART.view
     if key and view[key] ~= nil then view[key] = tonumber(value) end
-    ns.Print(string.format("Warcraft view: yaw %.2f, pitch %.2f, bpitch %.2f, fov %.2f, margin %.2f, tall %.2f",
-        view.yaw, view.pitch, view.bpitch, view.fov, view.margin, view.tall))
+    ns.Print(string.format("Warcraft view: yaw %.2f, bpitch %.2f, wfov %.3f, unit %d, tall %.2f, flipX %d, flipY %d",
+        view.yaw, view.bpitch, view.wfov, view.unit, view.tall, view.flipX, view.flipY))
     local page = ns.UI.pages and ns.UI.pages.warcraft and ns.UI.pages.warcraft.view
     if not page then return end
     local function Refit(m)
@@ -1907,8 +2064,8 @@ SlashCmdList.FNGWCVIEW = function(msg)
             m:Fit()
         end
     end
-    for _, t in ipairs(page.buildTex or {}) do Refit(t.model) end
-    for _, m in ipairs(page.treeModels or {}) do Refit(m) end
+    if page.world then page.world:Setup() end
+    page.treeDirty = true
 end
 
 ns.CustomPages = ns.CustomPages or {}

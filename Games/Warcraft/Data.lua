@@ -82,7 +82,10 @@ ns.WC.ART = {
     -- The camera: from yaw (around), pitch (down), with this field of view;
     -- margin > 1 leaves room around the model.
     -- bpitch: the buildings' camera, lower so walls show, not just roofs.
-    view = { yaw = math.pi, pitch = 0.75, bpitch = 0.55, fov = 0.6, margin = 1.0, tall = 1.6 },
+    -- The map: one 3D scene (wfov: a narrow lens, nearly flat like Warcraft III),
+    -- units `unit` pixels tall.
+    view = { yaw = math.pi, pitch = 0.75, bpitch = 0.55, fov = 0.6, margin = 1.0, tall = 1.6, wfov = 0.05, unit = 34,
+        flipX = 0, flipY = 0 }, -- 1: mirror the scene (if a client turns it the other way)
     models = {
         gold_mine = { file = 189620, fill = 1.1 },                -- elwynn/buildings/goldmine
         town_hall = { file = 190505 },                            -- westfall/buildings/westfallchurch (gallery 8)
