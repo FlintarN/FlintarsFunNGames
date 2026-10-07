@@ -3309,6 +3309,7 @@ function P:StartPvp(s)
     ME = seat
     CPUS = {} -- (the computer's seats play inside the turns: LockstepTick)
     self.lsCpus = g.cpus or {}
+    self.lsTake = {} -- seat -> from which turn the computer plays it (a player who left)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = g.factions, teams = g.teams, starts = g.starts, difficulties = g.difficulties,
@@ -3350,6 +3351,11 @@ function P:LockstepTick(elapsed)
             end
             if ls.turn % 4 == 0 then
                 for _, c in ipairs(self.lsCpus or {}) do WC().AI.Think(st, c) end
+                -- Seats the computer took over (in seat order: the same everywhere).
+                for seat = 1, #st.players do
+                    local from = self.lsTake and self.lsTake[seat]
+                    if from and ls.turn >= from then WC().AI.Think(st, seat) end
+                end
             end
             for _ = 1, math.floor(TURN / STEP + 0.5) do
                 self:Events(E().Step(st, STEP))
@@ -3373,12 +3379,58 @@ function P:LockstepTick(elapsed)
         self.status:SetText("Waiting for " .. (#names > 0 and table.concat(names, ", ") or "the others") .. "... ("
             .. math.floor(silence) .. "s)")
         self.sayUntil = Now() + 0.5
-        -- Two players: after a long silence the game is yours.
+        -- Two players: after a long silence the game is yours. More: the host
+        -- hands a silent player's seat to the computer after 30 seconds.
         local humans = 0
         for _ in pairs(ls.peers) do humans = humans + 1 end
         self.claim:SetShown(silence > 45 and humans == 1)
+        local s2 = ns.Session.Get(self.kind)
+        if humans >= 2 and silence > 30 and s2 and ns.Session.IsHost(s2) and s2.game then
+            local _, who = ls:Silence(Now())
+            local name = who and ls.peers[who]
+            if name then
+                s2.game.leaving = s2.game.leaving or {}
+                s2.game.leaving[name] = true
+                self:HostDrops(s2)
+            end
+        end
     else
         self.claim:Hide()
+    end
+end
+
+-- The host: a player left (offline, or silent too long): the computer takes
+-- their seat over from the next turn the host hasn't run, and everyone gets
+-- the commands of theirs the host has (in case someone missed some).
+function P:HostDrops(s)
+    local ls = self.ls
+    if not (ls and s.game and s.game.leaving) then return end
+    s.game.drops = s.game.drops or {}
+    local changed = false
+    for name in pairs(s.game.leaving) do
+        local seat = self.G.Seat(s, name)
+        if seat and seat ~= ls.seat and not s.game.drops[seat] then
+            local from = math.max(ls.turn, (ls.thru[seat] or ls.turn) + 1)
+            s.game.drops[seat] = { from = from, cmds = ls:Known(seat, from - ns.Lockstep.HIST) }
+            changed = true
+        end
+    end
+    s.game.leaving = nil
+    if changed then ns.Session.Update(s) end
+end
+
+-- Everyone (host too): apply the takeovers the session announces.
+function P:ApplyDrops(s)
+    local ls = self.ls
+    if not (ls and s.game and s.game.drops) then return end
+    for seat, d in pairs(s.game.drops) do
+        seat = tonumber(seat)
+        if seat and seat ~= ls.seat and not ls.dropped[seat] then
+            ls:Drop(seat, d.from, d.cmds)
+            self.lsTake[seat] = d.from
+            local name = s.game.names and s.game.names[seat] or ("Player " .. seat)
+            self:Say(name .. " left. The computer plays on for them.")
+        end
     end
 end
 
@@ -3480,6 +3532,10 @@ function P:RefreshPvp(s)
 
     if s.stage == "play" and s.recordId ~= self.pvpGame and seated then
         self:StartPvp(s)
+    end
+    if s.stage == "play" and self.ls then
+        if S.IsHost(s) and s.game and s.game.leaving then self:HostDrops(s) end
+        self:ApplyDrops(s)
     end
     if s.phase == "done" then
         if self.ls then ns.Lockstep.Stop(self.ls) self.ls = nil end

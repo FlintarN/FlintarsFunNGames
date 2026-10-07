@@ -30,6 +30,7 @@ L.DELAY = 2    -- a command runs this many turns after it was given
 L.SEND = 0.25  -- at most one message this often
 L.BEAT = 0.5   -- and at least this often (a lost message is covered soon)
 L.HASH = 20    -- turns between fingerprints
+L.HIST = 64    -- turns of everyone's commands kept after they ran (to hand on if a player drops)
 
 local games = {} -- id -> game (to deliver messages)
 local G = {}
@@ -54,6 +55,8 @@ function L.New(o)
         heard = {},                  -- seat -> when last heard from
         lastSend = -100, dirty = true,
         hashes = {}, theirHashes = {},
+        hist = {},                   -- seat -> turn -> commands that ran (the last HIST turns)
+        dropped = {},                -- seat -> the turn from which nobody gives its commands
     }, G)
     for seat in pairs(peers) do
         g.theirs[seat], g.thru[seat], g.acked[seat], g.theirHashes[seat] = {}, L.DELAY - 1, -1, {}
@@ -126,10 +129,35 @@ end
 
 function G:CanRun()
     if self.desync then return false end
-    for _, thru in pairs(self.thru) do
-        if thru < self.turn then return false end
+    for seat, thru in pairs(self.thru) do
+        local gone = self.dropped[seat]
+        if thru < self.turn and not (gone and self.turn >= gone) then return false end
     end
     return true
+end
+
+-- A player left: from turn `from` their seat gives no commands (the computer
+-- takes it over, the same on every client). cmds: their commands for the
+-- turns before, as the host had them (so nobody waits for what they missed).
+function G:Drop(seat, from, cmds)
+    if self.dropped[seat] then return end
+    self.dropped[seat] = from
+    local mine = self.theirs[seat] or {}
+    self.theirs[seat] = mine
+    for t, c in pairs(cmds or {}) do
+        t = tonumber(t)
+        if t and t >= self.turn and t < from and not mine[t] then mine[t] = c end
+    end
+    self.thru[seat] = math.max(self.thru[seat] or -1, from - 1)
+    self.peers[seat], self.acked[seat], self.heard[seat] = nil, nil, nil
+end
+
+-- What I know of a seat's commands from turn `low` on (to hand on in a Drop).
+function G:Known(seat, low)
+    local out = {}
+    for t, c in pairs(self.hist[seat] or {}) do if t >= low then out[t] = c end end
+    for t, c in pairs(self.theirs[seat] or {}) do if t >= low then out[t] = c end end
+    return out
 end
 
 -- Seconds since the quietest other player was last heard from, and their
@@ -160,9 +188,15 @@ function G:Run(fn)
     local t = self.turn
     local bySeat = {}
     bySeat[self.seat] = self.mine[t] or {}
-    for seat in pairs(self.peers) do
-        bySeat[seat] = self.theirs[seat][t] or {}
+    for seat in pairs(self.thru) do
+        local gone = self.dropped[seat]
+        bySeat[seat] = (gone and t >= gone) and {} or (self.theirs[seat][t] or {})
         self.theirs[seat][t] = nil
+    end
+    for seat, c in pairs(bySeat) do
+        self.hist[seat] = self.hist[seat] or {}
+        self.hist[seat][t] = c
+        self.hist[seat][t - L.HIST] = nil
     end
     fn(bySeat)
     self.turn = t + 1

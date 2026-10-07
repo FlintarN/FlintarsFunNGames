@@ -725,6 +725,47 @@ await Section('Warcraft 4: three players and a computer', async () => {
   for (const q of players) await q.run(`check(WcPvpGone(3) and WcPvpOver() == "on", "wc 3p: " .. PLAYER_NAME .. " sees Cara out, the game goes on")`);
 });
 
+await Section('Warcraft 4: a player drops, the computer takes over', async () => {
+  const host = await Player('Flintar', []);
+  const bob = await Player('Bob', []);
+  const cara = await Player('Cara', []);
+  const players = [host, bob, cara];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const code = await Get(host, 'WcPvpHost()');
+  await Pump(players, 1);
+  await host.run('WcPvpLobby("map:four_crowns")');
+  await Pump(players, 1);
+  await bob.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await cara.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await bob.run('WcPvpLobby("ready:on")');
+  await cara.run('WcPvpLobby("ready:on")');
+  await Pump(players, 1);
+  await host.run('WcPvpStart(3)');
+  await Pump(players, 1);
+  for (let i = 0; i < 40; i++) {
+    for (const q of players) await q.run('WcPvpRun(5)');
+    await Pump(players, 0.25);
+  }
+  // Cara's game goes quiet (she's gone): the other two carry on.
+  const two = [host, bob];
+  for (let i = 0; i < 320; i++) {
+    if (i % 9 === 0) { await host.run(`WcPvpOrder(${i})`); }
+    if (i % 11 === 0) { await bob.run(`WcPvpOrder(${i + 1})`); }
+    for (const q of two) await q.run('WcPvpRun(5)');
+    await Pump(two, 0.25);
+  }
+  const t1 = await Get(host, 'WcPvpTurn()');
+  const t2 = await Get(bob, 'WcPvpTurn()');
+  const t = Math.floor(Math.min(t1, t2) / 20) * 20;
+  const h1 = await Get(host, `WcPvpHash(${t})`);
+  const h2 = await Get(bob, `WcPvpHash(${t})`);
+  await host.run(`check(${t} >= 160, "wc drop: after 30 s of silence the game went on without Cara (turns ${t1} / ${t2})")`);
+  await host.run(`check("${h1}" ~= "" and "${h1}" == "${h2}", "wc drop: the host and Bob still have the same game at turn ${t}")`);
+  await bob.run(`check(ns.UI.pages.warcraft.view.lsTake[3] ~= nil, "wc drop: on Bob's side the computer plays Cara's seat")`);
+});
+
 await Section('Warcraft III engine and AI', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wc.lua'), 'utf8'));

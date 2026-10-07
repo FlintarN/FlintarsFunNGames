@@ -302,10 +302,10 @@ function G:Act(s, name, action)
 end
 
 -- The host skipped a player who went offline (group lobbies). Two players:
--- the other wins. More: no winner (the game can't go on without them).
+-- the other wins. More: the computer takes their seat over (the host's game
+-- page hands it on: UI\WarcraftPage.lua, P:TakeOver).
 function G:Drop(s, name)
     if s.stage ~= "play" then return end
-    local seat = G.Seat(s, name)
     local humans = 0
     for _ in pairs(s.game and s.game.names or {}) do humans = humans + 1 end
     if humans == 2 then
@@ -313,7 +313,8 @@ function G:Drop(s, name)
             if n ~= name then return Finish(s, TeamOf(s, p), "Warcraft 4, " .. name .. " left") end
         end
     end
-    Finish(s, nil, "Warcraft 4, " .. name .. " left. No winner.")
+    s.game.leaving = s.game.leaving or {}
+    s.game.leaving[name] = true
 end
 
 -- Practice bot (the queue's races stage only).
