@@ -21,7 +21,7 @@ local MM_SCALE = 2              -- minimap pixels per tile
 local EDGE, SCROLL = 10, 650    -- edge scrolling
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 } }
 local BUILDING_ART = {
-    town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks",
+    town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks",
     great_hall = "WcGreatHall", orc_burrow = "WcBurrow", orc_barracks = "WcOrcBarracks", gold_mine = "WcMine",
 }
 
@@ -1623,6 +1623,27 @@ local GALLERY = {
     { 201267, "neshrine (night elf)" }, { 194797, "guardtower_intact_fade" }, { 190153, "holdingpen" },
     { 198389, "peasantlumber01" }, { 198339, "deadminelumberpilelarge" }, { 194962, "hu_tent02" },
     { 192543, "dr_tent_02 (draenei)" }, { 192253, "be_tent02 (blood elf)" },
+    -- 99+: more human and Elwynn-style buildings.
+    { 242690, "duskwood_barn_closed" }, { 242695, "redridge_barn_closed" }, { 242693, "duskwood_stable" },
+    { 242698, "redridge_stable" }, { 190511, "lighthousered" }, { 190515, "westfalllighthouse" },
+    { 198261, "gryphonroost01" }, { 2016715, "kultiras_gryphonroost01" }, { 2016718, "kultiras_gryphonroost02" },
+    { 1881269, "human_siegetower" }, { 1127093, "ashran alliance tower" }, { 975083, "garrison_guardshack" },
+    { 219314, "humantanktower" }, { 2061082, "warfront magictower (human)" }, { 2065485, "warfront barn (human)" },
+    { 1910329, "warfront barracks (orc)" }, { 2061081, "warfront magictower (orc)" }, { 368823, "stormwind_bank_gold" },
+    { 381045, "stormwind auctionhouse01" }, { 452147, "stormwind_enchantingshop" }, { 452149, "stormwind_inscriptionshop" },
+    { 452151, "stormwind_jewelcraftingshop" }, { 452153, "stormwind_miningshop" }, { 189641, "stormwindgate" },
+    { 306203, "worgen_guardhouse_01" }, { 306223, "worgen_guardhouse_02" }, { 305999, "worgen_windmill_01" },
+    { 306001, "worgen_windmill_02" }, { 304345, "worgen_stable_01" }, { 304422, "worgen_stable_02" },
+    { 312267, "worgen_forge_01" }, { 2321274, "arathi windmill 01" }, { 2321275, "arathi windmill 02" },
+    { 2321276, "arathi windmill 03" }, { 1709395, "kultiras_chickencoop" }, { 948466, "garrison_farm_well" },
+    { 198672, "wreckedbuilding base01" }, { 198673, "wreckedbuilding base02" }, { 198674, "wreckedbuilding base03" },
+    { 929365, "garrison blacksmith forge" }, { 1958817, "kultiras blacksmith forge" }, { 959598, "salvageyard forge" },
+    -- Real Elwynn/Stormwind houses are WMO files: these may show nothing (a test).
+    { 106851, "WMO goldshireinn" }, { 106973, "WMO humantwostory" }, { 106907, "WMO human_barracks" },
+    { 107029, "WMO lumbermill" }, { 106848, "WMO goldshireblacksmith" }, { 106882, "WMO guardtower_intact" },
+    { 106965, "WMO human farm" }, { 106899, "WMO barn" }, { 106685, "WMO castle01" },
+    { 1830539, "WMO warfront altarofkings" }, { 2198682, "WMO warfront armory (human)" }, { 2053758, "WMO warfront workshop (human)" },
+    { 1846142, "WMO warfront altarofstorms" }, { 1851982, "WMO warfront tower (orc)" }, { 1915564, "WMO warfront barracks (orc)" },
 }
 local COLS, ROWS = 6, 3
 

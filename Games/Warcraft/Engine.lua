@@ -212,6 +212,7 @@ end
 
 -- Put a unit on the map (tests, and later scenarios).
 function E.Spawn(st, owner, utype, x, y) return NewUnit(st, owner, utype, x, y) end
+E.SpawnBuilding = NewBuilding
 
 local function Remove(st, e)
     if e.kind ~= "unit" then Occupy(st, e, false) end
@@ -358,12 +359,14 @@ function E.Hall(st, p)
     end
 end
 
--- The nearest finished drop-off (hall) of player p.
-function E.Dropoff(st, p, x, y)
+-- The nearest finished drop-off of player p for res ("gold" or "lumber";
+-- nil: anything). Halls take both, a lumber mill only lumber.
+function E.Dropoff(st, p, x, y, res)
     local best, bd
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner == p and e.kind == "building" and Def(e).dropoff and e.progress >= 1 then
+        local drop = e and e.kind == "building" and Def(e).dropoff
+        if drop and e.owner == p and e.progress >= 1 and (drop == true or not res or drop == res) then
             local cx, cy = Center(e)
             local d = (cx - x) ^ 2 + (cy - y) ^ 2
             if not bd or d < bd then best, bd = e, d end
@@ -473,7 +476,7 @@ local function LeaveMine(st, u)
     for i, id in ipairs(mine.garrison or {}) do
         if id == u.id then table.remove(mine.garrison, i) break end
     end
-    local hall = E.Dropoff(st, u.owner, u.x, u.y)
+    local hall = E.Dropoff(st, u.owner, u.x, u.y, "gold")
     local hx, hy = Center(mine)
     if hall then hx, hy = Center(hall) end
     local x, y = FreeAround(st, mine, hx, hy)
@@ -635,7 +638,7 @@ end
 local function Gather(st, u, o, dt)
     local res = o.res
     if u.phase == "return" then
-        local drop = E.Dropoff(st, u.owner, u.x, u.y)
+        local drop = E.Dropoff(st, u.owner, u.x, u.y, u.carry and u.carry.res or res)
         if not drop then u.order = nil return end
         if Gap(u, drop) <= 1.1 then
             Deposit(st, u)
@@ -1065,7 +1068,7 @@ function E.Command(st, p, cmd)
                 local o = u.order
                 if o and o.type == "gather" then u.workOrder = o end
                 if t == "callToArms" then
-                    local near = E.Dropoff(st, p, u.x, u.y) or hall
+                    local near = E.Dropoff(st, p, u.x, u.y, "gold") or hall
                     E.Order(st, u, { type = "toArms", hall = near.id })
                 else
                     local b = E.FreeBurrow(st, p, u.x, u.y)

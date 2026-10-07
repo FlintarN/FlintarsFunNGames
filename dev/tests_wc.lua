@@ -369,6 +369,12 @@ function WcBuildTests()
         if farm.progress >= 1 then break end
     end
     check(farm.progress >= 1 and not w2.order or (w2.order and w2.order.type ~= "build"), "wc: a second peasant finishes it")
+    -- A lumber mill takes lumber, not gold.
+    local lx, ly = WC.AI.FindSpot(st, hx + 8, hy - 2, 3)
+    local mill = E.SpawnBuilding(st, 1, "lumber_mill", lx, ly, true)
+    check(E.Dropoff(st, 1, lx + 1.5, ly + 1.5, "lumber") == mill, "wc: lumber goes to the lumber mill")
+    check(E.Dropoff(st, 1, lx + 1.5, ly + 1.5, "gold") == hall, "wc: gold still goes to the hall")
+    check(not E.Command(st, 2, { type = "build", unit = ws[3].id, btype = "lumber_mill", x = lx, y = ly + 5 }), "wc: orcs have no lumber mill")
     -- Orcs build from inside.
     st.players[2].gold, st.players[2].lumber = 5000, 5000
     local oh = E.Hall(st, 2)

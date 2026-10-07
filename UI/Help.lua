@@ -215,7 +215,7 @@ H.RULES = {
             .. "building to carry on building it. With a building selected, right-click sets its rally point." },
         { "Command card", "As in Warcraft III. Units: Move (M), Stop (S), Hold Position (H), Attack (A: click an "
             .. "enemy, or the ground to attack-move). Workers also: Gather (G), Return Resources (R) and Build "
-            .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Hall H). Halls and barracks "
+            .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Lumber Mill L, Hall H). Halls and barracks "
             .. "train (Peasant/Peon P, Footman F, Rifleman R, Grunt G, Headhunter T) and Set Rally Point (Y)." },
         { "Workers", "One worker at a time goes into the gold mine; the others wait at the door, so about five "
             .. "keep a mine busy. Harvesting workers walk through each other. A building only goes up while "
@@ -226,7 +226,8 @@ H.RULES = {
         { "Difficulty", "Pick Easy, Normal or Hard on the start screen. Easy builds slowly and waits 10 minutes "
             .. "before attacking; Normal waits 6; Hard waits 4, builds more and gets 25% more per trip." },
         { "Economy", "Workers carry 10 gold or lumber a trip. Every unit needs food: a hall gives 12, each farm or "
-            .. "burrow 6. The Idle button at the top right finds workers with nothing to do." },
+            .. "burrow 6. Lumber goes to the nearest hall or Lumber Mill, gold only to a hall. The Idle button at "
+            .. "the top right finds workers with nothing to do." },
     },
     hearthstone = {
         { "The idea", "Two heroes with 30 Health each. Bring the enemy hero to 0. You play minions (they fight "

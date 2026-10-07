@@ -6,7 +6,7 @@
 --   creature drawn for it), hotkey (as in Warcraft III).
 -- A building type: name, hp, armor, size (tiles, square), cost, time (to build),
 --   food (supply it gives), trains = { unit types }, dropoff = true (gold and lumber
---   are brought here), hall = true, icon.
+--   are brought here; "lumber": only lumber), hall = true, icon.
 -- A faction: name, hall, worker, farm, barracks (keys into Units/Buildings), color.
 local ADDON, ns = ...
 
@@ -39,6 +39,8 @@ B.farm = { hotkey = "F", name = "Farm", hp = 500, armor = 5, size = 2, cost = { 
     icon = I .. "INV_Misc_Food_02" }
 B.barracks = { hotkey = "B", name = "Barracks", hp = 1000, armor = 5, size = 3, cost = { 160, 60 }, time = 30, food = 0,
     trains = { "footman", "rifleman" }, icon = I .. "INV_Sword_27" }
+B.lumber_mill = { hotkey = "L", name = "Lumber Mill", hp = 900, armor = 5, size = 3, cost = { 120, 0 }, time = 30, food = 0,
+    dropoff = "lumber", icon = I .. "INV_Axe_10" }
 B.great_hall = { hotkey = "H", name = "Great Hall", hp = 1500, armor = 5, size = 4, cost = { 385, 185 }, time = 60, food = 12,
     trains = { "peon" }, dropoff = true, hall = true, icon = I .. "INV_BannerPVP_01" }
 B.orc_burrow = { hotkey = "O", name = "Orc Burrow", hp = 600, armor = 5, size = 2, cost = { 80, 40 }, time = 18, food = 6,
@@ -51,7 +53,7 @@ B.gold_mine = { name = "Gold Mine", hp = 1, armor = 0, size = 3, neutral = true,
 local F = {}
 ns.WC.Factions = F
 F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm", barracks = "barracks", alarm = "callToArms",
-    melee = "footman", ranged = "rifleman", builds = { "farm", "barracks", "town_hall" } }
+    melee = "footman", ranged = "rifleman", builds = { "farm", "barracks", "lumber_mill", "town_hall" } }
 F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", alarm = "battleStations",
     melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "great_hall" } }
 
@@ -74,6 +76,7 @@ ns.WC.ART = {
         town_hall = { file = 189629, grow = 1.6, y = 12 },     -- elwynn/buildings/humanguardtower
         farm = { file = 242696, grow = 1.5, y = 8 },           -- redridge_human_farm_closed (gallery 16)
         barracks = { file = 189445, grow = 1.5, y = 6 },       -- duskwood/duskwoodbarn
+        lumber_mill = { file = 242697, grow = 1.25, y = 5 },   -- redridge_lumbermill (gallery 44)
         great_hall = { file = 189200, grow = 1.6, y = 8 },     -- burningsteppes/orctents/orctent
         orc_burrow = { file = 199389, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent02
         orc_barracks = { file = 190175, grow = 1.6, y = 12 },  -- stranglethorn/buildings/trollwatchtower
