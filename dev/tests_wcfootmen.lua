@@ -209,3 +209,20 @@ function WcBuildingGroupTests()
     check(b1.rally and b2.rally and b1.rally.x == b2.rally.x, "groups: one rally point for both")
     view:Quit()
 end
+
+-- Footmen extras: casters for hire (3 at most), gold for an ally, a fifth tier.
+function WcFootmenExtraTests()
+    local st = E.New({ factions = { "human", "orc", "human", "orc" }, teams = { 1, 2, 1, 2 }, seed = 4, map = "frenzy_fields",
+        mode = "footmen" })
+    local F = WC.Modes.footmen
+    for i = 1, 3 do check(E.Command(st, 1, { type = "ffHire", utype = i % 2 == 1 and "priest" or "sorceress" }), "ff extra: hire caster " .. i) end
+    local ok, why = E.Command(st, 1, { type = "ffHire", utype = "priest" })
+    check(not ok and why == "you have 3 casters already", "ff extra: three casters at most (" .. tostring(why) .. ")")
+    ok = E.Command(st, 1, { type = "ffHire", utype = "shaman" })
+    check(not ok, "ff extra: a human barracks hires human casters")
+    local g1, g3 = st.players[1].gold, st.players[3].gold
+    check(E.Command(st, 1, { type = "giveGold", to = 3, amount = 100 }) and st.players[3].gold == g3 + 100
+        and st.players[1].gold == g1 - 100, "ff extra: 100 gold to my ally")
+    check(not E.Command(st, 1, { type = "giveGold", to = 2, amount = 100 }), "ff extra: not to an enemy")
+    check(WC.Research.ff_tier_human.levels == 4 and F.TIERS.human[5].unit == "siege_engine", "ff extra: a fifth tier: Siege Engines")
+end

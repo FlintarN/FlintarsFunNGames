@@ -38,10 +38,14 @@ F.HEROES = { "paladin", "archmage", "mountain_king", "blood_mage", "blademaster"
 -- how many at a time.
 F.TIERS = {
     human = { { unit = "footman", every = 10 }, { unit = "rifleman", every = 11 }, { unit = "knight", every = 12 },
-        { unit = "gryphon_rider", every = 14 } },
+        { unit = "gryphon_rider", every = 14 }, { unit = "siege_engine", every = 16 } },
     orc = { { unit = "grunt", every = 10 }, { unit = "headhunter", every = 10 }, { unit = "raider", every = 12 },
-        { unit = "tauren", every = 14 } },
+        { unit = "tauren", every = 14 }, { unit = "catapult", every = 16 } },
 }
+-- Casters for hire at the barracks (at most CASTERS at a time).
+F.CASTERS = 3
+F.CASTER_COST = 260
+F.HIRE = { human = { "priest", "sorceress" }, orc = { "shaman", "witch_doctor" } }
 
 -- The heroes, for gold only (from the barracks: one per player).
 local ffHeroes = {}
@@ -59,12 +63,13 @@ for _, race in ipairs({ "human", "orc" }) do
         attack = { damage = 40, cooldown = 1, range = 8, type = "pierce" }, -- it defends itself
         food = 200, trains = ffHeroes, requires = nil, ffRace = race })
     -- Its upgrades: soldiers' tier, weapons, armour.
-    local names = race == "human" and { "Riflemen", "Knights", "Gryphon Riders" } or { "Headhunters", "Raiders", "Tauren" }
-    R["ff_tier_" .. race] = { names = { "Train " .. names[1], "Train " .. names[2], "Train " .. names[3] }, building = key,
-        hotkey = "T", levels = 3, cost = { { 500, 0 }, { 1200, 0 }, { 2200, 0 } }, time = { 10, 15, 20 },
-        minTime = { 180, 420, 720 }, effect = {}, icon = race == "human" and "Interface\\Icons\\INV_Helmet_08"
-            or "Interface\\Icons\\INV_Helmet_01",
-        text = "Your barracks sends out stronger soldiers." }
+    local names = race == "human" and { "Riflemen", "Knights", "Gryphon Riders", "Siege Engines" }
+        or { "Headhunters", "Raiders", "Tauren", "Catapults" }
+    R["ff_tier_" .. race] = { names = { "Train " .. names[1], "Train " .. names[2], "Train " .. names[3], "Train " .. names[4] },
+        building = key, hotkey = "T", levels = 4, cost = { { 500, 0 }, { 1200, 0 }, { 2200, 0 }, { 4000, 0 } },
+        time = { 10, 15, 20, 30 }, minTime = { 180, 420, 720, 1080 }, effect = {},
+        icon = race == "human" and "Interface\\Icons\\INV_Helmet_08" or "Interface\\Icons\\INV_Helmet_01",
+        text = "Your barracks sends out stronger soldiers (the last tier: siege that breaks barracks)." }
     R["ff_weapons_" .. race] = { names = { "Weapons 1", "Weapons 2", "Weapons 3", "Weapons 4", "Weapons 5" }, building = key,
         hotkey = "W", levels = 5, cost = { { 300, 0 }, { 600, 0 }, { 900, 0 }, { 1200, 0 }, { 1500, 0 } },
         time = { 15, 20, 25, 30, 35 }, effect = { melee = 0.1, ranged = 0.1 }, icon = "Interface\\Icons\\INV_Sword_04",
@@ -193,9 +198,38 @@ function F.OnDeath(st, t)
     end
 end
 
+-- How many casters a player has (hired at the barracks).
+local function Casters(st, p)
+    local n = 0
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and e.ffHired then n = n + 1 end
+    end
+    return n
+end
+F.Casters = Casters
+
 -- "Send to": where your soldiers go: an enemy's seat, 0 the middle,
--- "rally" (or nothing) the rally point.
+-- "rally" (or nothing) the rally point. "ffHire": a caster at the barracks.
 function F.Command(st, p, cmd)
+    if cmd.type == "ffHire" then
+        local b = Barracks(st, p)
+        if not b then return false, "no barracks" end
+        local ok = false
+        for _, ut in ipairs(F.HIRE[E.Def(b).ffRace]) do if ut == cmd.utype then ok = true end end
+        if not ok then return false, "not here" end
+        if Casters(st, p) >= F.CASTERS then return false, "you have " .. F.CASTERS .. " casters already" end
+        local pl = st.players[p]
+        if pl.gold < F.CASTER_COST then return false, "not enough gold" end
+        local x, y = E.NearestFree(st, math.floor(b.x + 1), math.floor(b.y + b.size + 1))
+        if not x then return false, "no room" end
+        pl.gold = pl.gold - F.CASTER_COST
+        local u = E.Spawn(st, p, cmd.utype, x + 0.5, y + 0.5)
+        u.ffHired = true
+        local gx, gy = Goal(st, p)
+        if gx then E.Command(st, p, { type = "attackMove", units = { u.id }, x = gx, y = gy }) end
+        return true
+    end
     if cmd.type == "sendTo" then
         local t = tonumber(cmd.target)
         if t and t ~= 0 and not (st.players[t] and E.Foe(st, p, t)) then return false, "not an enemy" end

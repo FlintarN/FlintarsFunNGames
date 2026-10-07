@@ -1582,6 +1582,15 @@ function E.Command(st, p, cmd)
         pl.gold, pl.lumber = pl.gold + cost[1], pl.lumber + cost[2]
         E.Food(st)
         return true
+    elseif t == "giveGold" then
+        -- To an ally (2v2 and team games).
+        local to, n = tonumber(cmd.to), math.floor(tonumber(cmd.amount) or 0)
+        if not (to and to ~= p and st.players[to] and E.Ally(st, p, to)) then return false, "not an ally" end
+        local pl = st.players[p]
+        if n <= 0 or pl.gold < n then return false, "not enough gold" end
+        pl.gold, st.players[to].gold = pl.gold - n, st.players[to].gold + n
+        Emit("gave", { owner = p, to = to, amount = n })
+        return true
     elseif t == "surrender" then
         -- Give up: everything of yours goes; your allies play on.
         local mine = {}

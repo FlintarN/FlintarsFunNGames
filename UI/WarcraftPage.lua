@@ -2999,6 +2999,29 @@ function P:DrawCommands(sel)
                         self:Cmd({ type = "backToWork" })
                     end }
             end
+            -- Footmen Frenzy: casters for hire; gold for an ally.
+            if E().Def(b).ffRace then
+                local F = WC().Modes.footmen
+                local n = F.Casters(st, ME)
+                for i, ut in ipairs(F.HIRE[E().Def(b).ffRace]) do
+                    local ud = WC().Units[ut]
+                    list[4 + i] = { icon = ud.icon, key = i == 1 and "C" or "V", title = "Hire " .. ud.name .. (i == 1 and " (C)" or " (V)"),
+                        cost = { F.CASTER_COST, 0 }, enabled = n < F.CASTERS,
+                        tip = string.format("%d gold. A caster that joins your soldiers (%d of %d).", F.CASTER_COST, n, F.CASTERS),
+                        action = function()
+                            local ok, why = self:Cmd({ type = "ffHire", utype = ut })
+                            if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                        end }
+                end
+                local ally
+                for q = 1, #st.players do
+                    if q ~= ME and E().Ally(st, ME, q) and not st.players[q].neutral then ally = q break end
+                end
+                if ally then
+                    list[7] = { icon = IC .. "INV_Misc_Coin_01", key = "G", title = "Give 100 gold to your ally (G)", cost = { 100, 0 },
+                        tip = "Send 100 gold to your teammate.", action = function() self:Cmd({ type = "giveGold", to = ally, amount = 100 }) end }
+                end
+            end
             -- Footmen Frenzy: where your barracks sends its soldiers.
             if E().Def(b).ffRace then
                 local F = WC().Modes.footmen
