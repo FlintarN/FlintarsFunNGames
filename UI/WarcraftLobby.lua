@@ -105,6 +105,10 @@ function L.Build(view, o)
     f:SetFrameLevel(o:GetFrameLevel() + 4)
     f:Hide()
     view.lobbyFrame = f
+    -- The wood a shade darker behind the lobby (easier to read).
+    local dim = f:CreateTexture(nil, "BACKGROUND")
+    dim:SetAllPoints()
+    dim:SetColorTexture(0, 0, 0, 0.45)
 
     -- Seats.
     local head = W.Label(f, "Players", "GameFontNormalLarge")
@@ -224,6 +228,9 @@ L.Lobby = Lobby
 function L.Show(view, online)
     view.lobbyOnline = online and true or nil
     view.lobbyFrame:Show()
+    -- The title up top, a header over the seats and maps.
+    view.overTitle:ClearAllPoints()
+    view.overTitle:SetPoint("TOP", 0, -16)
     L.Draw(view)
 end
 

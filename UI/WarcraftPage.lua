@@ -939,6 +939,8 @@ function P:ShowScore(st, names)
 end
 
 function P:HideScreens()
+    self.overTitle:ClearAllPoints()
+    self.overTitle:SetPoint("TOP", 0, -60)
     self.mainMenu:Hide()
     self.scoreFrame:Hide()
     ns.WarcraftLobby.Hide(self)
@@ -3278,6 +3280,8 @@ end
 function P:PvpScreen(title, sub, lobby, keys)
     self:Pause()
     self.overlay:Show()
+    self.overTitle:ClearAllPoints()
+    self.overTitle:SetPoint("TOP", 0, -60)
     for _, p in ipairs(self.picks) do p:Hide() end
     self.diffLabel:Hide()
     for _, b in ipairs(self.diffButtons) do b:Hide() end
