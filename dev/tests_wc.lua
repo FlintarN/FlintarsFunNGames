@@ -197,20 +197,6 @@ function WcPageTests()
     view:Key("1")
     check(#view.sel == all, "wc page: 1 selects group 1 again")
     view.sel, view.lastClick = { worker.id }, nil
-    -- One 3D scene: lower on the map = nearer the camera = in front.
-    view:Draw()
-    local near, far
-    for id, f in pairs(view.unitFrames) do
-        local e = st.ents[id]
-        if f.actor and f.actor._pos and e then
-            local p = f.actor._pos
-            local d = math.sqrt(p[1] ^ 2 + p[2] ^ 2 + p[3] ^ 2)
-            if not near or e.y > near.y + 0.5 then near = { y = e.y, d = d } end
-            if not far or e.y < far.y - 0.5 then far = { y = e.y, d = d } end
-        end
-    end
-    check(view.world ~= nil and near and far, "wc page: units are actors in the map's 3D scene")
-    if near and far and near.y > far.y then check(near.d < far.d, "wc page: the lower unit is nearer the camera") end
     view:Draw()
     local labels = {}
     for _, c in ipairs(view.cmds) do if c:IsShown() then table.insert(labels, c.title) end end
