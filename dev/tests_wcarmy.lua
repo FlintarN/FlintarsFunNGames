@@ -509,6 +509,11 @@ function WcCasterTests()
     for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Dispel Magic (D)" then disp = c end end
     disp._scripts.OnClick(disp, "LeftButton")
     check(view.targeting == "cast" and view.castKey == "dispel", "casters card: Dispel Magic asks where")
+    view:Draw()
+    check(view.aoeTex and view.aoeTex:IsShown(), "casters card: a ring under the cursor shows where it lands")
+    view.targeting = nil
+    view:Draw()
+    check(not view.aoeTex:IsShown(), "casters card: gone when not aiming")
     -- Projectiles: a rifleman's shot flies as a bullet, a mortar's in an arc.
     local rf = E.Spawn(s2, 1, "rifleman", 21, 22)
     local mt = E.Spawn(s2, 1, "mortar_team", 21, 24)

@@ -2519,6 +2519,30 @@ function P:Draw()
     else
         self.ghost:Hide()
     end
+    -- Aiming a spell: a ring under the cursor, as big as where it lands (an
+    -- area spell's radius; a small one for spells on a unit or a spot).
+    local a = self.targeting == "cast" and self.castKey and WC().Abilities[self.castKey]
+    if a then
+        if not self.aoeTex then
+            self.aoeTex = self.fxLayer:CreateTexture(nil, "OVERLAY")
+            self.aoeTex:SetTexture(ART .. "WcSelect")
+        end
+        local caster = st.ents[self.castHero or 0]
+        local lv = caster and E().Skill(caster, self.castKey) or 1
+        local r = a.radius
+        if type(r) == "table" then r = r[math.max(1, math.min(lv, #r))] end
+        r = r or (a.target == "point" and 1 or 0.7)
+        local x, y = self:World()
+        local inRange = not caster or not a.range or (x - caster.x) ^ 2 + (y - caster.y) ^ 2 <= (a.range + 0.5) ^ 2
+        self.aoeTex:SetSize(r * 2 * TILE, r * 2 * TILE * 0.7) -- (flattened: the camera looks down at an angle)
+        self.aoeTex:ClearAllPoints()
+        self.aoeTex:SetPoint("CENTER", self.view, "TOPLEFT", x * TILE - cx, -(y * TILE - cy))
+        if inRange then self.aoeTex:SetVertexColor(1, 0.85, 0.3) else self.aoeTex:SetVertexColor(1, 0.3, 0.3) end
+        self.aoeTex:SetAlpha(0.9)
+        self.aoeTex:Show()
+    elseif self.aoeTex then
+        self.aoeTex:Hide()
+    end
     -- The rally point of the selected building.
     local sb = #self.sel == 1 and st.ents[self.sel[1]]
     if sb and sb.owner == ME and sb.rally then
