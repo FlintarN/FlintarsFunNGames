@@ -133,6 +133,12 @@ function AI.Think(st, p)
     end
     local ids = {}
     for _, u in ipairs(army) do table.insert(ids, u.id) end
+    if threat and not mem.alarm and #army < 4 then
+        if E_.Command(st, p, { type = f.alarm, building = hall.id }) then mem.alarm = st.time end
+    elseif not threat and mem.alarm and st.time - mem.alarm > 8 then
+        E_.Command(st, p, { type = "backToWork" })
+        mem.alarm = nil
+    end
     if threat and #ids > 0 then
         E_.Command(st, p, { type = "attackMove", units = ids, x = threat.x, y = threat.y })
         mem.defending = true

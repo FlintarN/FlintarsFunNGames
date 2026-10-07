@@ -205,7 +205,7 @@ local function NewBuilding(st, owner, btype, x, y, done)
     local d = D().Buildings[btype]
     local e = Add(st, { kind = d.neutral and "mine" or "building", type = btype, owner = owner, x = x, y = y,
         size = d.size, hp = done and d.hp or math.max(1, math.floor(d.hp * 0.1)), maxHp = d.hp,
-        progress = done and 1 or 0, queue = {}, trainT = 0 })
+        progress = done and 1 or 0, queue = {}, trainT = 0, garrison = d.garrison and {} or nil })
     Occupy(st, e, true)
     return e
 end
@@ -215,6 +215,25 @@ function E.Spawn(st, owner, utype, x, y) return NewUnit(st, owner, utype, x, y) 
 
 local function Remove(st, e)
     if e.kind ~= "unit" then Occupy(st, e, false) end
+    if e.kind == "unit" and e.inside then
+        local mine = st.ents[e.inside]
+        if mine and mine.inside == e.id then mine.inside = nil end
+        for i, id in ipairs(mine and mine.garrison or {}) do
+            if id == e.id then table.remove(mine.garrison, i) break end
+        end
+    end
+    if e.garrison then
+        local cx, cy = e.x + e.size / 2, e.y + e.size / 2
+        for _, id in ipairs(e.garrison) do
+            local u = st.ents[id]
+            if u then
+                u.inside = nil
+                local x, y = FreeAround(st, e, cx, cy + e.size)
+                if x then u.x, u.y = x + 0.5, y + 0.5 end
+            end
+        end
+        e.garrison = {}
+    end
     st.ents[e.id] = nil
     e.dead = true
 end
@@ -345,6 +364,21 @@ function E.Dropoff(st, p, x, y)
     return best
 end
 
+-- The nearest finished burrow of player p with room inside.
+function E.FreeBurrow(st, p, x, y)
+    local best, bd
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and e.kind == "building" and e.garrison and e.progress >= 1
+            and #e.garrison < Def(e).garrison then
+            local cx, cy = Center(e)
+            local d = (cx - x) ^ 2 + (cy - y) ^ 2
+            if not bd or d < bd then best, bd = e, d end
+        end
+    end
+    return best
+end
+
 function E.NearestMine(st, x, y)
     local best, bd
     for _, id in ipairs(st.list) do
@@ -422,9 +456,39 @@ end
 ---------------------------------------------------------------------------
 -- Orders
 ---------------------------------------------------------------------------
+-- A worker comes out of the gold mine (onto the side facing its hall).
+local function LeaveMine(st, u)
+    local mine = st.ents[u.inside or 0]
+    u.inside = nil
+    if not mine then return end
+    if mine.inside == u.id then mine.inside = nil end
+    for i, id in ipairs(mine.garrison or {}) do
+        if id == u.id then table.remove(mine.garrison, i) break end
+    end
+    local hall = E.Dropoff(st, u.owner, u.x, u.y)
+    local hx, hy = Center(mine)
+    if hall then hx, hy = Center(hall) end
+    local x, y = FreeAround(st, mine, hx, hy)
+    if x then u.x, u.y = x + 0.5, y + 0.5 end
+end
+E.LeaveMine = LeaveMine
+
 -- Give a unit an order (replaces what it was doing).
 function E.Order(st, u, order)
+    if u.inside then LeaveMine(st, u) end
+    if u.insideBuild then
+        local b = st.ents[u.insideBuild]
+        u.insideBuild = nil
+        if b then
+            local x, y = FreeAround(st, b, u.x, u.y + b.size)
+            if x then u.x, u.y = x + 0.5, y + 0.5 end
+        end
+    end
     u.order = order
+    if not order then
+        u.path, u.repath, u.work = nil, 0, nil
+        return
+    end
     u.path, u.repath, u.work = nil, 0, nil
     if order.type == "gather" then u.phase = (u.carry and u.carry.n > 0 and u.carry.res == order.res) and "return" or "go" end
 end
@@ -485,12 +549,11 @@ end
 
 local function Armor(a) return a * 0.06 / (1 + 0.06 * a) end
 
-local function Hit(st, u, t)
-    local d = D().Units[u.type]
-    local dmg = math.max(1, math.floor(d.damage * (1 - Armor(Def(t).armor or 0)) + 0.5))
+local function Strike(st, a, t, damage, ranged)
+    local dmg = math.max(1, math.floor(damage * (1 - Armor(Def(t).armor or 0)) + 0.5))
     t.hp = t.hp - dmg
-    t.lastHitBy = u.id
-    Emit("hit", { id = u.id, target = t.id, amount = dmg, ranged = d.range > 1.5 })
+    t.lastHitBy = a.id
+    Emit("hit", { id = a.id, target = t.id, amount = dmg, ranged = ranged })
     if t.hp <= 0 and not t.dead then
         Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type })
         if t.kind == "building" then
@@ -499,6 +562,11 @@ local function Hit(st, u, t)
         end
         Remove(st, t)
     end
+end
+
+local function Hit(st, u, t)
+    local d = D().Units[u.type]
+    Strike(st, u, t, d.damage, d.range > 1.5)
 end
 
 -- Chase and hit a target. False when it's gone.
@@ -581,16 +649,27 @@ local function Gather(st, u, o, dt)
                 local n = math.min(D().CARRY, mine.gold)
                 mine.gold = mine.gold - n
                 u.carry = { res = "gold", n = n }
-                u.inside = nil
+                LeaveMine(st, u)
                 if mine.gold <= 0 then Remove(st, mine) Emit("mineEmpty", { id = mine.id }) end
                 u.phase, u.path = "return", nil
+                Emit("mined", { id = u.id, owner = u.owner })
             end
             return
         end
         if Gap(u, mine) <= 1.1 then
-            u.phase, u.work, u.inside = "work", D().MINE_TIME, true
+            -- One worker in the mine at a time; the others wait at the door.
+            if not mine.inside or not st.ents[mine.inside] then
+                mine.inside = u.id
+                u.inside = mine.id
+                u.phase, u.work = "work", D().MINE_TIME
+                u.path = nil
+            else
+                u.phase = "wait"
+                u.path = nil
+            end
             return
         end
+        if u.phase == "wait" then u.phase = "go" end
         if not u.path then PathTo(st, u, nil, nil, mine) end
         if Follow(st, u, dt) and Gap(u, mine) > 1.1 then u.path = nil end
     else
@@ -638,13 +717,33 @@ local function Gather(st, u, o, dt)
     end
 end
 
+-- Does this worker count as building b right now?
+local function Building(st, u, b)
+    return u and not u.dead and u.order and u.order.type == "build" and u.order.site == b.id
+        and (u.insideBuild == b.id or Gap(u, b) <= 1.5)
+end
+E.Building = Building
+
 local function Build(st, u, o, dt)
     if o.site then
         local b = st.ents[o.site]
         if not b or b.progress >= 1 then
             u.order, u.building = nil, nil
             if u.after then E.Order(st, u, u.after) u.after = nil end
+            return
         end
+        b.builder = u.id
+        if u.insideBuild == b.id then return end
+        -- Walk back to it if pushed away; orcs go inside, humans hammer next to it.
+        if Gap(u, b) > 1.5 then
+            if not u.path then PathTo(st, u, nil, nil, b) end
+            if Follow(st, u, dt) then u.path = nil end
+            return
+        end
+        u.path = nil
+        local tx, ty = Center(b)
+        u.facing = ATAN2(ty - u.y, tx - u.x)
+        if D().Factions[st.players[u.owner].faction].buildInside then u.insideBuild = b.id end
         return
     end
     local size = D().Buildings[o.btype].size
@@ -691,8 +790,37 @@ local function Build(st, u, o, dt)
     end
 end
 
+-- Militia go back to being peasants (and back to work).
+function E.BackToWork(st, u)
+    if u.inside and not u.order then
+        LeaveMine(st, u)
+    end
+    if u.militia then
+        u.type = u.militia.was
+        local d = D().Units[u.type]
+        u.maxHp = d.hp
+        u.hp = math.min(u.hp, u.maxHp)
+        u.militia = nil
+    end
+    local o = u.workOrder
+    u.workOrder = nil
+    if not o then
+        local mine = E.NearestMine(st, u.x, u.y)
+        if mine then o = { type = "gather", res = "gold", target = mine.id } end
+    end
+    E.Order(st, u, o)
+end
+
 local function UnitStep(st, u, dt)
     u.cd = math.max(0, (u.cd or 0) - dt)
+    if u.militia then
+        u.militia.t = u.militia.t - dt
+        if u.militia.t <= 0 then
+            E.BackToWork(st, u)
+            Emit("backToWork", { id = u.id, owner = u.owner })
+        end
+    end
+    if u.inside and not u.order then return end -- sitting in a burrow
     local d = D().Units[u.type]
     local o = u.order
     if not o then
@@ -737,6 +865,45 @@ local function UnitStep(st, u, dt)
         end
         if not u.path then PathTo(st, u, o.x, o.y) end
         if Follow(st, u, dt) then u.order, u.path = nil, nil end
+    elseif o.type == "hold" then
+        local t = Nearest(st, u, d.range)
+        if t and Gap(u, t) <= d.range and u.cd <= 0 then
+            local tx, ty = Center(t)
+            u.facing = ATAN2(ty - u.y, tx - u.x)
+            u.cd = d.cooldown
+            Hit(st, u, t)
+        end
+    elseif o.type == "toArms" then
+        local hall = st.ents[o.hall]
+        if not hall then u.order = nil return end
+        if Gap(u, hall) <= 1.2 then
+            local was = u.type
+            u.type = "militia"
+            u.militia = { t = D().MILITIA_TIME, was = was }
+            u.maxHp = D().Units.militia.hp
+            u.order, u.path = nil, nil
+            Emit("militia", { id = u.id, owner = u.owner })
+            return
+        end
+        if not u.path then PathTo(st, u, nil, nil, hall) end
+        if Follow(st, u, dt) and Gap(u, hall) > 1.2 then u.path = nil end
+    elseif o.type == "garrison" then
+        local b = st.ents[o.target]
+        if not b or b.progress < 1 or #b.garrison >= Def(b).garrison then
+            -- Full or gone: try another burrow.
+            b = E.FreeBurrow(st, u.owner, u.x, u.y)
+            if not b then u.order = nil return end
+            o.target = b.id
+            u.path = nil
+        end
+        if Gap(u, b) <= 1.2 then
+            table.insert(b.garrison, u.id)
+            u.inside = b.id
+            u.order, u.path = nil, nil
+            return
+        end
+        if not u.path then PathTo(st, u, nil, nil, b) end
+        if Follow(st, u, dt) and Gap(u, b) > 1.2 then u.path = nil end
     elseif o.type == "gather" then
         Gather(st, u, o, dt)
     elseif o.type == "build" then
@@ -747,6 +914,11 @@ end
 local function BuildingStep(st, b, dt)
     local d = Def(b)
     if b.progress < 1 then
+        if not Building(st, st.ents[b.builder or 0], b) then
+            b.paused = true
+            return
+        end
+        b.paused = nil
         local before = b.progress
         b.progress = math.min(1, b.progress + dt / d.time)
         b.hp = math.min(b.maxHp, b.hp + (b.progress - before) * b.maxHp * 0.9)
@@ -754,6 +926,11 @@ local function BuildingStep(st, b, dt)
             Emit("built", { id = b.id, owner = b.owner, type = b.type })
             local u = st.ents[b.builder or 0]
             if u and u.order and u.order.site == b.id then
+                if u.insideBuild then
+                    u.insideBuild = nil
+                    local x, y = FreeAround(st, b, u.x, u.y + b.size)
+                    if x then u.x, u.y = x + 0.5, y + 0.5 end
+                end
                 u.order, u.building = nil, nil
                 -- Back to what it was doing before (gathering), if anything.
                 if u.after then
@@ -763,6 +940,18 @@ local function BuildingStep(st, b, dt)
             end
         end
         return
+    end
+    local gar = b.garrison
+    if gar and #gar > 0 and d.attack then
+        b.cd = (b.cd or 0) - dt
+        if b.cd <= 0 then
+            local cx, cy = Center(b)
+            local t = Nearest(st, { x = cx, y = cy, owner = b.owner, kind = "unit" }, d.attack.range + b.size / 2)
+            if t then
+                Strike(st, b, t, d.attack.damage, true)
+                b.cd = d.attack.cooldown / #gar -- more peons, faster spears
+            end
+        end
     end
     local q = b.queue[1]
     if q then
@@ -847,8 +1036,80 @@ function E.Command(st, p, cmd)
         end
         return n > 0, "only workers gather"
     elseif t == "stop" then
-        for _, u in ipairs(Owned(st, p, cmd.units)) do u.order, u.path = nil, nil end
+        for _, u in ipairs(Owned(st, p, cmd.units)) do E.Order(st, u, nil) end
         return true
+    elseif t == "hold" then
+        for _, u in ipairs(Owned(st, p, cmd.units)) do E.Order(st, u, { type = "hold" }) end
+        return true
+    elseif t == "callToArms" or t == "battleStations" then
+        local hall = st.ents[cmd.building]
+        if not hall or hall.owner ~= p or hall.kind ~= "building" then return false end
+        local f = D().Factions[st.players[p].faction]
+        if f.alarm ~= t then return false, "your race can't do that" end
+        local hx, hy = Center(hall)
+        local n = 0
+        for _, id in ipairs(st.list) do
+            local u = st.ents[id]
+            if u and u.owner == p and u.kind == "unit" and u.type == f.worker
+                and (u.x - hx) ^ 2 + (u.y - hy) ^ 2 <= D().ALARM_RADIUS ^ 2 then
+                local o = u.order
+                if o and o.type == "gather" then u.workOrder = o end
+                if t == "callToArms" then
+                    local near = E.Dropoff(st, p, u.x, u.y) or hall
+                    E.Order(st, u, { type = "toArms", hall = near.id })
+                else
+                    local b = E.FreeBurrow(st, p, u.x, u.y)
+                    if b then E.Order(st, u, { type = "garrison", target = b.id }) end
+                end
+                n = n + 1
+            end
+        end
+        Emit("alarm", { owner = p, kind2 = t })
+        return n > 0, "no workers nearby"
+    elseif t == "backToWork" then
+        local n = 0
+        for _, id in ipairs(st.list) do
+            local u = st.ents[id]
+            if u and u.owner == p and u.kind == "unit" and (u.militia or (u.order and (u.order.type == "toArms" or u.order.type == "garrison"))
+                or (u.inside and not u.order)) then
+                E.BackToWork(st, u)
+                n = n + 1
+            end
+        end
+        return n > 0, "nobody to send back"
+    elseif t == "resumeBuild" then
+        local b = st.ents[cmd.building]
+        if not b or b.owner ~= p or b.kind ~= "building" or b.progress >= 1 then return false end
+        for _, u in ipairs(Owned(st, p, cmd.units)) do
+            if D().Units[u.type].worker then
+                local after = u.order and u.order.type == "gather" and u.order or nil
+                E.Order(st, u, { type = "build", btype = b.type, x = b.x, y = b.y, site = b.id })
+                u.after = after
+                b.builder = u.id
+                return true
+            end
+        end
+        return false, "a worker builds"
+    elseif t == "returnRes" then
+        -- Carry the load home, then back to the same work.
+        local n = 0
+        for _, u in ipairs(Owned(st, p, cmd.units)) do
+            if u.carry and u.carry.n > 0 then
+                local o = u.order
+                if not (o and o.type == "gather" and o.res == u.carry.res) then
+                    if u.carry.res == "gold" then
+                        local mine = E.NearestMine(st, u.x, u.y)
+                        o = { type = "gather", res = "gold", target = mine and mine.id }
+                    else
+                        o = { type = "gather", res = "lumber", target = E.NearestTree(st, u.x, u.y) }
+                    end
+                end
+                E.Order(st, u, o)
+                u.phase = "return"
+                n = n + 1
+            end
+        end
+        return n > 0, "nothing to bring back"
     elseif t == "build" then
         local u = st.ents[cmd.unit]
         if not u or u.owner ~= p or not D().Units[u.type].worker then return false, "a worker builds" end
@@ -913,6 +1174,35 @@ function E.Step(st, dt)
         if e then
             if e.kind == "unit" then UnitStep(st, e, dt)
             elseif e.kind == "building" then BuildingStep(st, e, dt) end
+        end
+    end
+    -- Units don't stack: standing units that overlap push apart. Units on
+    -- the move pass through (pushing walkers apart can deadlock two units
+    -- heading for the same spot), and so do harvesting workers (as in
+    -- Warcraft III) and units in a mine or burrow.
+    local movers = {}
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        local walking = e and e.path and e.path[e.pathi or 1]
+        if e and e.kind == "unit" and not e.inside and not e.insideBuild and not walking
+            and not (e.order and e.order.type == "gather") then
+            table.insert(movers, e)
+        end
+    end
+    for i = 1, #movers do
+        local a = movers[i]
+        for j = i + 1, #movers do
+            local b = movers[j]
+            local dx, dy = b.x - a.x, b.y - a.y
+            local d2 = dx * dx + dy * dy
+            if d2 < 0.36 then
+                local d = math.sqrt(d2)
+                if d < 0.01 then dx, dy, d = (Rand(st, 3) - 2) * 0.1 + 0.05, 0.05, 0.1 end
+                local push = (0.6 - d) * 0.25
+                local px, py = dx / d * push, dy / d * push
+                if not Blocked(st, math.floor(a.x - px), math.floor(a.y - py)) then a.x, a.y = a.x - px, a.y - py end
+                if not Blocked(st, math.floor(b.x + px), math.floor(b.y + py)) then b.x, b.y = b.x + px, b.y + py end
+            end
         end
     end
     -- Forget the dead.

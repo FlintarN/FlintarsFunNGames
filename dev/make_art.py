@@ -1290,10 +1290,15 @@ def wc_grass():
         col = (rnd.randint(50, 70), rnd.randint(95, 130), rnd.randint(30, 45), 255)
         for k in range(3):
             d.line([(x + k - 1, y), (x + k - 2 + rnd.randint(0, 2), y - rnd.randint(2, 5))], fill=col)
+    # Lighter patches, blended in (the texture must stay fully opaque).
+    patches = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(patches)
     for _ in range(40):
         x, y = rnd.randint(0, n - 1), rnd.randint(0, n - 1)
         r = rnd.randint(6, 14)
-        d.ellipse([x - r, y - r, x + r, y + r], fill=(80, 118, 50, 70))
+        pd.ellipse([x - r, y - r, x + r, y + r], fill=(90, 128, 55, 60))
+    img = Image.alpha_composite(img, patches)
+    img.putalpha(255)
     img.save(os.path.join(OUT, 'WcGrass.tga'))
 
 
@@ -1414,3 +1419,19 @@ wc_ring('WcSelect', (80, 255, 80, 255), 3)
 wc_res_icons()
 wc_icon()
 print('warcraft art written')
+
+
+def wc_flag():
+    n = 64 * SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    s = SS
+    d.ellipse([10 * s, 54 * s, 26 * s, 62 * s], fill=(0, 0, 0, 100))
+    d.rectangle([16 * s, 4 * s, 20 * s, 58 * s], fill=(110, 75, 40, 255))
+    d.polygon([(20 * s, 6 * s), (58 * s, 16 * s), (20 * s, 30 * s)], fill=(60, 220, 60, 255))
+    d.polygon([(20 * s, 6 * s), (58 * s, 16 * s), (20 * s, 18 * s)], fill=(120, 255, 120, 255))
+    save(img, 'WcFlag', (64, 64))
+
+
+wc_flag()
+print('flag written')

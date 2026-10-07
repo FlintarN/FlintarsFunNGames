@@ -37,11 +37,59 @@ local function Save()
 end
 
 ---------------------------------------------------------------------------
+-- Unit models: each unit is its WoW creature. A creature's look is saved
+-- the first time it loads, so every copy matches and later loads are quick.
+---------------------------------------------------------------------------
+local MODEL_W, MODEL_H = 40, 48
+local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
+
+local function Looks()
+    local rec = Save()
+    rec.looks = rec.looks or {}
+    return rec.looks
+end
+
+local function LoadModel(m)
+    local look = Looks()[m.npc]
+    if look and m.SetDisplayInfo then m:SetDisplayInfo(look) else m:SetCreature(m.npc) end
+    m.anim = nil
+    m.tried = Now()
+end
+
+local function MakeModel(parent)
+    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
+    if not ok or not m or not m.SetCreature then return nil end
+    m:SetSize(MODEL_W, MODEL_H)
+    m.waits = pcall(m.SetScript, m, "OnModelLoaded", function(self)
+        self.loaded = true
+        if self.npc and not Looks()[self.npc] and self.GetDisplayInfo then
+            local look = self:GetDisplayInfo()
+            if look and look > 0 then Looks()[self.npc] = look end
+        end
+        if self.SetPortraitZoom then self:SetPortraitZoom(0) end
+        self.anim = nil
+    end)
+    m:SetScript("OnShow", function(self) if self.npc then LoadModel(self) end end)
+    return m
+end
+
+-- Which animation fits what the unit is doing.
+local function AnimFor(u, moved)
+    local o = u.order
+    if moved then return ANIM.walk end
+    local d = ns.WC.Units[u.type]
+    if (u.cd or 0) > d.cooldown - 0.45 and o and o.type == "attack" then return ANIM.attack end
+    if u.phase == "work" and o and o.type == "gather" and o.res == "lumber" then return ANIM.attack end
+    if o and o.type == "build" and o.site then return ANIM.attack end
+    return ANIM.stand
+end
+
+---------------------------------------------------------------------------
 -- Build
 ---------------------------------------------------------------------------
 function P.New(parent, kind)
     local self = setmetatable({ kind = kind, sel = {}, camX = 0, camY = 0, acc = 0, think = 0,
-        treeTex = {}, unitFrames = {}, buildTex = {}, fxFree = {}, mmTrees = {} }, P)
+        treeTex = {}, unitFrames = {}, framePool = {}, corpses = {}, buildTex = {}, fxFree = {}, mmTrees = {} }, P)
     self.setup = CreateFrame("Frame", nil, parent)
     self.setup:Hide()
     local v = CreateFrame("Frame", nil, parent)
@@ -55,30 +103,47 @@ function P.New(parent, kind)
     b:SetFrameLevel(panel:GetFrameLevel() + 2)
     self.board = b
 
-    -- Resource bar.
-    local bar = b:CreateTexture(nil, "BACKGROUND")
+    -- Resource bar (on its own frame, above the map).
+    local barFrame = CreateFrame("Frame", nil, b)
+    barFrame:SetPoint("TOPLEFT")
+    barFrame:SetPoint("TOPRIGHT")
+    barFrame:SetHeight(BAR)
+    barFrame:SetFrameLevel(b:GetFrameLevel() + 30)
+    local bar = barFrame:CreateTexture(nil, "BACKGROUND")
     bar:SetPoint("TOPLEFT")
     bar:SetPoint("TOPRIGHT")
     bar:SetHeight(BAR)
     bar:SetColorTexture(0.06, 0.05, 0.04, 0.95)
     local function Res(icon, x)
-        local t = b:CreateTexture(nil, "ARTWORK")
+        local t = barFrame:CreateTexture(nil, "ARTWORK")
         t:SetTexture(ART .. icon)
         t:SetSize(16, 16)
         t:SetPoint("TOPLEFT", x, -3)
-        local l = W.Label(b, "", "GameFontHighlight")
+        local l = W.Label(barFrame, "", "GameFontHighlight")
         l:SetPoint("LEFT", t, "RIGHT", 4, 0)
         return l
     end
     self.goldText = Res("WcGold", 300)
     self.lumberText = Res("WcLumber", 390)
     self.foodText = Res("WcFood", 480)
-    self.clock = W.Label(b, "", "GameFontNormalSmall")
+    self.clock = W.Label(barFrame, "", "GameFontNormalSmall")
     self.clock:SetPoint("TOPRIGHT", -8, -5)
-    self.statsText = W.Label(b, "", "GameFontDisableSmall")
+    self.statsText = W.Label(barFrame, "", "GameFontDisableSmall")
     self.statsText:SetPoint("TOPLEFT", 8, -5)
-    self.newButton = W.Button(b, "New game", 80, function() self:ShowStart() end, 18)
+    self.newButton = W.Button(barFrame, "New game", 80, function() self:ShowStart() end, 18)
     self.newButton:SetPoint("TOPLEFT", 160, -2)
+    local idle = CreateFrame("Button", nil, barFrame)
+    idle:SetSize(70, 18)
+    idle:SetPoint("TOPLEFT", 640, -2)
+    idle.icon = idle:CreateTexture(nil, "ARTWORK")
+    idle.icon:SetSize(16, 16)
+    idle.icon:SetPoint("LEFT")
+    idle.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    idle.text = W.Label(idle, "", "GameFontHighlightSmall")
+    idle.text:SetPoint("LEFT", idle.icon, "RIGHT", 3, 0)
+    idle:SetScript("OnClick", function() self:NextIdleWorker() end)
+    W.Tooltip(idle, "Idle workers", "Select the next worker with nothing to do (and look at it).")
+    self.idleButton = idle
 
     -- The map view.
     local view = CreateFrame("Frame", nil, b)
@@ -107,6 +172,10 @@ function P.New(parent, kind)
     self.ghost = self.fxLayer:CreateTexture(nil, "OVERLAY")
     self.ghost:SetAlpha(0.6)
     self.ghost:Hide()
+    self.rallyFlag = self.fxLayer:CreateTexture(nil, "OVERLAY")
+    self.rallyFlag:SetTexture(ART .. "WcFlag")
+    self.rallyFlag:SetSize(18, 22)
+    self.rallyFlag:Hide()
     self.marker = self.fxLayer:CreateTexture(nil, "OVERLAY")
     self.marker:SetTexture(ART .. "WcSelect")
     self.marker:Hide()
@@ -116,14 +185,16 @@ function P.New(parent, kind)
 
     view:SetScript("OnMouseDown", function(_, button) self:MouseDown(button) end)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
-    self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, S = true, F = true, B = true,
-        T = true, R = true },
+    self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
+        C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true },
         function(key) self:Key(key) end)
 
     -- The bottom panel: minimap, selection, command card.
     local hud = CreateFrame("Frame", nil, b)
     hud:SetPoint("TOPLEFT", 0, -(BAR + VIEW_H))
     hud:SetPoint("BOTTOMRIGHT")
+    hud:SetFrameLevel(view:GetFrameLevel() + 20)
+    hud:EnableMouse(true)
     local hbg = hud:CreateTexture(nil, "BACKGROUND")
     hbg:SetAllPoints()
     hbg:SetColorTexture(0.1, 0.08, 0.06, 1)
@@ -229,7 +300,7 @@ function P.New(parent, kind)
     -- Start / game over overlay.
     local o = CreateFrame("Frame", nil, b)
     o:SetAllPoints()
-    o:SetFrameLevel(b:GetFrameLevel() + 60)
+    o:SetFrameLevel(b:GetFrameLevel() + 80)
     o:EnableMouse(true)
     local shade = o:CreateTexture(nil, "BACKGROUND")
     shade:SetAllPoints()
@@ -411,10 +482,29 @@ function P:Events(events)
             if a and ev.ranged then
                 local tx, ty
                 if t then tx, ty = E().Center(t) end
-                if tx then self:Shot(a.x, a.y, tx, ty) end
+                local ax, ay = E().Center(a)
+                if tx then self:Shot(ax, ay, tx, ty) end
             end
         elseif ev.kind == "death" then
             if ev.owner == ME and ev.what == "building" then self:Say("One of your buildings was destroyed!") end
+            local f = self.unitFrames[ev.id]
+            if f and ev.what == "unit" then
+                self.unitFrames[ev.id] = nil
+                f.corpseUntil = Now() + 2.5
+                table.insert(self.corpses, f)
+                if f.model and f.model:IsShown() then
+                    f.model:SetAnimation(ANIM.death)
+                    f.model.anim = ANIM.death
+                end
+                f.hp:Hide() f.hpBg:Hide() f.sel:Hide() f.carry:Hide()
+            end
+        elseif ev.kind == "alarm" then
+            if ev.owner == ME then
+                self:Say(ev.kind2 == "callToArms" and "To arms!" or "Battle stations!")
+            else
+                self:Say("The enemy sounds the alarm!")
+            end
+            W.PlaySound("RAID_WARNING")
         elseif ev.kind == "trained" and ev.owner == ME then
             W.PlaySound("U_CHAT_SCROLL_BUTTON")
         elseif ev.kind == "built" and ev.owner == ME then
@@ -542,7 +632,7 @@ end
 
 -- Click at a map point: select what's there (Shift adds units).
 function P:SelectAt(x, y, add)
-    local e = E().At(self.st, x, y)
+    local e = E().At(self.st, x, y) or E().At(self.st, x, y + 0.7) or E().At(self.st, x, y + 1.3)
     if not e then
         if not add then self.sel = {} end
         return
@@ -576,7 +666,7 @@ end
 -- Right-click: move, attack, gather, or set a rally point.
 function P:Smart(x, y)
     local st = self.st
-    local target = E().At(st, x, y)
+    local target = E().At(st, x, y) or E().At(st, x, y + 0.7)
     local tree = st.trees[math.floor(y) * st.w + math.floor(x)] and (math.floor(y) * st.w + math.floor(x)) or nil
     local units = self:MyUnits()
     self:Mark(x, y)
@@ -597,6 +687,10 @@ function P:Smart(x, y)
     for _, id in ipairs(units) do
         local u = st.ents[id]
         if WC().Units[u.type].worker then table.insert(workers, id) else table.insert(others, id) end
+    end
+    if target and target.owner == ME and target.kind == "building" and target.progress < 1 and #workers > 0 then
+        E().Command(st, ME, { type = "resumeBuild", units = workers, building = target.id })
+        return
     end
     if target and target.kind == "mine" and #workers > 0 then
         E().Command(st, ME, { type = "gather", units = workers, target = target.id })
@@ -632,8 +726,9 @@ function P:MouseDown(button)
     end
     if self.targeting then
         if button == "RightButton" then self.targeting = nil self:Say("") return end
-        return self:AttackAt(x, y)
+        return self:TargetAt(x, y)
     end
+    if self.menu and button == "RightButton" then self.menu = nil return end
     if button == "LeftButton" then
         self.drag = { x = x, y = y, sx = sx, sy = sy }
     else
@@ -652,6 +747,30 @@ function P:MouseUp(button)
         self:SelectAt(x, y, add)
     else
         self:SelectBox(d.x, d.y, x, y, add)
+    end
+end
+
+-- The second click of a targeted command (attack, move, gather, rally).
+function P:TargetAt(x, y)
+    local mode = self.targeting
+    self.targeting = nil
+    self:Say("")
+    if mode == "attack" then return self:AttackAt(x, y) end
+    local st = self.st
+    self:Mark(x, y)
+    if mode == "move" then
+        local units = self:MyUnits()
+        if #units > 0 then E().Command(st, ME, { type = "move", units = units, x = x, y = y }) end
+    elseif mode == "gather" then
+        self:Smart(x, y)
+    elseif mode == "rally" then
+        local b = self:Selected()[1]
+        local target = E().At(st, x, y)
+        local i = math.floor(y) * st.w + math.floor(x)
+        if b then
+            E().Command(st, ME, { type = "rally", building = b.id, x = x, y = y,
+                target = target and target.kind == "mine" and target.id or nil, tree = st.trees[i] and i or nil })
+        end
     end
 end
 
@@ -709,6 +828,53 @@ end
 function P:CancelTrain()
     local b = self:Selected()[1]
     if b then E().Command(self.st, ME, { type = "cancel", building = b.id }) end
+end
+
+function P:Target(mode, text)
+    self.targeting = mode
+    self.place = nil
+    self:Say(text .. " (right-click cancels)")
+end
+
+function P:Hold()
+    local units = self:MyUnits()
+    if #units > 0 then E().Command(self.st, ME, { type = "hold", units = units }) end
+end
+
+function P:ReturnRes()
+    local units = self:MyUnits()
+    if #units > 0 then
+        local ok, why = E().Command(self.st, ME, { type = "returnRes", units = units })
+        if not ok then self:Say("Nothing to bring back") end
+    end
+end
+
+function P:IdleWorkers()
+    local out = {}
+    if not self.st then return out end
+    for _, id in ipairs(self.st.list) do
+        local e = self.st.ents[id]
+        if e and e.owner == ME and e.kind == "unit" and WC().Units[e.type].worker and not e.order then table.insert(out, e) end
+    end
+    return out
+end
+
+function P:NextIdleWorker()
+    local list = self:IdleWorkers()
+    if #list == 0 then return end
+    self.idleIndex = ((self.idleIndex or 0) % #list) + 1
+    local u = list[self.idleIndex]
+    self.sel = { u.id }
+    self.menu = nil
+    self:CenterOn(u)
+end
+
+function P:Alarm()
+    local b = self:Selected()[1]
+    if not b then return end
+    local f = WC().Factions[self.st.players[ME].faction]
+    local ok, why = E().Command(self.st, ME, { type = f.alarm, building = b.id })
+    if not ok then self:Say(why and (why:sub(1, 1):upper() .. why:sub(2)) or "Nobody answers") end
 end
 
 function P:Stop()
@@ -782,44 +948,75 @@ function P:DrawTrees()
     for j = used + 1, #self.treeTex do self.treeTex[j]:Hide() end
 end
 
-function P:UnitFrame(i)
-    local f = self.unitFrames[i]
-    if f then return f end
-    f = CreateFrame("Frame", nil, self.unitLayer)
-    f:SetSize(18, 18)
-    f:EnableMouse(false)
-    f.sel = f:CreateTexture(nil, "BACKGROUND")
-    f.sel:SetTexture(ART .. "WcSelect")
-    f.sel:SetPoint("CENTER", 0, -4)
-    f.sel:SetSize(24, 14)
-    f.icon = f:CreateTexture(nil, "ARTWORK")
-    f.icon:SetPoint("TOPLEFT", 2, -2)
-    f.icon:SetPoint("BOTTOMRIGHT", -2, 2)
-    f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if f.CreateMaskTexture then
-        local mask = f:CreateMaskTexture()
-        if mask then
-            mask:SetTexture(ART .. "HsOvalMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-            mask:SetAllPoints(f.icon)
-            f.icon:AddMaskTexture(mask)
+function P:UnitFrame(id, utype)
+    local f = self.unitFrames[id]
+    if f and f.type == utype then return f end
+    if f then self:FreeFrame(f) end -- it changed (a peasant became militia)
+    local pool = self.framePool[utype] or {}
+    self.framePool[utype] = pool
+    f = table.remove(pool)
+    if not f then
+        f = CreateFrame("Frame", nil, self.unitLayer)
+        f:SetSize(22, 22)
+        f:EnableMouse(false)
+        f.type = utype
+        f.team = f:CreateTexture(nil, "BACKGROUND")
+        f.team:SetTexture(ART .. "WcSelect")
+        f.team:SetPoint("CENTER", 0, -6)
+        f.team:SetSize(22, 11)
+        f.sel = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+        f.sel:SetTexture(ART .. "WcSelect")
+        f.sel:SetPoint("CENTER", 0, -6)
+        f.sel:SetSize(30, 15)
+        -- The icon, shown until the model loads (and at the view's edges).
+        f.icon = f:CreateTexture(nil, "ARTWORK")
+        f.icon:SetPoint("TOPLEFT", 3, -3)
+        f.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+        f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        if f.CreateMaskTexture then
+            local mask = f:CreateMaskTexture()
+            if mask then
+                mask:SetTexture(ART .. "HsOvalMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+                mask:SetAllPoints(f.icon)
+                f.icon:AddMaskTexture(mask)
+            end
         end
+        f.icon:SetTexture(WC().Units[utype].icon)
+        f.ring = f:CreateTexture(nil, "OVERLAY")
+        f.ring:SetAllPoints(f.icon)
+        f.ring:SetTexture(ART .. "WcRing")
+        f.model = MakeModel(f)
+        if f.model then
+            f.model:SetPoint("BOTTOM", f, "CENTER", 0, -8)
+            f.model.npc = WC().Units[utype].npc
+            f.model:SetFrameLevel(f:GetFrameLevel() + 1)
+        end
+        local top = CreateFrame("Frame", nil, f)
+        top:SetAllPoints()
+        top:SetFrameLevel(f:GetFrameLevel() + 3)
+        f.hpBg = top:CreateTexture(nil, "OVERLAY", nil, 1)
+        f.hpBg:SetColorTexture(0, 0, 0, 0.8)
+        f.hpBg:SetSize(20, 3)
+        f.hpBg:SetPoint("BOTTOM", f, "CENTER", 0, MODEL_H - 12)
+        f.hp = top:CreateTexture(nil, "OVERLAY", nil, 2)
+        f.hp:SetColorTexture(0.2, 1, 0.2, 1)
+        f.hp:SetHeight(3)
+        f.hp:SetPoint("LEFT", f.hpBg, "LEFT")
+        f.carry = top:CreateTexture(nil, "OVERLAY", nil, 3)
+        f.carry:SetSize(10, 10)
+        f.carry:SetPoint("CENTER", f, "CENTER", 9, 4)
     end
-    f.ring = f:CreateTexture(nil, "OVERLAY")
-    f.ring:SetAllPoints()
-    f.ring:SetTexture(ART .. "WcRing")
-    f.hpBg = f:CreateTexture(nil, "OVERLAY", nil, 1)
-    f.hpBg:SetColorTexture(0, 0, 0, 0.8)
-    f.hpBg:SetSize(18, 3)
-    f.hpBg:SetPoint("BOTTOM", f, "TOP", 0, 1)
-    f.hp = f:CreateTexture(nil, "OVERLAY", nil, 2)
-    f.hp:SetColorTexture(0.2, 1, 0.2, 1)
-    f.hp:SetHeight(3)
-    f.hp:SetPoint("LEFT", f.hpBg, "LEFT")
-    f.carry = f:CreateTexture(nil, "OVERLAY", nil, 3)
-    f.carry:SetSize(8, 8)
-    f.carry:SetPoint("BOTTOMRIGHT", 3, -3)
-    self.unitFrames[i] = f
+    f.corpseUntil = nil
+    f:SetAlpha(1)
+    self.unitFrames[id] = f
     return f
+end
+
+function P:FreeFrame(f)
+    f:Hide()
+    local pool = self.framePool[f.type] or {}
+    self.framePool[f.type] = pool
+    table.insert(pool, f)
 end
 
 function P:Draw()
@@ -902,6 +1099,8 @@ function P:Draw()
         t.art:Hide() t.sel:Hide() t.bar:Hide() t.barBg:Hide() t.team:Hide()
     end
     -- Units.
+    local seen = {}
+    local now = Now()
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and e.kind == "unit" then
@@ -912,18 +1111,18 @@ function P:Draw()
             dot:ClearAllPoints()
             dot:SetPoint("CENTER", self.mm, "TOPLEFT", e.x * MM_SCALE, -e.y * MM_SCALE)
             local px, py = e.x * TILE - cx, e.y * TILE - cy
-            if not e.inside and px > -20 and px < BW + 20 and py > -20 and py < VIEW_H + 20 then
-                ui = ui + 1
-                local f = self:UnitFrame(ui)
+            if not e.inside and not e.insideBuild and px > -30 and px < BW + 30 and py > -10 and py < VIEW_H + 50 then
+                seen[id] = true
+                local f = self:UnitFrame(id, e.type)
                 f:Show()
-                local d = WC().Units[e.type]
-                f.icon:SetTexture(d.icon)
+                f.team:SetVertexColor(col[1], col[2], col[3])
                 f.ring:SetVertexColor(col[1], col[2], col[3])
                 f.sel:SetShown(selected[id] == true)
+                f.sel:SetVertexColor(0.3, 1, 0.3)
                 local hurt = e.hp < e.maxHp
                 f.hpBg:SetShown(hurt or selected[id] == true)
                 f.hp:SetShown(hurt or selected[id] == true)
-                f.hp:SetWidth(math.max(1, 18 * e.hp / e.maxHp))
+                f.hp:SetWidth(math.max(1, 20 * e.hp / e.maxHp))
                 local frac = e.hp / e.maxHp
                 f.hp:SetColorTexture(frac > 0.5 and 0.2 or 1, frac > 0.25 and 1 or 0.2, 0.2, 1)
                 if e.carry then
@@ -934,10 +1133,49 @@ function P:Draw()
                 end
                 f:ClearAllPoints()
                 f:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
+                -- Always the model (the panels above the map hide anything poking out).
+                local m = f.model
+                if m then
+                    if not m:IsShown() then m:Show() end
+                    if m.waits and not m.loaded and now - (m.tried or 0) > 2 then LoadModel(m) end
+                    f.icon:Hide()
+                    f.ring:Hide()
+                    if m.SetFacing then m:SetFacing(math.pi / 2 - (e.facing or 0)) end
+                    local moved = f.lastX and (math.abs(f.lastX - e.x) + math.abs(f.lastY - e.y)) > 0.005
+                    local anim = AnimFor(e, moved)
+                    if m.anim ~= anim and m.SetAnimation then
+                        m:SetAnimation(anim)
+                        m.anim = anim
+                    end
+                else
+                    f.icon:Show()
+                    f.ring:Show()
+                end
+                f.lastX, f.lastY = e.x, e.y
             end
         end
     end
-    for j = ui + 1, #self.unitFrames do self.unitFrames[j]:Hide() end
+    for id, f in pairs(self.unitFrames) do
+        if not seen[id] then
+            self.unitFrames[id] = nil
+            self:FreeFrame(f)
+        end
+    end
+    -- Bodies fade, then go back to the pool.
+    for i = #self.corpses, 1, -1 do
+        local f = self.corpses[i]
+        local left = (f.corpseUntil or 0) - now
+        if left <= 0 then
+            table.remove(self.corpses, i)
+            self:FreeFrame(f)
+        else
+            f:SetAlpha(math.min(1, left / 1.2))
+            if f.model and f.model.anim == ANIM.death and left < 1.6 and f.model.SetAnimation then
+                f.model:SetAnimation(ANIM.dead)
+                f.model.anim = ANIM.dead
+            end
+        end
+    end
     self.mmDots:End()
     -- The camera on the minimap.
     local mx, my = cx / TILE * MM_SCALE, cy / TILE * MM_SCALE
@@ -970,6 +1208,21 @@ function P:Draw()
         self.ghost:SetVertexColor(ok and 0.5 or 1, ok and 1 or 0.3, ok and 0.5 or 0.3)
     else
         self.ghost:Hide()
+    end
+    -- The rally point of the selected building.
+    local sb = #self.sel == 1 and st.ents[self.sel[1]]
+    if sb and sb.owner == ME and sb.rally then
+        self.rallyFlag:Show()
+        self.rallyFlag:ClearAllPoints()
+        self.rallyFlag:SetPoint("BOTTOMLEFT", self.view, "TOPLEFT", sb.rally.x * TILE - cx - 3, -(sb.rally.y * TILE - cy))
+    else
+        self.rallyFlag:Hide()
+    end
+    local idle = self:IdleWorkers()
+    self.idleButton:SetShown(#idle > 0)
+    if #idle > 0 then
+        self.idleButton.icon:SetTexture(WC().Units[WC().Factions[st.players[ME].faction].worker].icon)
+        self.idleButton.text:SetText("Idle: " .. #idle)
     end
     self:DrawPanel()
 end
@@ -1023,10 +1276,18 @@ function P:DrawPanel()
             elseif o.type == "build" then status = "Building a " .. WC().Buildings[o.btype].name
             elseif o.type == "attack" then status = "Attacking"
             elseif o.type == "attackMove" then status = "Attack-moving"
-            elseif o.type == "move" then status = "Moving" end
+            elseif o.type == "move" then status = "Moving"
+            elseif o.type == "hold" then status = "Holding position"
+            elseif o.type == "toArms" then status = "Answering the call to arms"
+            elseif o.type == "garrison" then status = "Running to a burrow" end
+            if first.militia then status = string.format("Militia: %d s left. %s", math.ceil(first.militia.t), status) end
         elseif first.kind == "building" then
+            if first.garrison and first.progress >= 1 then
+                status = "Peons inside: " .. #first.garrison .. "/" .. E().Def(first).garrison
+            end
             if first.progress < 1 then
                 status = string.format("Under construction: %d%%", math.floor(first.progress * 100))
+                if first.paused then status = status .. " (paused: right-click it with a worker to carry on)" end
             elseif first.queue[1] then
                 local ud = WC().Units[first.queue[1]]
                 status = string.format("Training %s: %d%%", ud.name, math.floor(first.trainT / ud.time * 100))
@@ -1044,45 +1305,92 @@ function P:DrawPanel()
     self:DrawCommands(sel)
 end
 
+local IC = "Interface\\Icons\\"
+
 function P:DrawCommands(sel)
     local st = self.st
     local list = {}
     local mine = {}
     for _, e in ipairs(sel) do if e.owner == ME then table.insert(mine, e) end end
     local f = WC().Factions[st.players[ME].faction]
-    local hasWorker, hasUnit = false, false
+    local hasWorker, hasUnit, carrying = false, false, false
     for _, e in ipairs(mine) do
         if e.kind == "unit" then
             hasUnit = true
-            if WC().Units[e.type].worker then hasWorker = true end
+            if WC().Units[e.type].worker then
+                hasWorker = true
+                if e.carry then carrying = true end
+            end
         end
     end
+    if not hasWorker then self.menu = nil end
     local function Cost(c) return c[1] .. " gold" .. (c[2] > 0 and (", " .. c[2] .. " lumber") or "") end
-    if hasUnit then
-        table.insert(list, { icon = "Interface\\Icons\\Ability_SteelMelee", key = "A", title = "Attack (A)",
+    local function Add(item) table.insert(list, item) end
+    if hasWorker and self.menu == "build" then
+        -- The worker's build menu.
+        for _, bt in ipairs(f.builds) do
+            local bd = WC().Buildings[bt]
+            local tip = Cost(bd.cost)
+            if bd.food and bd.food > 0 then tip = tip .. ". Gives " .. bd.food .. " food." end
+            if bd.trains then
+                local names = {}
+                for _, ut in ipairs(bd.trains) do table.insert(names, WC().Units[ut].name) end
+                tip = tip .. " Trains " .. table.concat(names, " and ") .. "."
+            end
+            Add({ icon = bd.icon, key = bd.hotkey, title = "Build " .. bd.name .. " (" .. bd.hotkey .. ")", tip = tip,
+                cost = bd.cost, action = function() self.menu = nil self:StartPlace(bt) end })
+        end
+        list[8] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands (or right-click).",
+            action = function() self.menu = nil end }
+    elseif hasUnit then
+        Add({ icon = IC .. "Ability_Rogue_Sprint", key = "M", title = "Move (M)", tip = "Then click where to go.",
+            action = function() self:Target("move", "Click where to move") end })
+        Add({ icon = IC .. "Spell_Nature_TimeStop", key = "S", title = "Stop (S)", tip = "Stop what they're doing.",
+            action = function() self:Stop() end })
+        Add({ icon = IC .. "Ability_Defend", key = "H", title = "Hold Position (H)",
+            tip = "Stand still and only fight what comes in range.", action = function() self:Hold() end })
+        Add({ icon = IC .. "Ability_SteelMelee", key = "A", title = "Attack (A)",
             tip = "Then click: an enemy to attack it, or the ground to attack-move there.",
-            action = function() self.targeting = "attack" self.place = nil self:Say("Click a target or a spot (right-click cancels)") end })
-        table.insert(list, { icon = "Interface\\Icons\\Spell_Nature_TimeStop", key = "S", title = "Stop (S)",
-            tip = "Stop what they're doing.", action = function() self:Stop() end })
-    end
-    if hasWorker then
-        local farm, rax = WC().Buildings[f.farm], WC().Buildings[f.barracks]
-        table.insert(list, { icon = farm.icon, key = "F", title = "Build " .. farm.name .. " (F)",
-            tip = Cost(farm.cost) .. ". Gives " .. farm.food .. " food.", cost = farm.cost,
-            action = function() self:StartPlace(f.farm) end })
-        table.insert(list, { icon = rax.icon, key = "B", title = "Build " .. rax.name .. " (B)",
-            tip = Cost(rax.cost) .. ". Trains your soldiers.", cost = rax.cost,
-            action = function() self:StartPlace(f.barracks) end })
+            action = function() self:Target("attack", "Click a target or a spot") end })
+        if hasWorker then
+            Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
+                action = function() self:Target("gather", "Click the gold mine or a tree") end })
+            Add({ icon = IC .. "INV_Misc_Bag_10", key = "R", title = "Return Resources (R)",
+                tip = "Bring what they carry back to the hall, then carry on.", enabled = carrying,
+                action = function() self:ReturnRes() end })
+            Add({ icon = IC .. "INV_Hammer_20", key = "B", title = "Build (B)", tip = "Open the build menu.",
+                action = function() self.menu = "build" end })
+        end
     end
     local b = #mine == 1 and mine[1].kind == "building" and mine[1].progress >= 1 and mine[1]
     if b then
-        for i, ut in ipairs(E().Def(b).trains or {}) do
+        for _, ut in ipairs(E().Def(b).trains or {}) do
             local ud = WC().Units[ut]
-            table.insert(list, { icon = ud.icon, key = i == 1 and "T" or "R",
-                title = "Train " .. ud.name .. (i == 1 and " (T)" or " (R)"), cost = ud.cost,
+            Add({ icon = ud.icon, key = ud.hotkey, title = "Train " .. ud.name .. " (" .. ud.hotkey .. ")", cost = ud.cost,
                 tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food, ud.hp, ud.damage,
                     ud.range > 1.5 and ", ranged" or ""),
                 action = function() self:Train(ut) end })
+        end
+        local fac = WC().Factions[st.players[ME].faction]
+        if E().Def(b).hall or (E().Def(b).garrison and fac.alarm == "battleStations") then
+            if fac.alarm == "callToArms" then
+                list[6] = { icon = IC .. "Ability_Warrior_BattleShout", key = "C", title = "Call to Arms (C)",
+                    tip = "Ring the alarm: peasants nearby run to the hall and fight as Militia for 45 seconds.",
+                    action = function() self:Alarm() end }
+            else
+                list[6] = { icon = IC .. "Ability_Warrior_BattleShout", key = "B", title = "Battle Stations (B)",
+                    tip = "Peons nearby run into the burrows (4 each); burrows with peons attack enemies.",
+                    action = function() self:Alarm() end }
+            end
+            list[7] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
+                tip = "Everyone called to arms goes back to work.", action = function()
+                    E().Command(st, ME, { type = "backToWork" })
+                end }
+        end
+        if E().Def(b).trains then
+            list[8] = { icon = IC .. "INV_Misc_Flag_01", key = "Y", title = "Set Rally Point (Y)",
+                tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
+                action = function() self:Target("rally", "Click where new units should go") end }
         end
     end
     for i, c in ipairs(self.cmds) do
@@ -1092,7 +1400,7 @@ function P:DrawCommands(sel)
             c.icon:SetTexture(item.icon)
             c.title, c.tip, c.action, c.key = item.title, item.tip, item.action, item.key
             c.hotkey:SetText(item.key or "")
-            local can = not item.cost or E().CanAfford(st, ME, item.cost)
+            local can = (not item.cost or E().CanAfford(st, ME, item.cost)) and item.enabled ~= false
             c:SetEnabled(can)
             c.icon:SetDesaturated(not can)
         end

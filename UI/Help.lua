@@ -207,19 +207,24 @@ H.RULES = {
             .. "every boulder you didn't need. Five levels are hand-built; after that they're random." },
     },
     warcraft = {
-        { "The idea", "A small real-time strategy game against the computer. You start with a hall, five "
-            .. "workers and a gold mine. Gather gold and lumber, build farms (for food) and barracks, train an "
-            .. "army and destroy every enemy building. Lose all of yours and it's over." },
-        { "Mouse", "Left-click a unit or building to select it; drag a box to select several of your units "
-            .. "(Shift adds). Right-click the ground to move, an enemy to attack, the gold mine or a tree to "
-            .. "gather (workers). With a building selected, right-click sets where new units go." },
-        { "Keys", "A then click: attack a target or attack-move to a spot (fighting anything on the way). "
-            .. "S stops. With a worker: F builds a farm or burrow, B a barracks. With a hall or barracks: T and "
-            .. "R train. Arrow keys or the screen edges scroll; click the minimap to jump there." },
-        { "Economy", "Workers carry 10 gold or lumber at a time back to the hall. Every unit needs food: "
-            .. "a hall gives 12, each farm 6. Costs show on each button." },
-        { "Sides", "Human: Peasant, Footman, Rifleman. Orc: Peon, Grunt, Troll Headhunter. The computer "
-            .. "attacks in growing waves and defends its base." },
+        { "The idea", "A small Warcraft III against the computer. You start with a hall, five workers and a gold "
+            .. "mine. Gather gold and lumber, build farms (food) and barracks, train an army and destroy every "
+            .. "enemy building. Lose all of yours and it's over." },
+        { "Mouse", "Left-click to select; drag a box to select several of your units (Shift adds). Right-click: "
+            .. "the ground to move, an enemy to attack, the gold mine or a tree to gather, an unfinished "
+            .. "building to carry on building it. With a building selected, right-click sets its rally point." },
+        { "Command card", "As in Warcraft III. Units: Move (M), Stop (S), Hold Position (H), Attack (A: click an "
+            .. "enemy, or the ground to attack-move). Workers also: Gather (G), Return Resources (R) and Build "
+            .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Hall H). Halls and barracks "
+            .. "train (Peasant/Peon P, Footman F, Rifleman R, Grunt G, Headhunter T) and Set Rally Point (Y)." },
+        { "Workers", "One worker at a time goes into the gold mine; the others wait at the door, so about five "
+            .. "keep a mine busy. Harvesting workers walk through each other. A building only goes up while "
+            .. "its worker stays with it (peons go inside); send the worker away and it pauses." },
+        { "Call to Arms", "Human Town Hall: Call to Arms (C) rings the alarm. Peasants nearby run to the hall and "
+            .. "fight as Militia for 45 seconds. Orc: Battle Stations (B) sends peons into the burrows (4 each), "
+            .. "and burrows with peons throw spears. Back to Work (W) ends it early." },
+        { "Economy", "Workers carry 10 gold or lumber a trip. Every unit needs food: a hall gives 12, each farm or "
+            .. "burrow 6. The Idle button at the top right finds workers with nothing to do." },
     },
     hearthstone = {
         { "The idea", "Two heroes with 30 Health each. Bring the enemy hero to 0. You play minions (they fight "

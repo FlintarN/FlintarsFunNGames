@@ -548,6 +548,10 @@ await Section('Warcraft III engine and AI', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wc.lua'), 'utf8'));
   await p.run('WcEngineTests()');
+  await p.run('WcWorkerTests()');
+  await p.run('WcCommandTests()');
+  await p.run('WcBuildTests()');
+  await p.run('WcAlarmTests()');
   await p.run('WcAIGames()');
   await p.run('WcPageTests()');
 });

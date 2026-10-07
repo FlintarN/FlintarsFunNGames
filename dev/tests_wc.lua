@@ -172,8 +172,11 @@ function WcPageTests()
     view:Draw()
     local labels = {}
     for _, c in ipairs(view.cmds) do if c:IsShown() then table.insert(labels, c.title) end end
-    check(#labels == 4, "wc page: worker commands: attack, stop, farm, barracks (" .. table.concat(labels, ", ") .. ")")
-    -- Build a farm with F and a click.
+    check(#labels == 7, "wc page: worker commands like Warcraft III (" .. table.concat(labels, ", ") .. ")")
+    -- Build a farm: B opens the build menu, F picks the farm, then a click.
+    view:Key("B")
+    view:Draw()
+    check(view.menu == "build", "wc page: B opens the build menu")
     view:Key("F")
     check(view.place and view.place.btype == "farm", "wc page: F starts placing a farm")
     local hall = ns.WC.Engine.Hall(st, 1)
@@ -186,8 +189,24 @@ function WcPageTests()
     -- Train from the hall with T.
     view:SelectAt(hx, hy)
     view:Draw()
-    view:Key("T")
-    check(#hall.queue == 1, "wc page: T trains a peasant")
+    view:Key("P")
+    check(#hall.queue == 1, "wc page: P trains a peasant")
+    -- Rally the hall onto the mine with Y: new peasants go mining.
+    local mineE = ns.WC.Engine.NearestMine(st, hx, hy)
+    local rmx, rmy = ns.WC.Engine.Center(mineE)
+    view:Key("Y")
+    check(view.targeting == "rally", "wc page: Y sets a rally point")
+    view:TargetAt(rmx, rmy)
+    check(hall.rally and hall.rally.target == mineE.id, "wc page: rallied to the mine")
+    view:Draw()
+    check(view.rallyFlag:IsShown(), "wc page: the rally flag shows")
+    Run(12)
+    local newest
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.type == "peasant" then newest = e end
+    end
+    check(newest and newest.order and newest.order.type == "gather" and newest.order.res == "gold", "wc page: the new peasant goes to the mine")
     -- Box select and move.
     view:SelectBox(hx - 8, hy - 8, hx + 12, hy + 12)
     local n = #view:MyUnits()
@@ -239,4 +258,193 @@ function WcPageTests()
     check(st.over and view.overlay:IsShown() and view.overTitle:GetText() == "Victory!", "wc page: victory")
     check(ns.db.warcraft.wins == 1 and ns.db.warcraft.game == nil, "wc page: the win counts")
     check(not ns.Solo.Running("warcraft"), "wc page: the tab can go")
+end
+
+-- Workers like Warcraft III: one in the mine at a time, units don't stack.
+function WcWorkerTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 9 })
+    local mine = E.NearestMine(st, 0, 0)
+    local most, sawWait, sawInside = 0, false, false
+    for _ = 1, 400 do
+        E.Step(st, 0.05)
+        local inside = 0
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e.kind == "unit" and e.owner == 1 then
+                if e.inside == mine.id then inside = inside + 1 sawInside = true end
+                if e.phase == "wait" then sawWait = true end
+            end
+        end
+        if inside > most then most = inside end
+    end
+    check(most == 1 and sawInside, "wc: one worker in the mine at a time (" .. most .. ")")
+    check(sawWait, "wc: the others wait their turn")
+    -- A worker told to do something else comes out of the mine.
+    local inside
+    for _ = 1, 60 do
+        E.Step(st, 0.05)
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e.kind == "unit" and e.owner == 1 and e.inside then inside = e end
+        end
+        if inside then break end
+    end
+    check(inside ~= nil, "wc: someone is in the mine")
+    E.Command(st, 1, { type = "move", units = { inside.id }, x = 20, y = 20 })
+    check(not inside.inside and mine.inside == nil and not E.Blocked(st, math.floor(inside.x), math.floor(inside.y)), "wc: ordered away, it steps out")
+    -- Soldiers sent to one spot spread out instead of stacking.
+    local a, b = E.Spawn(st, 1, "footman", 30, 20), E.Spawn(st, 1, "footman", 30.05, 20)
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    local d = math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
+    check(d > 0.45, "wc: units push apart (" .. string.format("%.2f", d) .. ")")
+end
+
+
+-- Hold position, return resources, idle workers.
+function WcCommandTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 21 })
+    local fm = E.Spawn(st, 1, "footman", 30, 20)
+    E.Command(st, 1, { type = "hold", units = { fm.id } })
+    local peon = E.Spawn(st, 2, "peon", 34, 20)
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(math.abs(fm.x - 30) < 0.3 and fm.order and fm.order.type == "hold", "wc: hold position stays put")
+    peon.x, peon.y = 31, 20
+    for _ = 1, 60 do E.Step(st, 0.05) end
+    check(peon.hp < peon.maxHp, "wc: but hits what comes in range")
+    -- Return resources: a worker with a load goes home with it.
+    local w
+    for _ = 1, 400 do
+        E.Step(st, 0.05)
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e.owner == 1 and e.kind == "unit" and e.carry and e.carry.res == "gold" then w = e end
+        end
+        if w then break end
+    end
+    check(w ~= nil, "wc: a worker carrying gold")
+    E.Command(st, 1, { type = "move", units = { w.id }, x = 20, y = 20 })
+    for _ = 1, 20 do E.Step(st, 0.05) end
+    local gold = st.players[1].gold
+    check(E.Command(st, 1, { type = "returnRes", units = { w.id } }), "wc: return resources")
+    for _ = 1, 300 do
+        E.Step(st, 0.05)
+        if not w.carry then break end
+    end
+    check(not w.carry and st.players[1].gold >= gold + 10 and w.order and w.order.type == "gather", "wc: brought home, back to the mine")
+end
+
+-- Building like Warcraft III: the builder stays; leaving pauses it.
+function WcBuildTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 31 })
+    st.players[1].gold, st.players[1].lumber = 5000, 5000
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local ws = {}
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.kind == "unit" then table.insert(ws, e) end
+    end
+    local w = ws[1]
+    local x1, y1 = WC.AI.FindSpot(st, hx + 5, hy + 5, 2)
+    E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x1, y = y1 })
+    local farm
+    for _ = 1, 300 do
+        E.Step(st, 0.05)
+        if w.order and w.order.site then farm = st.ents[w.order.site] break end
+    end
+    check(farm and farm.progress < 1, "wc: the farm goes down")
+    for _ = 1, 60 do E.Step(st, 0.05) end
+    local p1 = farm.progress
+    check(p1 > 0, "wc: it goes up while the peasant works")
+    -- Another order: the farm waits.
+    local x2, y2 = WC.AI.FindSpot(st, hx - 6, hy + 8, 2)
+    E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x2, y = y2 })
+    for _ = 1, 60 do E.Step(st, 0.05) end
+    check(farm.progress == p1 and farm.paused, "wc: no peasant, no progress (one building at a time)")
+    -- Another peasant takes over.
+    local w2 = ws[2]
+    E.Command(st, 1, { type = "resumeBuild", units = { w2.id }, building = farm.id })
+    for _ = 1, 600 do
+        E.Step(st, 0.05)
+        if farm.progress >= 1 then break end
+    end
+    check(farm.progress >= 1 and not w2.order or (w2.order and w2.order.type ~= "build"), "wc: a second peasant finishes it")
+    -- Orcs build from inside.
+    st.players[2].gold, st.players[2].lumber = 5000, 5000
+    local oh = E.Hall(st, 2)
+    local ox, oy = E.Center(oh)
+    local peon
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 2 and e.kind == "unit" then peon = e break end
+    end
+    local bx, by = WC.AI.FindSpot(st, ox - 6, oy - 6, 2)
+    E.Command(st, 2, { type = "build", unit = peon.id, btype = "orc_burrow", x = bx, y = by })
+    local inside = false
+    for _ = 1, 400 do
+        E.Step(st, 0.05)
+        if peon.insideBuild then inside = true break end
+    end
+    check(inside, "wc: the peon goes inside to build")
+    for _ = 1, 600 do
+        E.Step(st, 0.05)
+        if not peon.insideBuild then break end
+    end
+    check(not peon.insideBuild and not E.Blocked(st, math.floor(peon.x), math.floor(peon.y)), "wc: and comes out when it's done")
+end
+
+-- Call to Arms and Battle Stations.
+function WcAlarmTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 41 })
+    local hall = E.Hall(st, 1)
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(E.Command(st, 1, { type = "callToArms", building = hall.id }), "wc: Call to Arms")
+    for _ = 1, 200 do E.Step(st, 0.05) end
+    local militia = 0
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.type == "militia" then militia = militia + 1 end
+    end
+    check(militia >= 4, "wc: peasants turn into militia (" .. militia .. ")")
+    check(E.Command(st, 1, { type = "backToWork" }), "wc: Back to Work")
+    local back = 0
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.type == "peasant" and e.order and e.order.type == "gather" then back = back + 1 end
+    end
+    check(back >= 4, "wc: back to the mine (" .. back .. ")")
+    -- Militia wear off by themselves.
+    E.Command(st, 1, { type = "callToArms", building = hall.id })
+    for _ = 1, math.floor((WC.MILITIA_TIME + 15) / 0.05) do E.Step(st, 0.05) end
+    local left = 0
+    for _, id in ipairs(st.list) do if st.ents[id].type == "militia" then left = left + 1 end end
+    check(left == 0, "wc: after 45 seconds they're peasants again")
+    -- Orcs: peons into a burrow; the burrow shoots.
+    st.players[2].gold, st.players[2].lumber = 5000, 5000
+    local oh = E.Hall(st, 2)
+    local ox, oy = E.Center(oh)
+    local bx, by = WC.AI.FindSpot(st, ox - 5, oy - 5, 2)
+    local peon
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 2 and e.kind == "unit" then peon = e break end
+    end
+    E.Command(st, 2, { type = "build", unit = peon.id, btype = "orc_burrow", x = bx, y = by })
+    for _ = 1, 900 do E.Step(st, 0.05) end
+    local burrow
+    for _, id in ipairs(st.list) do if st.ents[id].type == "orc_burrow" then burrow = st.ents[id] end end
+    check(burrow and burrow.progress >= 1, "wc: a burrow")
+    check(E.Command(st, 2, { type = "battleStations", building = oh.id }), "wc: Battle Stations")
+    for _ = 1, 800 do
+        E.Step(st, 0.05)
+        if #burrow.garrison == 4 then break end
+    end
+    check(#burrow.garrison == 4, "wc: four peons inside (" .. #burrow.garrison .. ")")
+    local fx, fy = E.Center(burrow)
+    local foe = E.Spawn(st, 1, "footman", fx + 4, fy)
+    E.Command(st, 1, { type = "hold", units = { foe.id } })
+    for _ = 1, 60 do E.Step(st, 0.05) end
+    check(foe.hp < foe.maxHp, "wc: the burrow shoots")
+    E.Command(st, 2, { type = "backToWork" })
+    check(#burrow.garrison == 0, "wc: back to work empties it")
 end
