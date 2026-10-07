@@ -213,6 +213,12 @@ H.RULES = {
         { "Mouse", "Left-click to select; drag a box to select several of your units (Shift adds). Right-click: "
             .. "the ground to move, an enemy to attack, the gold mine or a tree to gather, an unfinished "
             .. "building to carry on building it. With a building selected, right-click sets its rally point." },
+        { "Selecting", "Double-click (or Ctrl+click) one of your units: all of that type on screen. Control groups: "
+            .. "Ctrl+1..0 saves the selection, Shift+number adds to it, the number selects it again (press it "
+            .. "twice to look there)." },
+        { "Shift", "Hold Shift to queue orders instead of replacing them: move here, then there; build a farm, "
+            .. "then another (Shift keeps placing). Buildings in the queue are paid up front and show as ghosts; "
+            .. "a new order without Shift cancels the queue and gives their gold and lumber back." },
         { "Command card", "As in Warcraft III. Units: Move (M), Stop (S), Hold Position (H), Attack (A: click an "
             .. "enemy, or the ground to attack-move). Workers also: Gather (G), Return Resources (R) and Build "
             .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Lumber Mill L, Tower T, Altar A, Hall H). Towers shoot enemies in range. Halls and barracks "

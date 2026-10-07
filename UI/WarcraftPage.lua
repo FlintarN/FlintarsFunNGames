@@ -291,7 +291,9 @@ function P.New(parent, kind)
     view:SetScript("OnMouseDown", function(_, button) self:MouseDown(button) end)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
-        C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true },
+        C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
+        L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
+        ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
 
     -- The bottom panel: minimap, selection, command card.
@@ -496,6 +498,7 @@ end
 
 function P:NewGame(faction, seed)
     local other = faction == "human" and "orc" or "human"
+    self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000),
         difficulty = Save().difficulty or "normal" })
     Save().game = self.st
@@ -766,6 +769,15 @@ function P:SelectAt(x, y, add)
         if not add then self.sel = {} end
         return
     end
+    -- Double-click (or Ctrl+click) one of your units: all of that type on screen.
+    local last = self.lastClick
+    local double = last and last.type == e.type and last.id == e.id and Now() - last.t < 0.4
+    self.lastClick = { id = e.id, type = e.type, t = Now() }
+    if e.owner == ME and e.kind == "unit" and (double or (IsControlKeyDown and IsControlKeyDown())) then
+        self:SelectType(e.type, add)
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        return
+    end
     if add and e.owner == ME and e.kind == "unit" then
         for i, id in ipairs(self.sel) do
             if id == e.id then table.remove(self.sel, i) return end
@@ -775,6 +787,57 @@ function P:SelectAt(x, y, add)
         self.sel = { e.id }
     end
     W.PlaySound("U_CHAT_SCROLL_BUTTON")
+end
+
+-- All your units of a type that are on screen.
+function P:SelectType(utype, add)
+    local x0, y0 = self.camX / TILE, self.camY / TILE
+    local x1, y1 = x0 + BW / TILE, y0 + VIEW_H / TILE
+    local picked = add and self.sel or {}
+    local have = {}
+    for _, id in ipairs(picked) do have[id] = true end
+    for _, id in ipairs(self.st.list) do
+        local e = self.st.ents[id]
+        if e and e.owner == ME and e.kind == "unit" and e.type == utype and not have[id]
+            and e.x >= x0 and e.x <= x1 and e.y >= y0 and e.y <= y1 then
+            table.insert(picked, id)
+        end
+    end
+    self.sel = picked
+end
+
+-- Control groups, like Warcraft III: Ctrl+number sets, Shift+number adds,
+-- the number selects it (twice quickly: the camera jumps there).
+function P:Group(n)
+    self.groups = self.groups or {}
+    local ctrl = IsControlKeyDown and IsControlKeyDown()
+    local shift = IsShiftKeyDown and IsShiftKeyDown()
+    local mine = {}
+    for _, e in ipairs(self:Selected()) do
+        if e.owner == ME then table.insert(mine, e.id) end
+    end
+    if ctrl or (shift and self.groups[n]) then
+        local g = ctrl and {} or self.groups[n]
+        local have = {}
+        for _, id in ipairs(g) do have[id] = true end
+        for _, id in ipairs(mine) do if not have[id] then table.insert(g, id) end end
+        if #g > 0 then
+            self.groups[n] = g
+            self:Say("Group " .. n .. ": " .. #g)
+        end
+        return
+    end
+    local g = self.groups[n]
+    if not g then return end
+    local alive = {}
+    for _, id in ipairs(g) do if self.st.ents[id] then table.insert(alive, id) end end
+    self.groups[n] = alive
+    if #alive == 0 then return end
+    local last = self.lastGroup
+    if last and last.n == n and Now() - last.t < 0.4 then self:CenterOn(self.st.ents[alive[1]]) end
+    self.lastGroup = { n = n, t = Now() }
+    self.sel = { unpack(alive) }
+    self.menu = nil
 end
 
 -- Drag a box: your units inside it.
@@ -1018,6 +1081,8 @@ end
 
 function P:Key(key)
     if not self.st or self.paused then return end
+    local n = key:match("^(%d)$")
+    if n then return self:Group(tonumber(n)) end
     local cmd
     for _, c in ipairs(self.cmds) do
         if c:IsShown() and c.key == key and c:IsEnabled() then cmd = c end

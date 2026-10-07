@@ -183,6 +183,20 @@ function WcPageTests()
     end
     view:SelectAt(worker.x, worker.y)
     check(#view.sel == 1 and view.sel[1] == worker.id, "wc page: click selects a worker")
+    -- Double-click: every peasant on screen; Ctrl+1 keeps them as group 1.
+    view:SelectAt(worker.x, worker.y)
+    local all = #view.sel
+    check(all > 1, "wc page: double-click selects all peasants on screen (" .. all .. ")")
+    local oldCtrl = IsControlKeyDown
+    IsControlKeyDown = function() return true end
+    view:Key("1")
+    IsControlKeyDown = oldCtrl
+    view.lastClick = nil
+    view:SelectAt(worker.x, worker.y)
+    check(#view.sel == 1, "wc page: one click again: one")
+    view:Key("1")
+    check(#view.sel == all, "wc page: 1 selects group 1 again")
+    view.sel, view.lastClick = { worker.id }, nil
     view:Draw()
     local labels = {}
     for _, c in ipairs(view.cmds) do if c:IsShown() then table.insert(labels, c.title) end end
