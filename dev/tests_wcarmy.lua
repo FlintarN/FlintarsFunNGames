@@ -357,5 +357,44 @@ function WcDemo()
     view:Draw()
     check(view.unitFrames[cat.id].model.disp == "f" .. WC.Units.catapult.file, "wc looks: the Catapult's own model")
     check(view.unitFrames[hawk.id].shadow ~= nil, "wc looks: a flyer's shadow")
+
+    -- Sound: a voice when selected or ordered, annoyed when clicked a lot;
+    -- the Game audio switch mutes it, alerts have their own switch.
+    local S = WC.Sounds
+    local function Has(list, id) for _, x in ipairs(list) do if x == id then return true end end end
+    local foot
+    for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.type == "footman" then foot = e end end
+    view.camX, view.camY = foot.x * 20 - 300, foot.y * 20 - 150
+    SOUND_FILES = {}
+    view:SelectAt(foot.x, foot.y)
+    check(#SOUND_FILES == 1 and Has(S.Voices.footman.what, SOUND_FILES[1]), "wc sound: the Footman answers when selected")
+    for _ = 1, 4 do view:SelectAt(foot.x, foot.y) end
+    check(Has(S.Voices.footman.pissed, SOUND_FILES[#SOUND_FILES]), "wc sound: annoyed after clicking it a lot")
+    SOUND_FILES = {}
+    view.lastAck = nil
+    view:Smart(foot.x + 2, foot.y)
+    check(#SOUND_FILES == 1 and Has(S.Voices.footman.yes, SOUND_FILES[1]), "wc sound: yes, on the move")
+    ns.db.gameSound = false
+    SOUND_FILES = {}
+    view:SelectAt(foot.x, foot.y)
+    check(#SOUND_FILES == 0, "wc sound: Game audio off: quiet")
+    view:Say("Not enough gold or lumber")
+    check(#SOUND_FILES == 1 and SOUND_FILES[1] == S.Error, "wc sound: warnings still play (Alerts)")
+    ns.db.alertSound = false
+    SOUND_FILES = {}
+    view:Say("Not enough gold or lumber")
+    check(#SOUND_FILES == 0, "wc sound: Alerts off: quiet")
+    ns.db.gameSound, ns.db.alertSound = true, true
+    -- Every unit has a voice, every hero ability a sound.
+    local mute = {}
+    for k, u in pairs(WC.Units) do
+        if not u.summon and k ~= "catapult" and k ~= "target_dummy" and k ~= "sheep" and not k:find("%d$")
+            and not (S.Voices[k] and S.Voices[k].what) then table.insert(mute, k) end
+    end
+    for k, a in pairs(WC.Abilities) do
+        if not a.passive and not S.Spells[k] then table.insert(mute, k) end
+    end
+    table.sort(mute)
+    check(#mute == 0, "wc sound: every unit has a voice and every spell a sound (" .. table.concat(mute, ", ") .. ")")
     view:ShowMenu()
 end

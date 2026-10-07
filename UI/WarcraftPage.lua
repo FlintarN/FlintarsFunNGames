@@ -40,6 +40,7 @@ end
 
 local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
+local function Snd() return ns.WC.Sounds end
 local function Now() return GetTime and GetTime() or 0 end
 local ATAN2 = math.atan2 or math.atan
 
@@ -920,7 +921,13 @@ function P:FadeFlash()
     end
 end
 
+local WARN = { "^Not enough", "^Can't", "^Requires", "^Bring a hero", "^The hero's bag", "^Not ready" }
 function P:Say(text)
+    if Snd() then
+        for _, w in ipairs(WARN) do
+            if tostring(text):find(w) then W.PlayFile(Snd().Error, "alert") break end
+        end
+    end
     self.status:SetText(text)
     self.sayUntil = Now() + 2
 end
@@ -928,6 +935,7 @@ end
 -- Sounds and little effects for what just happened.
 function P:Events(events)
     self:SpellEvents(events)
+    self:Sounds(events)
     for _, ev in ipairs(events) do
         if ev.kind == "hit" then
             local a, t = self.st.ents[ev.id], self.st.ents[ev.target]
@@ -1128,7 +1136,7 @@ function P:SelectAt(x, y, add)
     self.lastClick = { id = e.id, type = e.type, t = Now() }
     if e.owner == ME and e.kind == "unit" and (double or (IsControlKeyDown and IsControlKeyDown())) then
         self:SelectType(e.type, add)
-        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        self:Voice(e, "what")
         return
     end
     if add and e.owner == ME and e.kind == "unit" then
@@ -1139,7 +1147,11 @@ function P:SelectAt(x, y, add)
     else
         self.sel = { e.id }
     end
-    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    if e.owner == ME and e.kind == "unit" and Snd() and Snd().Voices[e.type] then
+        self:Voice(e, "what")
+    else
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    end
 end
 
 -- All your units of a type that are on screen.
@@ -1206,6 +1218,7 @@ function P:SelectBox(x1, y1, x2, y2, add)
     end
     if add then for _, id in ipairs(picked) do table.insert(self.sel, id) end
     elseif #picked > 0 then self.sel = picked end
+    if #picked > 0 then self:Voice(self.st.ents[picked[1]], "what") end
 end
 
 -- Right-click: move, attack, gather, or set a rally point.
@@ -2590,12 +2603,119 @@ local function Copy(t)
     return out
 end
 
+---------------------------------------------------------------------------
+-- Sound (Games/Warcraft/Sounds.lua): voices, combat, spells, warnings.
+---------------------------------------------------------------------------
+
+-- A unit says something: what (selected), yes, attack, ready, pissed, done.
+function P:Voice(e, kind)
+    local v = e and Snd() and Snd().Voices[e.type]
+    if not v then return end
+    -- Clicked again and again: it gets annoyed (Warcraft III).
+    if kind == "what" then
+        local c = self.clicks
+        if c and c.id == e.id and Now() - c.t < 2 then c.n, c.t = c.n + 1, Now() else c = { id = e.id, n = 1, t = Now() } end
+        self.clicks = c
+        if c.n >= 4 and v.pissed then
+            local i = (c.n - 4) % #v.pissed + 1
+            return W.PlayFile(v.pissed[i], "voice")
+        end
+    end
+    local list = v[kind] or v.yes or v.what
+    if list then W.PlayFile(list, "voice") end
+end
+
+-- Units you ordered acknowledge (one voice, not one per unit).
+function P:Acknowledge(cmd)
+    if self.lastAck and Now() - self.lastAck < 0.3 then return end
+    local t = cmd.type
+    local kind = (t == "attack" or t == "attackMove") and "attack"
+        or ((t == "move" or t == "gather" or t == "build" or t == "resumeBuild" or t == "returnRes" or t == "hold"
+            or t == "stop" or t == "patrol") and "yes") or nil
+    if not kind then return end
+    local id = cmd.unit or (cmd.units and cmd.units[1])
+    local e = id and self.st.ents[id]
+    if e and e.owner == ME then
+        self.lastAck = Now()
+        self:Voice(e, kind)
+    end
+end
+
+-- Is this spot on screen (and in sight)? Sounds only for what you'd see.
+function P:OnScreen(x, y)
+    local px, py = x * TILE - self.camX, y * TILE - self.camY
+    return px > -40 and px < BW + 40 and py > -40 and py < VIEW_H + 40
+end
+
+function P:Sounds(events)
+    local S = Snd()
+    if not S then return end
+    local st = self.st
+    self.sndN, self.sndT = self.sndN or 0, self.sndT or 0
+    if Now() - self.sndT > 0.25 then self.sndN, self.sndT = 0, Now() end
+    local function Room() -- at most a few at once
+        if self.sndN >= 3 then return false end
+        self.sndN = self.sndN + 1
+        return true
+    end
+    for _, ev in ipairs(events) do
+        local k = ev.kind
+        if k == "hit" then
+            local a, t = st.ents[ev.id], st.ents[ev.target]
+            if t and t.owner == ME and (not self.alarmT or Now() - self.alarmT > 20) and not self:OnScreen(t.x, t.y) then
+                self.alarmT = Now()
+                W.PlayFile(S.UnderAttack, "alert")
+                self:Say(t.kind == "unit" and "Our forces are under attack!" or "Our base is under attack!")
+            end
+            if a and t and self:OnScreen(t.x, t.y) and self:Sees(t) and Room() then
+                local ud = WC().Units[a.type]
+                local at = (ud and ud.attackType) or "normal"
+                local list = S.Hit.normal
+                if a.kind ~= "unit" then list = S.Hit.gun
+                elseif at == "siege" then list = S.Hit.siege
+                elseif at == "magic" then list = S.Hit.magic
+                elseif ev.ranged then list = S.GUNS[a.type] and S.Hit.gun or S.Hit.pierce
+                elseif t.kind ~= "unit" then list = S.Hit.building end
+                local v = S.Voices[a.type]
+                if v and v.hit and math.random() < 0.3 then list = v.hit end
+                W.PlayFile(list, "game")
+            end
+        elseif k == "death" then
+            local f = self.unitFrames[ev.id]
+            if ev.what == "building" then
+                W.PlayFile(S.Collapse, "game")
+            elseif f and Room() then
+                local v = S.Voices[ev.type]
+                if v and v.death then W.PlayFile(v.death, "game") end
+            end
+        elseif k == "cast" then
+            local caster = st.ents[ev.id]
+            local id = S.Spells[ev.ability]
+            if id and caster and (caster.owner == ME or self:OnScreen(caster.x, caster.y)) then W.PlayFile(id, "game") end
+        elseif k == "trained" and ev.owner == ME then
+            self:Voice({ type = ev.type, id = ev.id }, "ready")
+        elseif k == "revived" and ev.owner == ME then
+            self:Voice({ type = ev.type, id = ev.id }, "ready")
+        elseif k == "built" and ev.owner == ME then
+            local w = Snd().Voices[WC().Factions[st.players[ME].faction].worker]
+            if w and w.done then W.PlayFile(w.done, "voice") end
+        elseif k == "levelUp" and ev.owner == ME then
+            W.PlayFile(S.LevelUp, "game")
+        end
+    end
+end
+
 -- A command from your clicks. In PvP it's checked on a copy of the game (so
 -- you hear "not enough gold" at once) and runs in a later turn on both sides.
 function P:Cmd(cmd)
-    if not self.ls then return E().Command(self.st, ME, cmd) end
-    local ok, why = E().Command(Copy(self.st), ME, cmd)
-    if ok then self.ls:Command(cmd) end
+    local ok, why
+    if not self.ls then
+        ok, why = E().Command(self.st, ME, cmd)
+    else
+        ok, why = E().Command(Copy(self.st), ME, cmd)
+        if ok then self.ls:Command(cmd) end
+    end
+    if ok then self:Acknowledge(cmd) end
     return ok, why
 end
 

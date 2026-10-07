@@ -230,6 +230,12 @@ UnitClass = function(u) if UnitExists(u) then return "Warrior", "WARRIOR", 1 end
 SOUNDS = {}
 SOUNDKIT = setmetatable({}, { __index = function(_, k) return k end })
 PlaySound = function(kit) table.insert(SOUNDS, kit) end
+SOUND_FILES = {}
+PlaySoundFile = function(id, channel)
+    table.insert(SOUND_FILES, id)
+    return true, #SOUND_FILES
+end
+StopSound = function() end
 
 -- Guild and hidden chat channels.
 IN_GUILD = false

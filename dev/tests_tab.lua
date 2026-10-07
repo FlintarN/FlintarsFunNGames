@@ -93,9 +93,9 @@ do
     ns.db.alertSound = true
 
     -- Minimap button.
-    Click(page.checks[5])
+    Click(page.checks[6])
     check(ns.db.minimap == false and not ns.Minimap.button:IsShown(), "settings: minimap button hidden")
-    Click(page.checks[5])
+    Click(page.checks[6])
     check(ns.Minimap.button:IsShown(), "settings: and back")
 
     -- Window size.

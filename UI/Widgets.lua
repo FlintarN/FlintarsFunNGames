@@ -137,6 +137,27 @@ function W.PlaySound(kit, alert)
     if PlaySound and SOUNDKIT and SOUNDKIT[kit] then PlaySound(SOUNDKIT[kit]) end
 end
 
+-- A sound file from the game (by file id). kind "game": the games' own audio
+-- (unit voices, combat, spells; needs Sounds and Game audio on); "alert": a
+-- warning (Alerts on); "voice": game audio, but a new voice cuts off the last
+-- one, like Warcraft III.
+local lastVoice
+function W.PlayFile(id, kind)
+    local db = ns.db or {}
+    if not id then return end
+    if kind == "alert" then
+        if db.alertSound == false then return end
+    elseif db.sound == false or db.gameSound == false then
+        return
+    end
+    if type(id) == "table" then id = id[math.random(#id)] end
+    if not PlaySoundFile then return end
+    if kind == "voice" and lastVoice and StopSound then StopSound(lastVoice, 100) end
+    local ok, willPlay, handle = pcall(PlaySoundFile, id, "SFX")
+    if kind == "voice" and ok and willPlay then lastVoice = handle end
+    return ok and willPlay
+end
+
 ---------------------------------------------------------------------------
 -- Panel: a framed box with the game's dark marble background and a bronze
 -- tooltip border, with an optional gold title along the top.
