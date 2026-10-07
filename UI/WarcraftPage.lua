@@ -719,7 +719,9 @@ function P.New(parent, kind)
     PvpButton("cancelQueue", "Cancel", 100, function() self:CancelQueue() end)
     -- In a PvP game: give up, or win when the other player is gone.
     self.surrender = W.Button(self.fxLayer, "Surrender", 90, function()
-        W.Confirm("Surrender this game?", function() S.Act(self.kind, "surrender") end)
+        W.Confirm("Surrender this game?", function()
+            if self.ls then self:Cmd({ type = "surrender" }) else S.Act(self.kind, "surrender") end
+        end)
     end, 20)
     self.surrender:SetPoint("TOPRIGHT", -8, -6)
     self.surrender:Hide()
@@ -1032,6 +1034,12 @@ function P:Events(events)
                 or ((r.names and r.names[ev.level] or r.name) .. " researched"))
         elseif ev.kind == "built" and ev.owner == ME then
             self:Say(WC().Buildings[ev.type].name .. " finished")
+        elseif (ev.kind == "defeated" or ev.kind == "surrendered") and ev.owner == ME then
+            self:Say("You are out. You can watch to the end, or leave.")
+        elseif ev.kind == "defeated" or ev.kind == "surrendered" then
+            local s = ns.Session.Get(self.kind)
+            local name = s and s.game and s.game.names and s.game.names[ev.owner] or ("Player " .. ev.owner)
+            self:Say(name .. (ev.kind == "surrendered" and " surrendered." or " is out."))
         elseif ev.kind == "cantBuild" and ev.owner == ME then
             self:Say("Can't build there")
         elseif ev.kind == "treeDown" then
@@ -2857,26 +2865,31 @@ end
 -- The PvP game starts on this client: same seed and races on both sides.
 function P:StartPvp(s)
     local me = ns.Me()
+    local g = s.game
     local seat = self.G.Seat(s, me) or 1
     ME = seat
-    CPUS = s.test and { 3 - seat } or {} -- practice: the computer plays the bot
-    local factions = { s.races[s.players[1].name], s.races[s.players[2].name] }
+    CPUS = {} -- (the computer's seats play inside the turns: LockstepTick)
+    self.lsCpus = g.cpus or {}
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
-    self.st = E().New({ factions = factions, seed = s.seed, difficulty = "normal" })
+    self.st = E().New({ factions = g.factions, teams = g.teams, starts = g.starts, difficulties = g.difficulties,
+        map = g.map, seed = s.seed, difficulty = "normal" })
+    local factions = g.factions
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted, self.reported, self.pvpGame = false, false, s.recordId
     self.acc, self.think = 0, 0
     self.treeDirty = true
     self:BuildMinimapTrees()
     self:CenterOn(E().Hall(self.st, ME))
-    if not s.test then
-        local other = s.players[3 - seat].name
-        local st = self.st
-        self.ls = ns.Lockstep.New({ id = s.recordId, seat = seat, peer = other,
-            hash = function() return E().Hash(st) end })
-        self.pvpStart = Now()
+    -- Lockstep with every other player (none: just you and computers).
+    local peers = {}
+    for p, name in pairs(g.names or {}) do
+        if p ~= seat then peers[p] = name end
     end
+    local st = self.st
+    self.ls = ns.Lockstep.New({ id = s.recordId, seat = seat, peers = peers,
+        hash = function() return E().Hash(st) end })
+    self.pvpStart = Now()
     self.claim:Hide()
     self:Resume()
     self:Say("You play " .. WC().Factions[factions[seat]].name .. ". Destroy every enemy building!")
@@ -2885,7 +2898,7 @@ end
 -- Every frame (even with the window closed): run the turns both sides have.
 function P:LockstepTick(elapsed)
     local st, ls = self.st, self.ls
-    if not st or st.over then return end
+    if not st or st.over or not ls then return end
     elapsed = math.min(elapsed or 0, 0.25)
     ls:Update(Now())
     local TURN = ns.Lockstep.TURN
@@ -2893,8 +2906,11 @@ function P:LockstepTick(elapsed)
     while self.acc >= TURN and ls:CanRun() do
         self.acc = self.acc - TURN
         ls:Run(function(bySeat)
-            for seat = 1, 2 do
+            for seat = 1, #st.players do
                 for _, c in ipairs(bySeat[seat] or {}) do E().Command(st, seat, c) end
+            end
+            if ls.turn % 4 == 0 then
+                for _, c in ipairs(self.lsCpus or {}) do WC().AI.Think(st, c) end
             end
             for _ = 1, math.floor(TURN / STEP + 0.5) do
                 self:Events(E().Step(st, STEP))
@@ -2913,10 +2929,15 @@ function P:LockstepTick(elapsed)
     local silence = ls:Silence(Now()) or (Now() - (self.pvpStart or Now()))
     if waiting and silence > 2 then
         local s = ns.Session.Get(self.kind)
-        local other = s and s.players[3 - ME] and s.players[3 - ME].name or "the other player"
-        self.status:SetText("Waiting for " .. other .. "... (" .. math.floor(silence) .. "s)")
+        local names = {}
+        for _, seat in ipairs(ls:Waiting()) do table.insert(names, ls.peers[seat] or ("player " .. seat)) end
+        self.status:SetText("Waiting for " .. (#names > 0 and table.concat(names, ", ") or "the others") .. "... ("
+            .. math.floor(silence) .. "s)")
         self.sayUntil = Now() + 0.5
-        self.claim:SetShown(silence > 45)
+        -- Two players: after a long silence the game is yours.
+        local humans = 0
+        for _ in pairs(ls.peers) do humans = humans + 1 end
+        self.claim:SetShown(silence > 45 and humans == 1)
     else
         self.claim:Hide()
     end
@@ -2986,18 +3007,8 @@ function P:RefreshPvp(s)
         if s.queued and #s.players >= 2 then
             return self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
         end
-        local keys = {}
-        if host then
-            if s.test and S.CanAddBot(s) then table.insert(keys, "bot") end
-            table.insert(keys, "start")
-            table.insert(keys, "close")
-        elseif seated then
-            table.insert(keys, "leave")
-        end
-        self:PvpScreen("Warcraft 4: lobby", A.ScopeLine(s), who .. "\n\n"
-            .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
-            keys)
-        self.pvpButtons.start:SetEnabled(#s.players >= 2)
+        self:PvpScreen("Warcraft 4: lobby", A.ScopeLine(s), "", host and { "close" } or (seated and { "leave" } or { "done" }))
+        ns.WarcraftLobby.Show(self, true)
         return
     elseif s.phase == "cancelled" then
         return self:PvpScreen("The lobby is closed", s.banner or "", "", { "done" })
@@ -3035,7 +3046,7 @@ function P:RefreshPvp(s)
         if self.ls then ns.Lockstep.Stop(self.ls) self.ls = nil end
         self.surrender:Hide()
         self.claim:Hide()
-        local won = s.result and s.result.winner == me
+        local won = self.G.Won(s, me)
         local draw = s.result and not s.result.winner
         if not self.counted and not s.test and seated then
             self.counted = true

@@ -166,8 +166,9 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
 
 ## Warcraft III custom games and maps (research in dev/research/, build later)
 - Player counts: 10 is the cap, not the target. Each mode at its natural size: co-op defense 4–5 players, Footmen 4, versus 4v4 or 5v5, melee 1v1/2v2. Tower Defense: free-for-all (2 up to 8 players, each sending to the next) or team-based.
-- [ ] Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
-- [ ] Map selection in the lobby: standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
+- [x] Up to 8 players (lobby, teams, lockstep for many seats, computers in seats). Left: a player who drops mid-game ends a 3+ player game with no winner (could hand their seat to the computer).
+- [ ] (was) Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
+- [x] Map selection in the lobby (five maps; more to make): standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
 - Suggested order (from the research, not decided):
   1. Maps as data (ASCII grid + legend, symmetry, a validator); our map as "Riverford"; a map picker in the lobby.
   2. More players: seats and teams, one broadcast per turn on the group channel, the AI fills empty seats, bigger maps with a scrolling camera.

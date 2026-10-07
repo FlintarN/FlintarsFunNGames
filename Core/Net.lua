@@ -18,10 +18,11 @@ ns.Net = Net
 
 Net.PREFIX = "FunNGames"
 Net.REALM_CHANNEL = "FunNGamesRealm"
--- Real-time games (Warcraft III lockstep) send several messages a second.
--- WoW lets each prefix send about one a second after a short burst, so
--- those messages take turns over a few prefixes of their own.
-Net.FAST = { "FunNGamesL1", "FunNGamesL2", "FunNGamesL3", "FunNGamesL4" }
+-- Real-time games (Warcraft 4 lockstep) send several messages a second, to
+-- several players. WoW lets each prefix send about one a second after a
+-- short burst, so those messages take turns over prefixes of their own.
+Net.FAST = { "FunNGamesL1", "FunNGamesL2", "FunNGamesL3", "FunNGamesL4", "FunNGamesL5", "FunNGamesL6",
+    "FunNGamesL7", "FunNGamesL8" }
 local FAST = {}
 for _, p in ipairs(Net.FAST) do FAST[p] = true end
 local fastNext = 0
@@ -130,6 +131,14 @@ function Net.WhisperFast(cmd, data, target)
     if not SendAddon then return false end
     fastNext = fastNext % #Net.FAST + 1
     return SendParts(cmd, data, "WHISPER", target, Net.FAST[fastNext])
+end
+
+-- To a whole scope (the group) on the fast prefixes: one message for everyone.
+function Net.SendFast(cmd, data, scope)
+    local chatType, target = Net.Route(scope)
+    if not (chatType and SendAddon) then return false end
+    fastNext = fastNext % #Net.FAST + 1
+    return SendParts(cmd, data, chatType, target, Net.FAST[fastNext])
 end
 
 -- To one player only (private cards; a player talking to a host).

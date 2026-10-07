@@ -178,8 +178,18 @@ function L.Build(view, o)
     f.start:SetPoint("BOTTOMRIGHT", -16, 16)
 end
 
--- The lobby on screen now (Single Player: the saved one).
+-- Online: the session's lobby (the host shares it); nil in Single Player.
+local function Online(view)
+    if not view.lobbyOnline then return nil end
+    local s = ns.Session.Get(view.kind)
+    return s and s.phase == "lobby" and s or nil
+end
+
+-- The lobby on screen now: Single Player's saved one, or the session's
+-- (seen from my seat: my seat is kind "me").
 local function Lobby(view)
+    local s = Online(view)
+    if s then return ns.Games.warcraft.LobbyView(s, ns.Me()) end
     local rec = ns.db.warcraft
     rec.lobby = rec.lobby or L.Default(rec.map)
     L.Fit(rec.lobby)
@@ -187,7 +197,9 @@ local function Lobby(view)
 end
 L.Lobby = Lobby
 
-function L.Show(view)
+-- online: the session's lobby (true) or Single Player's.
+function L.Show(view, online)
+    view.lobbyOnline = online and true or nil
     view.lobbyFrame:Show()
     L.Draw(view)
 end
@@ -200,6 +212,16 @@ function L.Click(view, i, what)
     local lobby = Lobby(view)
     local s = lobby.slots[i]
     local m = WC().Maps[lobby.map]
+    if Online(view) then
+        -- The host decides; a player changes their own seat.
+        local act
+        if what == "who" then act = "who:" .. i
+        elseif what == "race" then act = "race:" .. i .. ":" .. Next(RACES, s.race)
+        else act = "team:" .. i .. ":" .. (s.team % m.players + 1) end
+        ns.Session.Act(view.kind, act)
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        return
+    end
     if what == "who" then
         if s.kind == "me" then return end
         -- Computer (Normal) > (Hard) > (Easy) > Closed > Computer (Normal)...
@@ -220,6 +242,11 @@ function L.Click(view, i, what)
 end
 
 function L.PickMap(view, key)
+    if Online(view) then
+        ns.Session.Act(view.kind, "map:" .. key)
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        return
+    end
     local lobby = Lobby(view)
     lobby.map = key
     ns.db.warcraft.map = key
@@ -229,6 +256,11 @@ function L.PickMap(view, key)
 end
 
 function L.Start(view)
+    if Online(view) then
+        local ok, why = ns.Session.Start(view.kind)
+        if not ok and why then view.lobbyFrame.why:SetText("|cffff6060" .. why .. "|r") end
+        return
+    end
     local lobby = Lobby(view)
     local ok, why = L.CanStart(lobby)
     if not ok then
@@ -293,6 +325,8 @@ end
 function L.Draw(view)
     local f = view.lobbyFrame
     local lobby = Lobby(view)
+    local online = Online(view)
+    local host = not online or ns.Session.IsHost(online)
     local m = WC().Maps[lobby.map]
     local p = WC().ParseMap(lobby.map)
     for i, r in ipairs(f.rows) do
@@ -312,6 +346,11 @@ function L.Draw(view)
             r.race:SetShown(playing)
             r.team:SetShown(playing)
             r.swatch:SetAlpha(playing and 1 or 0.25)
+            -- Online: the host runs the seats; you set your own race and team.
+            local yours = s.kind == "me" or (host and s.kind == "cpu")
+            r.who:SetEnabled(host and s.kind ~= "me" and s.kind ~= "player")
+            r.race:SetEnabled(yours)
+            r.team:SetEnabled(yours)
         end
     end
     local i = 0
@@ -324,6 +363,7 @@ function L.Draw(view)
             b.text:SetText(mm.name)
             b.size:SetText(mm.players .. " players")
             b.bg:SetShown(key == lobby.map)
+            b:SetEnabled(host)
             b:Show()
         end
     end
@@ -332,6 +372,8 @@ function L.Draw(view)
     f.mapText:SetText(string.format("%s\n%d x %d\n%d players", m.name, p.w, p.h, m.players))
     f.mapLong:SetText(m.text)
     local ok, why = L.CanStart(lobby)
+    f.start:SetShown(host)
     f.start:SetEnabled(ok)
+    if not host then ok, why = false, "Waiting for the host to start." end
     f.why:SetText(ok and "" or ("|cffaaaaaa" .. why .. "|r"))
 end

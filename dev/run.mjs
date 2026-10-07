@@ -633,11 +633,10 @@ await Section('Warcraft III PvP over a code lobby', async () => {
   await Pump(players, 1);
   await bob.run(`WcPvpJoin("${code}")`);
   await Pump(players, 2);
+  await bob.run('WcPvpLobby("race:2:orc")');
+  await Pump(players, 1);
+  await host.run(`check(WcPvpSeat(2) == "Bob", "wc pvp: Bob sits in seat 2")`);
   await host.run('WcPvpStart()');
-  await Pump(players, 1);
-  await host.run('WcPvpRace("human")');
-  await Pump(players, 1);
-  await bob.run('WcPvpRace("orc")');
   await Pump(players, 1);
   for (let i = 0; i < 160; i++) {
     if (i % 9 === 0) { await host.run(`WcPvpOrder(${i})`); }
@@ -654,9 +653,60 @@ await Section('Warcraft III PvP over a code lobby', async () => {
   await host.run(`check("${h1}" ~= "" and "${h1}" == "${h2}", "wc pvp: both clients have the same game at turn ${t} (${h1} / ${h2})")`);
   await host.run(`check(WcPvpInfo() == "1:nil", "wc pvp: no desync (" .. WcPvpInfo() .. ")")`);
   await bob.run('WcPvpSurrender()');
+  for (let i = 0; i < 8; i++) {
+    for (const q of players) await q.run('WcPvpRun(5)');
+    await Pump(players, 0.25);
+  }
   await Pump(players, 1);
   await host.run('WcPvpEnd(true)');
   await bob.run('WcPvpEnd(false)');
+});
+
+await Section('Warcraft 4: three players and a computer', async () => {
+  const host = await Player('Flintar', []);
+  const bob = await Player('Bob', []);
+  const cara = await Player('Cara', []);
+  const players = [host, bob, cara];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const code = await Get(host, 'WcPvpHost()');
+  await Pump(players, 1);
+  await host.run('WcPvpLobby("map:four_crowns")');
+  await Pump(players, 1);
+  await bob.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await cara.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await host.run('WcPvpLobby("who:4")');         // seat 4: a computer
+  await host.run('WcPvpLobby("team:4:2")');
+  await Pump(players, 1);
+  await bob.run('WcPvpLobby("team:2:1")');       // Bob with the host
+  await cara.run('WcPvpLobby("team:3:2")');      // Cara with the computer
+  await cara.run('WcPvpLobby("race:3:orc")');
+  await Pump(players, 1);
+  await cara.run(`check(WcPvpSeat(4) == "Computer (Normal)" and WcPvpSeat(2) == "Bob", "wc 3p: Cara's lobby shows Bob and the computer")`);
+  await host.run('WcPvpStart(3)');
+  await Pump(players, 1);
+  for (let i = 0; i < 160; i++) {
+    if (i % 9 === 0) { await host.run(`WcPvpOrder(${i})`); }
+    if (i % 11 === 0) { await bob.run(`WcPvpOrder(${i + 1})`); }
+    if (i % 13 === 0) { await cara.run(`WcPvpOrder(${i + 2})`); }
+    for (const q of players) await q.run('WcPvpRun(5)');
+    await Pump(players, 0.25);
+  }
+  const ts = [];
+  for (const q of players) ts.push(await Get(q, 'WcPvpTurn()'));
+  const t = Math.floor(Math.min(...ts) / 20) * 20;
+  const hs = [];
+  for (const q of players) hs.push(await Get(q, `WcPvpHash(${t})`));
+  await host.run(`check(${t} >= 100, "wc 3p: the game ran in lockstep (turns ${ts.join(' / ')})")`);
+  await host.run(`check("${hs[0]}" ~= "" and "${hs[0]}" == "${hs[1]}" and "${hs[1]}" == "${hs[2]}", "wc 3p: all three have the same game at turn ${t}")`);
+  // Cara gives up: her things go everywhere; her computer ally plays on.
+  await cara.run('WcPvpSurrender()');
+  for (let i = 0; i < 8; i++) {
+    for (const q of players) await q.run('WcPvpRun(5)');
+    await Pump(players, 0.25);
+  }
+  for (const q of players) await q.run(`check(WcPvpGone(3) and WcPvpOver() == "on", "wc 3p: " .. PLAYER_NAME .. " sees Cara out, the game goes on")`);
 });
 
 await Section('Warcraft III engine and AI', async () => {

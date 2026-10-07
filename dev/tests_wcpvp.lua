@@ -107,11 +107,26 @@ function WcPvpJoin(code)
     v.codeBox._scripts.OnEnterPressed(v.codeBox)
 end
 
-function WcPvpStart()
+-- The host starts from the lobby screen (everyone is seated by then).
+function WcPvpStart(n)
     local v = View()
     v:Refresh()
-    check(#S.Get("warcraft").players == 2, "wc pvp: Bob is in the lobby")
-    v.pvpButtons.start._scripts.OnClick()
+    local s = S.Get("warcraft")
+    check(#s.players == (n or 2), "wc pvp: everyone is in the lobby (" .. #s.players .. ")")
+    check(v.lobbyFrame:IsShown() and v.lobbyFrame.start:IsShown(), "wc pvp: the host sees the lobby and Start")
+    v.lobbyFrame.start._scripts.OnClick()
+end
+
+-- A lobby move (seats, races, teams, the map).
+function WcPvpLobby(action)
+    S.Act("warcraft", action)
+end
+
+-- What this player's lobby screen shows in a seat.
+function WcPvpSeat(i)
+    local v = View()
+    v:Refresh()
+    return v.lobbyFrame.rows[i].who:GetText() or ""
 end
 
 function WcPvpRace(f)
@@ -135,7 +150,8 @@ function WcPvpOrder(n)
     if not st or not v.ls then return end
     local seat = v.ls.seat
     if n % 2 == 0 then
-        v:Cmd({ type = "train", building = E.Hall(st, seat).id, utype = seat == 1 and "peasant" or "peon" })
+        local hall = E.Hall(st, seat)
+        if hall then v:Cmd({ type = "train", building = hall.id, utype = WC.Factions[st.players[seat].faction].worker }) end
     else
         local ids = {}
         for _, id in ipairs(st.list) do
@@ -153,9 +169,21 @@ function WcPvpInfo()
     return v.ls and (v.ls.seat .. ":" .. tostring(v.ls.desync)) or "none"
 end
 
+-- Surrender: a command in the game (the turns carry it to everyone).
 function WcPvpSurrender()
-    S.Act("warcraft", "surrender")
+    View():Cmd({ type = "surrender" })
 end
+
+-- Is this seat out of the game here? (no buildings or units left)
+function WcPvpGone(seat)
+    local st = View().st
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == seat then return false end
+    end
+    return true
+end
+function WcPvpOver() return View().st and View().st.over and "over" or "on" end
 
 function WcPvpEnd(expectWin)
     local s = S.Get("warcraft")

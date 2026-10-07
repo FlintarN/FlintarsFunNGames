@@ -1483,6 +1483,17 @@ function E.Command(st, p, cmd)
         pl.gold, pl.lumber = pl.gold + cost[1], pl.lumber + cost[2]
         E.Food(st)
         return true
+    elseif t == "surrender" then
+        -- Give up: everything of yours goes; your allies play on.
+        local mine = {}
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e and e.owner == p then table.insert(mine, e) end
+        end
+        for _, e in ipairs(mine) do Remove(st, e) end
+        E.Food(st)
+        Emit("surrendered", { owner = p })
+        return true
     elseif t == "cancelBuild" then
         -- Cancel a building still going up: 75% back, like Warcraft III.
         local b = st.ents[cmd.building]

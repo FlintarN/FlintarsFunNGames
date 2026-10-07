@@ -79,7 +79,9 @@ function S.MyTurn(s)
 end
 
 function S.MaxPlayers(s)
-    return S.Game(s).maxPlayers or 40
+    local G = S.Game(s)
+    if G.MaxPlayers then return G.MaxPlayers(s) end
+    return G.maxPlayers or 40
 end
 
 -- Where a game is played: "group" (default, and always for the casino),
@@ -255,6 +257,10 @@ function S.Start(kind)
     if not (S.IsHost(s) and s.phase == "lobby") then return false end
     local G = S.Game(s)
     if #s.players < G.minPlayers then return false, "You need at least " .. G.minPlayers .. " players." end
+    if G.CanStart then
+        local ok, why = G:CanStart(s)
+        if not ok then return false, why end
+    end
     s.phase = "rolling"
     s.log = {}
     G:Begin(s)
@@ -322,7 +328,9 @@ end
 function S.Act(kind, action)
     local s = S.sessions[kind]
     -- Moves while a game runs; after it ends the game decides (a rematch).
-    if not s or not (s.phase == "rolling" or s.phase == "done") or S.HostOffline(s) then return false end
+    -- (Games with lobbyActs take moves in the lobby too: seats, races, the map.)
+    local lobby = s and s.phase == "lobby" and S.Game(s).lobbyActs
+    if not s or not (s.phase == "rolling" or s.phase == "done" or lobby) or S.HostOffline(s) then return false end
     if S.IsHost(s) then return HostAct(s, ns.Me(), action) end
     ToHost(s, "A", s.id .. " " .. action)
     return true
@@ -579,7 +587,7 @@ end)
 ns.Net.On("A", function(sender, data)
     local id, action = data:match("^(%S+) (%S+)$")
     local s = id and Hosted(sender, id)
-    if not s or not (s.phase == "rolling" or s.phase == "done") then return end
+    if not s or not (s.phase == "rolling" or s.phase == "done" or (s.phase == "lobby" and S.Game(s).lobbyActs)) then return end
     HostAct(s, sender, action)
 end)
 
