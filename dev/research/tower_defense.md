@@ -324,3 +324,6 @@ so late cheap sends are still relevant.
 - Gem TD — Dota 2 Wiki: https://dota2.fandom.com/wiki/Gem_TD
 - GemTD by Cecrit (itch.io): https://cecrit.itch.io/gemtd
 - SweClockers TD thread (Burbenog mention): https://www.sweclockers.com/forum/post/3288243
+
+## Decision (from the user)
+Tower Defense supports both: a free-for-all of 2 up to 8 players (1v1v1v1..., each lane sends to the next, last one standing wins) and team-based (e.g. 2v2, 4v4). Design the lane count and map width for up to 8 lanes.
