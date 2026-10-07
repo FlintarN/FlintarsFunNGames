@@ -55,6 +55,26 @@ F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm
 F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", alarm = "battleStations",
     melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "great_hall" } }
 
+-- Art from the WoW game files (file ids from the community listfile; all
+-- vanilla-era files). Models: file, cam (camera distance, bigger = smaller
+-- on screen), y (pixels to lift it), facing (radians), pitch (tilt, if the
+-- client allows it), grow (frame size compared to the footprint).
+ns.WC.ART = {
+    ground = 187126, -- tileset/elwynn/elwynngrassbase.blp
+    groundRepeat = 4, -- tiles per texture repeat
+    trees = { 189923, 189927, 189923, 189928 }, -- elwynnfirtree01, elwynntreecanopy01/02
+    treeCam = 1.0, treeGrow = 1.5, treeY = 6,
+    models = {
+        gold_mine = { file = 189620, cam = 1.0, grow = 1.5, y = 4 },      -- elwynn/buildings/goldmine
+        town_hall = { file = 190505, cam = 1.0, grow = 1.6, y = 8 },      -- westfall/buildings/church
+        farm = { file = 190519, cam = 1.0, grow = 1.8, y = 10 },          -- westfall/buildings/windmill
+        barracks = { file = 189601, cam = 1.0, grow = 1.6, y = 6 },       -- elwynn/buildings/blacksmith
+        great_hall = { file = 199384, cam = 1.0, grow = 1.5, y = 6 },     -- generic/orc/tents/durotarorctent01
+        orc_burrow = { file = 199387, cam = 1.0, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent01
+        orc_barracks = { file = 199385, cam = 1.0, grow = 1.5, y = 6 },   -- generic/orc/tents/durotarorctent02
+    },
+}
+
 ns.WC.START = { gold = 500, lumber = 150, workers = 5 }
 ns.WC.MINE_GOLD = 12500
 ns.WC.TREE_LUMBER = 50

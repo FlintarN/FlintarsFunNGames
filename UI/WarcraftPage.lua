@@ -73,6 +73,27 @@ local function MakeModel(parent)
     return m
 end
 
+-- A model of a world object (building, tree, mine) from its file id.
+local function MakeDoodad(parent)
+    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
+    if not ok or not m or not m.SetModel then return nil end
+    m:SetScript("OnShow", function(self) if self.file then self:Apply(true) end end)
+    function m:Use(file, cam, facing, pitch)
+        if self.file == file and self.cam == cam then return end
+        self.file, self.cam, self.facing, self.pitch = file, cam, facing, pitch
+        self:Apply(true)
+    end
+    function m:Apply(reload)
+        if reload then self:SetModel(self.file) end
+        if self.SetPortraitZoom then self:SetPortraitZoom(0) end
+        if self.SetCamDistanceScale then self:SetCamDistanceScale(self.cam or 1) end
+        if self.SetFacing then self:SetFacing(self.facing or 0) end
+        if self.pitch and self.SetPitch then pcall(self.SetPitch, self, self.pitch) end
+    end
+    pcall(m.SetScript, m, "OnModelLoaded", function(self) self:Apply(false) end)
+    return m
+end
+
 -- Which animation fits what the unit is doing.
 local function AnimFor(u, moved)
     local o = u.order
@@ -154,8 +175,8 @@ function P.New(parent, kind)
     self.view = view
     self.ground = view:CreateTexture(nil, "BACKGROUND")
     self.ground:SetAllPoints()
-    local okWrap = pcall(self.ground.SetTexture, self.ground, ART .. "WcGrass", "REPEAT", "REPEAT")
-    if not okWrap then self.ground:SetTexture(ART .. "WcGrass") end
+    local okWrap = pcall(self.ground.SetTexture, self.ground, ns.WC.ART.ground, "REPEAT", "REPEAT")
+    if not okWrap then self.ground:SetTexture(ns.WC.ART.ground) end
     local function Layer(level)
         local f = CreateFrame("Frame", nil, view)
         f:SetAllPoints()
@@ -950,26 +971,37 @@ end
 
 function P:DrawTrees()
     local st = self.st
-    local x0, y0 = math.floor(self.camX / TILE) - 1, math.floor(self.camY / TILE) - 1
-    local x1, y1 = x0 + math.ceil(BW / TILE) + 2, y0 + math.ceil(VIEW_H / TILE) + 2
+    local art = ns.WC.ART
+    local x0, y0 = math.floor(self.camX / TILE) - 2, math.floor(self.camY / TILE) - 2
+    local x1, y1 = x0 + math.ceil(BW / TILE) + 4, y0 + math.ceil(VIEW_H / TILE) + 4
+    x0, y0 = x0 - x0 % 2, y0 - y0 % 2
+    self.treeModels = self.treeModels or {}
     local used = 0
-    for y = math.max(0, y0), math.min(st.h - 1, y1) do
-        for x = math.max(0, x0), math.min(st.w - 1, x1) do
-            if st.trees[y * st.w + x] then
-                used = used + 1
-                local t = self.treeTex[used]
-                if not t then
-                    t = self.treeLayer:CreateTexture(nil, "ARTWORK")
-                    t:SetTexture(ART .. "WcTree")
-                    t:SetSize(TILE + 8, TILE + 8)
-                    self.treeTex[used] = t
+    for by = math.max(0, y0), math.min(st.h - 1, y1), 2 do
+        for bx = math.max(0, x0), math.min(st.w - 1, x1), 2 do
+            local n = 0
+            for dy = 0, 1 do
+                for dx = 0, 1 do
+                    if st.trees[(by + dy) * st.w + bx + dx] then n = n + 1 end
                 end
+            end
+            if n > 0 then
+                used = used + 1
+                local t = self.treeModels[used]
+                if not t then
+                    t = MakeDoodad(self.treeLayer) or self.treeLayer:CreateTexture(nil, "ARTWORK")
+                    if not t.Use then t:SetTexture(ART .. "WcTree") end
+                    self.treeModels[used] = t
+                end
+                local size = TILE * 2 * art.treeGrow * (n >= 3 and 1 or 0.8)
+                t:SetSize(size, size)
+                if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], art.treeCam, (bx * 7 + by * 3) % 6) end
                 t:Show()
-                Place(t, self.view, x * TILE + TILE / 2 - self.camX, y * TILE + TILE / 2 - 4 - self.camY)
+                Place(t, self.view, (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY)
             end
         end
     end
-    for j = used + 1, #self.treeTex do self.treeTex[j]:Hide() end
+    for j = used + 1, #self.treeModels do self.treeModels[j]:Hide() end
 end
 
 function P:UnitFrame(id, utype)
@@ -1049,7 +1081,8 @@ function P:Draw()
     self:ClampCam()
     local cx, cy = self.camX, self.camY
     -- Ground scrolls with the camera.
-    self.ground:SetTexCoord(cx / 256, (cx + BW) / 256, cy / 256, (cy + VIEW_H) / 256)
+    local rep = TILE * ns.WC.ART.groundRepeat
+    self.ground:SetTexCoord(cx / rep, (cx + BW) / rep, cy / rep, (cy + VIEW_H) / rep)
     if self.treeDirty or self.lastCamX ~= cx or self.lastCamY ~= cy then
         self:DrawTrees()
         self.treeDirty = false
@@ -1075,11 +1108,24 @@ function P:Draw()
             end
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             local size = e.size * TILE
-            t.art:SetTexture(ART .. BUILDING_ART[e.type])
-            t.art:SetSize(size + 4, size + 4)
-            Place(t.art, self.view, px + size / 2, py + size / 2)
-            t.art:SetAlpha((e.progress or 1) < 1 and 0.5 + 0.5 * e.progress or 1)
-            t.art:Show()
+            local look = ns.WC.ART.models[e.type]
+            if t.model == nil then t.model = MakeDoodad(self.buildLayer) or false end
+            local alpha = (e.progress or 1) < 1 and 0.45 + 0.55 * e.progress or 1
+            if t.model and look then
+                local ms = size * look.grow
+                t.model:SetSize(ms, ms)
+                t.model:Use(look.file, look.cam, look.facing, look.pitch)
+                Place(t.model, self.view, px + size / 2, py + size / 2 - (look.y or 0))
+                t.model:SetAlpha(alpha)
+                t.model:Show()
+                t.art:Hide()
+            else
+                t.art:SetTexture(ART .. BUILDING_ART[e.type])
+                t.art:SetSize(size + 4, size + 4)
+                Place(t.art, self.view, px + size / 2, py + size / 2)
+                t.art:SetAlpha(alpha)
+                t.art:Show()
+            end
             t.sel:SetShown(selected[id] == true)
             t.sel:SetSize(size + 6, size + 6)
             Place(t.sel, self.view, px + size / 2, py + size / 2)
@@ -1121,6 +1167,7 @@ function P:Draw()
     for j = bi + 1, #self.buildTex do
         local t = self.buildTex[j]
         t.art:Hide() t.sel:Hide() t.bar:Hide() t.barBg:Hide() t.team:Hide()
+        if t.model then t.model:Hide() end
     end
     -- Units.
     local seen = {}
