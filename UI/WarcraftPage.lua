@@ -240,15 +240,13 @@ local function MakeUnitModel(parent)
         actor:SetModelByCreatureDisplayID(disp)
         self:Fit()
     end
-    -- Facing a screen direction (0 right, pi/2 down, towards the viewer).
+    -- Facing a screen direction (0 right, pi/2 down, towards the viewer): the
+    -- same turn the old unit frames used (SetFacing(pi/2 - phi)), counted
+    -- from looking straight at the camera.
     function sc:SetFacing(phi)
-        local f, r = CameraDirs(self, view.yaw, view.bpitch)
-        local fl = math.max(math.sqrt(f[1] ^ 2 + f[2] ^ 2), 0.0001)
-        local rl = math.max(math.sqrt(r[1] ^ 2 + r[2] ^ 2), 0.0001)
-        local c, s = math.cos(phi), math.sin(phi)
-        local dx = c * r[1] / rl - s * f[1] / fl
-        local dy = c * r[2] / rl - s * f[2] / fl
-        if actor.SetYaw then actor:SetYaw(ATAN2(dy, dx)) end
+        local f = CameraDirs(self, view.yaw, view.bpitch)
+        local toCamera = ATAN2(-f[2], -f[1])
+        if actor.SetYaw then actor:SetYaw(toCamera + math.pi / 2 - phi) end
     end
     function sc:SetAnimation(anim)
         if actor.SetAnimation then actor:SetAnimation(anim) end
