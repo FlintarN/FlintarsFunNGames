@@ -137,17 +137,16 @@ function W.PlaySound(kit, alert)
     if PlaySound and SOUNDKIT and SOUNDKIT[kit] then PlaySound(SOUNDKIT[kit]) end
 end
 
--- A sound file from the game (by file id). kind "game": the games' own audio
--- (unit voices, combat, spells; needs Sounds and Game audio on); "alert": a
--- warning (Alerts on); "voice": game audio, but a new voice cuts off the last
--- one, like Warcraft III.
+-- A sound file from the game (by file id). kind "game": a game sound (Game
+-- sounds on); "voice": the same, but a new voice cuts off the last one, like
+-- Warcraft III; "alert": an alert (Alerts on).
 local lastVoice
 function W.PlayFile(id, kind)
     local db = ns.db or {}
     if not id then return end
     if kind == "alert" then
         if db.alertSound == false then return end
-    elseif db.sound == false or db.gameSound == false then
+    elseif db.sound == false then
         return
     end
     if type(id) == "table" then id = id[math.random(#id)] end

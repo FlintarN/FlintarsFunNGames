@@ -359,7 +359,7 @@ function WcDemo()
     check(view.unitFrames[hawk.id].shadow ~= nil, "wc looks: a flyer's shadow")
 
     -- Sound: a voice when selected or ordered, annoyed when clicked a lot;
-    -- the Game audio switch mutes it, alerts have their own switch.
+    -- the Game sounds switch mutes it.
     local S = WC.Sounds
     local function Has(list, id) for _, x in ipairs(list) do if x == id then return true end end end
     local foot
@@ -374,17 +374,15 @@ function WcDemo()
     view.lastAck = nil
     view:Smart(foot.x + 2, foot.y)
     check(#SOUND_FILES == 1 and Has(S.Voices.footman.yes, SOUND_FILES[1]), "wc sound: yes, on the move")
-    ns.db.gameSound = false
+    SOUND_FILES = {}
+    view:Say("Not enough gold or lumber")
+    check(#SOUND_FILES == 1 and SOUND_FILES[1] == S.Error, "wc sound: the warning sound")
+    ns.db.sound = false
     SOUND_FILES = {}
     view:SelectAt(foot.x, foot.y)
-    check(#SOUND_FILES == 0, "wc sound: Game audio off: quiet")
     view:Say("Not enough gold or lumber")
-    check(#SOUND_FILES == 1 and SOUND_FILES[1] == S.Error, "wc sound: warnings still play (Alerts)")
-    ns.db.alertSound = false
-    SOUND_FILES = {}
-    view:Say("Not enough gold or lumber")
-    check(#SOUND_FILES == 0, "wc sound: Alerts off: quiet")
-    ns.db.gameSound, ns.db.alertSound = true, true
+    check(#SOUND_FILES == 0, "wc sound: Game sounds off: quiet, warnings too")
+    ns.db.sound = true
     -- Every unit has a voice, every hero ability a sound.
     local mute = {}
     for k, u in pairs(WC.Units) do

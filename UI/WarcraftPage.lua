@@ -925,7 +925,7 @@ local WARN = { "^Not enough", "^Can't", "^Requires", "^Bring a hero", "^The hero
 function P:Say(text)
     if Snd() then
         for _, w in ipairs(WARN) do
-            if tostring(text):find(w) then W.PlayFile(Snd().Error, "alert") break end
+            if tostring(text):find(w) then W.PlayFile(Snd().Error, "game") break end
         end
     end
     self.status:SetText(text)
@@ -2664,7 +2664,7 @@ function P:Sounds(events)
             local a, t = st.ents[ev.id], st.ents[ev.target]
             if t and t.owner == ME and (not self.alarmT or Now() - self.alarmT > 20) and not self:OnScreen(t.x, t.y) then
                 self.alarmT = Now()
-                W.PlayFile(S.UnderAttack, "alert")
+                W.PlayFile(S.UnderAttack, "game")
                 self:Say(t.kind == "unit" and "Our forces are under attack!" or "Our base is under attack!")
             end
             if a and t and self:OnScreen(t.x, t.y) and self:Sees(t) and Room() then

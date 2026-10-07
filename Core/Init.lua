@@ -117,9 +117,8 @@ end
 local DEFAULTS = {
     popup = true,         -- open the window when someone starts a game
     turnPopup = true,     -- open the window when it's your turn
-    sound = true,         -- every sound the addon makes
-    alertSound = true,    -- alerts and warnings: your turn, disconnects, under attack
-    gameSound = true,     -- the games' own audio: unit voices, combat, spells
+    sound = true,         -- game sounds: everything inside the games
+    alertSound = true,    -- alerts: your turn, disconnects
     minimap = true,
     realmLobbies = true,  -- join the hidden realm channel for Arcade lobbies
     scale = 1,
@@ -183,7 +182,7 @@ local HELP = {
     "/fng - open or close the window",
     "/fng popup - turn the automatic pop-up on or off",
     "/fng reset - move the window back to the middle of the screen",
-    "/fng mute - turn the addon's sounds off or on",
+    "/fng mute - turn the game sounds off or on (alerts stay)",
     "/fng debug - print what the addon reads from roll messages",
     "/fng dc <bot> - practice: make a bot go offline, or come back",
 }

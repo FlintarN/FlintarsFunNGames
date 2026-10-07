@@ -160,5 +160,5 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 ## Sound (next, after the looks)
 - [x] Warcraft III: the real Warcraft III unit voices that are in WoW's files (sound/creature/peasant, peon, footman, grunt, rifleman, tauren...: "yes", "what", "ready", attack, warcry, pissed when clicked a lot); WoW NPC voices for the rest. Ready-when-trained, "work complete", "we're under attack", "not enough gold/lumber", building/construction and death sounds, spell sounds from sound/spells, weapon hits, gold mining and chopping, victory/defeat music.
 - Hearthstone: card play and draw, minion attack/death sounds from each creature's own WoW sounds, spell sounds, hero emotes/lines, turn start and timer warning, victory/defeat, a menu/queue sound.
-- [x] Switches: Game audio, Alerts and warnings. Only on/off switches, no volume sliders (WoW's own volume settings handle that).
+- [x] Two switches: Game sounds (everything inside the games) and Alerts (your turn, disconnects). Only on/off switches, no volume sliders (WoW's own volume settings handle that).
 - [ ] Missing: footsteps, mining/chopping, construction, victory/defeat music.

@@ -48,24 +48,21 @@ function P:Build(page)
     left:SetWidth(262)
     local db = function() return ns.db end
     self.checks = {
-        Check(left, -32, "Sounds", "Every sound the addon makes: dice, cards, coins, reels. Turn off to mute the addon.",
+        Check(left, -32, "Game sounds", "Everything inside the games: dice, cards, coins, reels, and Warcraft III's "
+            .. "voices, battles, spells and warnings.",
             function() return db().sound ~= false end, function(v) db().sound = v end),
-        Check(left, -58, "Alerts and warnings", "The ready-check sound on your turn, a warning when a player "
-            .. "disconnects, and in Warcraft III \"we're under attack\" and \"not enough gold\". Works even with Sounds off.",
+        Check(left, -58, "Alerts", "When it's your turn, and when a player disconnects. Works even with Game sounds off.",
             function() return db().alertSound ~= false end, function(v) db().alertSound = v end),
-        Check(left, -84, "Game audio", "The games' own sounds: unit voices, swords, guns and spells in Warcraft III. "
-            .. "Turn off to keep the rest.",
-            function() return db().gameSound ~= false end, function(v) db().gameSound = v end),
-        Check(left, -110, "Pop up when a game starts", "Open the window when someone in your group starts a game.",
+        Check(left, -84, "Pop up when a game starts", "Open the window when someone in your group starts a game.",
             function() return db().popup ~= false end, function(v) db().popup = v end),
-        Check(left, -136, "Open the window on your turn", "If the window is closed when it's your turn, open it.",
+        Check(left, -110, "Open the window on your turn", "If the window is closed when it's your turn, open it.",
             function() return db().turnPopup ~= false end, function(v) db().turnPopup = v end),
-        Check(left, -162, "Minimap button", "The dice on the edge of the minimap.",
+        Check(left, -136, "Minimap button", "The dice on the edge of the minimap.",
             function() return db().minimap ~= false end, function(v)
                 db().minimap = v
                 ns.Minimap:SetShown(v)
             end),
-        Check(left, -188, "Realm lobbies (Arcade)", "Join a hidden realm channel so you can see and host Arcade lobbies "
+        Check(left, -162, "Realm lobbies (Arcade)", "Join a hidden realm channel so you can see and host Arcade lobbies "
             .. "open to the whole realm. It never shows in your chat.",
             function() return db().realmLobbies ~= false end, function(v)
                 db().realmLobbies = v
@@ -74,7 +71,7 @@ function P:Build(page)
     }
 
     local sizeLabel = W.Label(left, "Window size", "GameFontHighlight")
-    sizeLabel:SetPoint("TOPLEFT", 16, -226)
+    sizeLabel:SetPoint("TOPLEFT", 16, -200)
     self.sizeText = W.Label(left, "", "GameFontNormal")
     self.sizeText:SetPoint("LEFT", sizeLabel, "RIGHT", 60, 0)
     local function Step(dir)
