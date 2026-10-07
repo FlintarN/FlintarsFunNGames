@@ -70,3 +70,34 @@ S.UnderAttack = 567397
 -- Units that fire guns rather than bows.
 S.GUNS = { rifleman = true, mortar_team = true, flying_machine = true, siege_engine = true }
 
+-- Work: a pickaxe in the mine, an axe in the trees, a hammer on a building.
+S.Mine = { 567564, 567575 }
+S.Chop = { 567639, 567638, 567627 }
+S.Hammer = { 567731, 567791, 567725 }
+-- Done researching or upgrading; buying; items.
+S.Researched = 567431
+S.Buy = 567413
+S.Items = { healing_potion = 567555, mana_potion = 567555, town_portal = 569735 }
+S.ItemDefault = 567489
+-- Clicking a building of yours, by what it is.
+S.Buildings = {
+    default = 567567, hall = 567409, farm = 567558, altar = 568371, shop = 567428, smith = 567725, tower = 567554,
+}
+S.BUILDING_KIND = {
+    town_hall = "hall", keep = "hall", castle = "hall", great_hall = "hall", stronghold = "hall", fortress = "hall",
+    farm = "farm", orc_burrow = "farm", altar_kings = "altar", altar_storms = "altar", arcane_vault = "shop",
+    voodoo_lounge = "shop", blacksmith = "smith", war_mill = "smith", workshop = "smith", scout_tower = "tower",
+    guard_tower = "tower", watch_tower = "tower",
+}
+-- Victory and defeat.
+S.Victory = { human = 567408, orc = 567495 }
+S.Defeat = 567488
+-- Machines and summons that don't talk.
+S.Voices.catapult = { what = { 567558 }, yes = { 567558 }, attack = { 567558 }, ready = { 567558 } }
+S.Voices.target_dummy = { what = { 567567 }, death = { 567567 } }
+S.Voices.sheep = { what = { 560229 }, death = { 560229 } }
+for lv = 1, 3 do
+    S.Voices["serpent_ward" .. lv] = { what = { 568287 }, ready = { 568287 } }
+end
+S.Voices.healing_ward = { what = { 568287 }, ready = { 568287 } }
+

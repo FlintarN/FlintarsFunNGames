@@ -869,7 +869,7 @@ function P:GameOver()
     self.overSub:SetText(string.format("%s, %d:%02d played. Wins %d, losses %d.",
         WC().DIFFICULTY[st.difficulty or "normal"].name, math.floor(st.time / 60),
         math.floor(st.time % 60), rec.wins, rec.losses))
-    W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+    W.PlayFile(won and Snd().Victory[self.st.players[ME].faction] or Snd().Defeat, "game")
     ns.Changed()
 end
 
@@ -964,12 +964,11 @@ function P:Events(events)
             else
                 self:Say("The enemy sounds the alarm!")
             end
-            W.PlaySound("RAID_WARNING")
+            W.PlayFile(Snd().UnderAttack, "game")
         elseif ev.kind == "cast" then
             local a = WC().Abilities[ev.ability]
             if ev.owner == ME then self:Say(a.name) end
             if ev.x then self:Flash(ev.x, ev.y, ev.ability) end
-            W.PlaySound("U_CHAT_SCROLL_BUTTON")
         elseif ev.kind == "bolt" then
             local a, t = self.st.ents[ev.id], self.st.ents[ev.target]
             if a and t then
@@ -979,7 +978,6 @@ function P:Events(events)
             end
         elseif ev.kind == "levelUp" and ev.owner == ME then
             self:Say(WC().Units[ev.type].name .. " reached level " .. ev.level .. "!")
-            W.PlaySound("LEVELUP")
         elseif ev.kind == "heroDied" then
             self:Say(ev.owner == ME and ("Your " .. WC().Units[ev.type].name .. " has fallen. Revive at the altar.")
                 or ("Enemy " .. WC().Units[ev.type].name .. " slain!"))
@@ -989,12 +987,8 @@ function P:Events(events)
             local r = WC().Research[ev.key]
             self:Say(ev.upgrade and (WC().Buildings[ev.upgrade].name .. " ready")
                 or ((r.names and r.names[ev.level] or r.name) .. " researched"))
-            W.PlaySound("IG_MAINMENU_OPTION")
-        elseif ev.kind == "trained" and ev.owner == ME then
-            W.PlaySound("U_CHAT_SCROLL_BUTTON")
         elseif ev.kind == "built" and ev.owner == ME then
             self:Say(WC().Buildings[ev.type].name .. " finished")
-            W.PlaySound("IG_MAINMENU_OPTION")
         elseif ev.kind == "cantBuild" and ev.owner == ME then
             self:Say("Can't build there")
         elseif ev.kind == "treeDown" then
@@ -1149,6 +1143,9 @@ function P:SelectAt(x, y, add)
     end
     if e.owner == ME and e.kind == "unit" and Snd() and Snd().Voices[e.type] then
         self:Voice(e, "what")
+    elseif e.owner == ME and e.kind == "building" and Snd() then
+        local S = Snd()
+        W.PlayFile(S.Buildings[S.BUILDING_KIND[e.type] or "default"], "game")
     else
         W.PlaySound("U_CHAT_SCROLL_BUTTON")
     end
@@ -2627,6 +2624,7 @@ end
 
 -- Units you ordered acknowledge (one voice, not one per unit).
 function P:Acknowledge(cmd)
+    if cmd.type == "buy" and Snd() then W.PlayFile(Snd().Buy, "game") end
     if self.lastAck and Now() - self.lastAck < 0.3 then return end
     local t = cmd.type
     local kind = (t == "attack" or t == "attackMove") and "attack"
@@ -2645,6 +2643,30 @@ end
 function P:OnScreen(x, y)
     local px, py = x * TILE - self.camX, y * TILE - self.camY
     return px > -40 and px < BW + 40 and py > -40 and py < VIEW_H + 40
+end
+
+-- Workers at work on screen: an axe in the trees, a hammer on buildings.
+-- A sound every second or so, a few at most.
+function P:WorkSounds()
+    local S, st = Snd(), self.st
+    if not S or not st or self.paused then return end
+    local now = Now()
+    if now < (self.workSndT or 0) then return end
+    self.workSndT = now + 0.45
+    self.workSnd = self.workSnd or {}
+    local n = 0
+    for _, id in ipairs(st.list) do
+        local u = st.ents[id]
+        local o = u and u.kind == "unit" and u.order
+        local kind = o and ((o.type == "gather" and o.res == "lumber" and u.phase == "work" and "chop")
+            or (o.type == "build" and o.site and not u.insideBuild and "hammer"))
+        if kind and self:OnScreen(u.x, u.y) and self:Sees(u) and now >= (self.workSnd[id] or 0) then
+            self.workSnd[id] = now + 1.1 + (id % 5) * 0.08
+            W.PlayFile(kind == "chop" and S.Chop or S.Hammer, "game")
+            n = n + 1
+            if n >= 2 then break end
+        end
+    end
 end
 
 function P:Sounds(events)
@@ -2698,7 +2720,15 @@ function P:Sounds(events)
             self:Voice({ type = ev.type, id = ev.id }, "ready")
         elseif k == "built" and ev.owner == ME then
             local w = Snd().Voices[WC().Factions[st.players[ME].faction].worker]
-            if w and w.done then W.PlayFile(w.done, "voice") end
+            W.PlayFile(w and w.done or S.Researched, w and w.done and "voice" or "game")
+        elseif k == "researched" and ev.owner == ME then
+            W.PlayFile(S.Researched, "game")
+        elseif k == "mined" then
+            local u = st.ents[ev.id]
+            if u and self:OnScreen(u.x, u.y) and Room() then W.PlayFile(S.Mine, "game") end
+        elseif k == "useItem" then
+            local u = st.ents[ev.id]
+            if u and (ev.owner == ME or self:OnScreen(u.x, u.y)) then W.PlayFile(S.Items[ev.item] or S.ItemDefault, "game") end
         elseif k == "levelUp" and ev.owner == ME then
             W.PlayFile(S.LevelUp, "game")
         end
@@ -2969,7 +2999,7 @@ function P:RefreshPvp(s)
             elseif not draw then
                 rec.pvpLosses = rec.pvpLosses + 1
             end
-            W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+            W.PlayFile(won and Snd().Victory[self.st.players[ME].faction] or Snd().Defeat, "game")
         end
         local rec = Save()
         local score = {}
@@ -3377,6 +3407,7 @@ do
     function P:Draw()
         Draw(self)
         self:DrawFx()
+        self:WorkSounds()
     end
 end
 

@@ -383,6 +383,16 @@ function WcDemo()
     view:Say("Not enough gold or lumber")
     check(#SOUND_FILES == 0, "wc sound: Game sounds off: quiet, warnings too")
     ns.db.sound = true
+    -- A building of yours makes its sound when clicked; buying rings a coin.
+    local farm
+    for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.type == "farm" and e.owner == 1 then farm = e end end
+    view.camX, view.camY = farm.x * 20 - 300, farm.y * 20 - 150
+    SOUND_FILES = {}
+    view:SelectAt(farm.x + 1, farm.y + 1)
+    check(SOUND_FILES[1] == S.Buildings.farm, "wc sound: a farm sounds like a farm")
+    SOUND_FILES = {}
+    view:Acknowledge({ type = "buy" })
+    check(SOUND_FILES[1] == S.Buy, "wc sound: a coin when you buy")
     -- Every unit has a voice, every hero ability a sound.
     local mute = {}
     for k, u in pairs(WC.Units) do

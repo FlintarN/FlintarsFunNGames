@@ -161,7 +161,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 Two switches only: Game sounds (inside the games) and Alerts (your turn, disconnects). No volume sliders.
 1. [x] Hearthstone: card draw, play, mulligan; each minion's voice when played, attacking and dying (WoW NPC voices by race, beast/murloc/elemental/demon sounds); spells by school (fire, frost, arcane, nature, lightning, holy, shadow, physical); hero power; hero attacks; heal, armor, freeze, Divine Shield; weapons equip/break; your turn and the turn timer running out; victory and defeat; opponent found.
 2. [x] Arcade games: Tetris (move, rotate, drop, line, Tetris, level up), Snake (eat, crash), Flappy (flap, point, crash), 2048 (slide, merge), Minesweeper (reveal, flag, boom, win), Wordle (type, enter, right/close/wrong, win), Candy Crush (swap, match, combo, special), Angry Birds (launch, hit, pig pops, level done), Shooter (shoot, hit, explode, power-up), Agar.io (eat, split, eaten), Tic-Tac-Toe and Battleship (place, hit, miss, sink).
-3. [ ] Warcraft III leftovers: mining and chopping, construction hammering, research/upgrade done, buying and drinking, building click sounds, Catapult and summons, victory and defeat music.
+3. [x] Warcraft III leftovers: mining and chopping, construction hammering, research/upgrade done, buying and drinking, building click sounds, Catapult and summons, victory and defeat music.
 - [x] Warcraft III: unit voices (the real Warcraft III ones where WoW has them), combat, deaths, spells, warnings, level-up.
 
 ## Warcraft III custom games and maps (research in dev/research/, build later)
