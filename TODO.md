@@ -15,7 +15,6 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
      - Solo games, next batch: Temple Run, Subway Surfers, Survivor (Roguelike), Tower Defense.
   Note: casino games stay group-only (/roll fairness needs a group) unless we add combined sealed-secret dice.
 
-- [ ] Final name (front-runner: High Roller; also liked: All In). Check CurseForge for clashes, then rename (folder, TOC, SavedVariables, prefix, slash, slot sign, docs).
 - [ ] One big group test with friends, all games: pop-up and Join, rolls picked up from other players, check marks, poker hole cards by whisper, deal check, stats on both sides.
 
 ## Later
@@ -32,9 +31,8 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 - [ ] "Paid" button: mark a debt as paid, and a trade helper that fills in the gold.
 - [ ] Host tools: remove a player, last call, remind players who have not rolled, skip a player who left mid-game.
 - [ ] Optional chat announcements of results.
-- [ ] CurseForge listing and packaging.
 
-- [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, Classic-set class cards (secrets, combo, stealth, enrage), a card choice for Tracking.
+- [ ] Hearthstone next steps: secrets, deathrattle cards, Classic-set class cards (combo, stealth, enrage), a card choice for Tracking.
 
 - [ ] Warcraft III: see the roadmap below.
 
@@ -101,7 +99,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Upkeep: less gold per trip above 50 and 80 food, shown in the resource bar.
 
 ### 6. The map and the match
-- [ ] Fog of war and the black mask (explored / seen), unit sight ranges, shared sight for allies.
+- [ ] Shared sight for allies (fog of war itself is done).
 - [ ] Day and night cycle (shorter sight at night, Night Elf bonuses).
 - [ ] Creep camps around the map (WoW creatures) that guard expansions and give heroes experience and item drops; a neutral shop and mercenary camp.
 - [ ] Bigger maps, more than one map, map picker; 4 players (2 vs 2 against the AI).
