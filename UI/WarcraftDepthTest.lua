@@ -1,76 +1,69 @@
--- /wc3dtest: a test window for drawing the Warcraft III map as ONE 3D scene
--- (so things lower on the map are always in front). Three panels try the
--- same layout at different camera distances; the one that shows three farms
--- stacked correctly (the lowest in front) tells which distances WoW draws.
-local ADDON, ns = ...
+-- /wc3dtest: which way of drawing makes WoW layer overlapping 3D models like
+-- 2D (lower on the map = in front)? Each panel draws three farms the way the
+-- game does (one model frame each, overlapping) plus a tower behind them,
+-- and tries one fix. The panel where the lowest farm is fully in front and
+-- the tower is behind is the fix to use.
+local _, ns = ...
 
-local ATAN2 = math.atan2 or math.atan
 local FARM, TOWER = 242696, 2061081
-local PW, PH = 240, 300 -- each panel
+local PW, PH, FS = 180, 260, 120 -- panel, model frame
+local YAW, PITCH, FOV = math.pi, 0.55, 0.6
 
--- A scene whose actors are placed by screen pixel and depth row.
--- base: camera distance of the front row.
-local function MakeScene(parent, base)
+-- One model frame. how(i, dist, r) returns near, far, distance, fov for the
+-- i-th item from the front (1 = lowest on the map).
+local function Item(parent, file, x, y, i, how)
     local sc = CreateFrame("ModelScene", nil, parent)
-    if not sc.CreateActor then return nil end
-    sc:SetSize(PW, PH)
-    local yaw, pitch, fov = math.pi, 0.55, 0.05
-    sc:SetCameraFieldOfView(fov)
-    if sc.SetCameraNearClip then sc:SetCameraNearClip(base / 3) end
-    if sc.SetCameraFarClip then sc:SetCameraFarClip(base * 100) end
-    sc:SetCameraPosition(0, 0, 0)
-    sc:SetCameraOrientationByYawPitchRoll(yaw, pitch, 0)
-    local f = { math.cos(pitch) * math.cos(yaw), math.cos(pitch) * math.sin(yaw), -math.sin(pitch) }
-    local r = { math.sin(yaw), -math.cos(yaw), 0 }
-    if sc.GetCameraForward then
-        local x, y, z = sc:GetCameraForward()
-        if x then f = { x, y, z } end
-    end
-    if sc.GetCameraRight then
-        local x, y, z = sc:GetCameraRight()
-        if x then r = { x, y, z } end
-    end
-    local u = { r[2] * f[3] - r[3] * f[2], r[3] * f[1] - r[1] * f[3], r[1] * f[2] - r[2] * f[1] }
-    if sc.GetCameraUp then
-        local x, y, z = sc:GetCameraUp()
-        if x then u = { x, y, z } end
-    end
-    local F = (PH / 2) / math.tan(fov / 2)
-    local yaw0 = ATAN2(f[2], f[1]) + math.pi
-    sc.items = {}
-    -- A model whose base centre stands at (px, py), `size` pixels wide, at depth row `row`.
-    function sc:Add(file, px, py, row, size)
-        local a = self:CreateActor()
-        a:SetModelByFileID(file)
-        table.insert(self.items, { a = a, px = px, py = py, row = row, size = size })
-    end
-    function sc:Place()
-        for _, it in ipairs(self.items) do
-            local a = it.a
-            local x1, y1, z1, x2, y2, z2 = a:GetActiveBoundingBox()
-            if x1 and x2 and x2 > x1 then
-                local k = it.size / math.max(x2 - x1, y2 - y1)
-                local t = base * 1.035 ^ ((20 - it.row) * 4)
-                local s = k * t / F
-                local sx, sy = (it.px - PW / 2) / F, (PH / 2 - it.py) / F
-                local mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-                local c, si = math.cos(yaw0), math.sin(yaw0)
-                local rx, ry = mx * c - my * si, mx * si + my * c
-                a:SetYaw(yaw0)
-                a:SetScale(s)
-                a:SetPosition((f[1] + r[1] * sx + u[1] * sy) * t - s * rx, (f[2] + r[2] * sx + u[2] * sy) * t - s * ry,
-                    (f[3] + r[3] * sx + u[3] * sy) * t - s * z1)
-            end
+    if not sc.CreateActor then return end
+    sc:SetSize(FS, FS)
+    sc:SetPoint("TOPLEFT", x, -y)
+    local a = sc:CreateActor()
+    a:SetModelByFileID(file)
+    sc:SetScript("OnUpdate", function(self)
+        local x1, y1, z1, x2, y2, z2 = a:GetActiveBoundingBox()
+        if not x1 or not x2 or x2 <= x1 then return end
+        local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
+        local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
+        local dist = r / math.tan(FOV / 2)
+        local near, far, d, fov = how(i, dist, r)
+        self:SetCameraFieldOfView(fov)
+        if self.SetCameraNearClip then self:SetCameraNearClip(near) end
+        if self.SetCameraFarClip then self:SetCameraFarClip(far) end
+        self:SetCameraOrientationByYawPitchRoll(YAW, PITCH, 0)
+        local fx, fy, fz = 1, 0, 0
+        if self.GetCameraForward then
+            local gx, gy, gz = self:GetCameraForward()
+            if gx then fx, fy, fz = gx, gy, gz end
         end
-    end
-    return sc
+        self:SetCameraPosition(cx - fx * d, cy - fy * d, cz - fz * d)
+    end)
 end
+
+-- The fixes. The plain one is today's game.
+local FIXES = {
+    { name = "as now", how = function(_, dist) return 0.1, 5000, dist, FOV end },
+    -- Near clip close to the model for the front one, far for the back
+    -- ones: the depth each writes is squeezed into its own band.
+    { name = "near clip A", how = function(i, dist, r)
+        local c = ({ 0.9, 0.45, 0.2, 0.08 })[i]
+        return (dist - r) * c, 100000, dist, FOV
+    end },
+    { name = "near clip B", how = function(i, dist, r)
+        local c = ({ 0.08, 0.2, 0.45, 0.9 })[i]
+        return (dist - r) * c, 100000, dist, FOV
+    end },
+    -- The camera further away for the back ones, with a narrower lens so
+    -- they look the same size.
+    { name = "distance", how = function(i, dist, r)
+        local d = dist + (i - 1) * 3 * r
+        return 1, 100000, d, 2 * math.atan(math.tan(FOV / 2) * dist / d)
+    end },
+}
 
 local function Open()
     local g = ns.WcDepthTest
     if not g then
         g = CreateFrame("Frame", "FunNGamesWc3dTest", UIParent, "BasicFrameTemplateWithInset")
-        g:SetSize(3 * PW + 60, PH + 80)
+        g:SetSize(#FIXES * (PW + 10) + 30, PH + 90)
         g:SetPoint("CENTER")
         g:SetFrameStrata("DIALOG")
         g:SetMovable(true)
@@ -81,34 +74,24 @@ local function Open()
         tinsert(UISpecialFrames, "FunNGamesWc3dTest")
         local title = g:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         title:SetPoint("TOP", 0, -5)
-        title:SetText("Warcraft III: 3D test - which panel shows the farms?")
-        g.scenes = {}
-        for i, base in ipairs({ 15, 150, 1500 }) do
-            local bg = g:CreateTexture(nil, "BACKGROUND")
-            bg:SetSize(PW, PH)
-            bg:SetPoint("TOPLEFT", 20 + (i - 1) * (PW + 10), -50)
+        title:SetText("Warcraft III 3D test: where is the lowest farm fully in front?")
+        for p, fix in ipairs(FIXES) do
+            local panel = CreateFrame("Frame", nil, g)
+            panel:SetSize(PW, PH)
+            panel:SetPoint("TOPLEFT", 20 + (p - 1) * (PW + 10), -40)
+            local bg = panel:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
             bg:SetColorTexture(0.25, 0.4, 0.15, 1)
-            local sc = MakeScene(g, base)
-            if sc then
-                sc:SetPoint("TOPLEFT", bg, "TOPLEFT")
-                -- Three farms in a column, each a bit lower (and so in front),
-                -- and a tower behind them.
-                sc:Add(TOWER, 150, 120, 6, 45)
-                sc:Add(FARM, 120, 150, 8, 70)
-                sc:Add(FARM, 120, 190, 10, 70)
-                sc:Add(FARM, 120, 230, 12, 70)
-                table.insert(g.scenes, sc)
-            end
-            local label = g:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
-            label:SetPoint("TOP", bg, "BOTTOM", 0, -4)
-            label:SetText(tostring(i))
+            -- Front to back (so frame order alone would get it wrong): three
+            -- farms, each higher up (further back), then the tower behind.
+            Item(panel, FARM, 40, 130, 1, fix.how)
+            Item(panel, FARM, 30, 90, 2, fix.how)
+            Item(panel, FARM, 20, 50, 3, fix.how)
+            Item(panel, TOWER, 50, 0, 4, fix.how)
+            local label = g:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            label:SetPoint("TOP", panel, "BOTTOM", 0, -6)
+            label:SetText(p .. ": " .. fix.name)
         end
-        g:SetScript("OnUpdate", function(self, elapsed)
-            self.t = (self.t or 0) + elapsed
-            if self.t < 0.2 then return end
-            self.t = 0
-            for _, sc in ipairs(self.scenes) do sc:Place() end
-        end)
         ns.WcDepthTest = g
     end
     g:Show()
