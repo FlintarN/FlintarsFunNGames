@@ -116,6 +116,11 @@ function AI.Think(st, p)
     elseif barracks == 1 and diff.secondRax and st.time > diff.secondRax and pl.gold > 450 then
         Build(f.barracks)
     end
+    -- A tower by the hall (not on Easy).
+    local towers = (count.buildings[f.tower] or 0) + (count.building[f.tower] or 0)
+    if diff.alarm and barracks >= 1 and towers == 0 and st.time > 300 and pl.gold > 300 then
+        if Build(f.tower) then return end
+    end
     -- Soldiers: melee and ranged in turn.
     for _, id in ipairs(st.list) do
         local b = st.ents[id]

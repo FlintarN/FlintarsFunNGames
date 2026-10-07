@@ -21,7 +21,8 @@ local MM_SCALE = 2              -- minimap pixels per tile
 local EDGE, SCROLL = 10, 650    -- edge scrolling
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 } }
 local BUILDING_ART = {
-    town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks",
+    town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks", guard_tower = "WcFarm", altar_kings = "WcFarm",
+    watch_tower = "WcBurrow", altar_storms = "WcBurrow",
     great_hall = "WcGreatHall", orc_burrow = "WcBurrow", orc_barracks = "WcOrcBarracks", gold_mine = "WcMine",
 }
 
@@ -91,7 +92,9 @@ local function MakeDoodad(parent)
         self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
         local fx, fy, fz = 1, 0, 0
         if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
-        local dist = r / math.tan(view.fov / 2) * view.margin
+        local fit = ns.WC.ART.fit[self.file] or {}
+        cz = cz + r * (fit.up or 0)
+        local dist = r / math.tan(view.fov / 2) * view.margin * (fit.margin or 1)
         self:SetCameraPosition(cx - fx * dist, cy - fy * dist, cz - fz * dist)
     end
     function sc:Fit()
@@ -1638,6 +1641,28 @@ local GALLERY = {
     { 2321276, "arathi windmill 03" }, { 1709395, "kultiras_chickencoop" }, { 948466, "garrison_farm_well" },
     { 198672, "wreckedbuilding base01" }, { 198673, "wreckedbuilding base02" }, { 198674, "wreckedbuilding base03" },
     { 929365, "garrison blacksmith forge" }, { 1958817, "kultiras blacksmith forge" }, { 959598, "salvageyard forge" },
+    -- 141+: more buildings (no bonfires or totems).
+    { 1083858, "ashran alliance lumbershack" }, { 1083871, "ashran alliance towershack" }, { 1083857, "ashran alliance tenttown" },
+    { 1083866, "ashran alliance tent" }, { 1850545, "human_tent01 (bfa)" }, { 1990244, "human_tent02 (bfa)" },
+    { 1990237, "human_tent03 (bfa)" }, { 1634387, "kultiras_tent01" }, { 1634680, "kultiras_tent02" },
+    { 1659553, "kultiras_tent03" }, { 942929, "garrison enchanting tent" }, { 950140, "garrison jewelcrafting tent" },
+    { 951937, "garrison inscription tent" }, { 951944, "garrison tailoring tent" }, { 198621, "stormwind vendortent01" },
+    { 384480, "stormwind vendortent02" }, { 194712, "loghouse_gh_02" }, { 194713, "loghouse_gh_03" },
+    { 255406, "loghouse_darkshore_02" }, { 255407, "loghouse_darkshore_03" }, { 1501498, "karazhan opera house" },
+    { 1676043, "witch_hut01" }, { 793024, "dalaran tower base" }, { 1121823, "night elf druid tower" },
+    { 571929, "pandaren house woodframe" }, { 574603, "pandaren countryhouse" }, { 1080965, "draenor house set 1" },
+    { 1080966, "draenor house set 2" }, { 1080967, "draenor house set 3" }, { 1080969, "draenor house set 4" },
+    { 1080664, "draenor storagehut" }, { 1080668, "draenor fishinghut" }, { 1006258, "orc garrison guardshack" },
+    { 1135244, "ashran horde tower" }, { 1083861, "ashran horde townhall entrance" }, { 1883494, "horde siegetower" },
+    { 959163, "warsong_tent01" }, { 959686, "warsong_tent_grunt01" }, { 875065, "orcclans_tent01" },
+    { 987012, "shadowmoon_tent01" }, { 1116048, "bleedinghollow_tent01" }, { 874687, "ironhorde_tent01" },
+    { 878882, "ironhorde_tent02" }, { 999668, "ironhorde gunbunker" }, { 2322505, "warsong bg orctent01" },
+    { 2322506, "warsong bg orctent02" }, { 660417, "orctent05" }, { 412262, "dragonmaw_orctent01" },
+    { 1134449, "legion_barracks01" }, { 1266313, "legion_barrackssmall01" }, { 981084, "highmaul tower02" },
+    { 981086, "highmaul tower03" }, { 309145, "goblin_guardtower_01" }, { 316229, "pygmy_guard_tower" },
+    { 200660, "undercitytower01" }, { 200661, "undercitytower02" }, { 1091580, "murloc_hut01" },
+    { 1811536, "quillboar_hut01 (bfa)" }, { 195726, "wolvar_hut01" }, { 376272, "earthen_building_01" },
+    { 667816, "troll_tent_01" }, { 1608321, "blood troll tent01" }, { 2176404, "venture company tent" },
 }
 local COLS, ROWS = 6, 3
 

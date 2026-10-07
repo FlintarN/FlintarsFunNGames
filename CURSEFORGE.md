@@ -36,7 +36,7 @@ The card game, in WoW, against the computer.
 
 ### Warcraft III
 
-A small real-time strategy game against the computer: Human or Orc, workers gathering gold and lumber, farms, barracks and lumber mills, an army of Footmen and Riflemen (or Grunts and Troll Headhunters). Select with a box, right-click to command, attack-move with A, and watch the minimap: the computer attacks in growing waves.
+A small real-time strategy game against the computer: Human or Orc, workers gathering gold and lumber, farms, barracks, lumber mills and towers, an army of Footmen and Riflemen (or Grunts and Troll Headhunters). Select with a box, right-click to command, attack-move with A, and watch the minimap: the computer attacks in growing waves.
 
 ### Play together
 

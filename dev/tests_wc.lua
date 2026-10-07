@@ -375,6 +375,16 @@ function WcBuildTests()
     check(E.Dropoff(st, 1, lx + 1.5, ly + 1.5, "lumber") == mill, "wc: lumber goes to the lumber mill")
     check(E.Dropoff(st, 1, lx + 1.5, ly + 1.5, "gold") == hall, "wc: gold still goes to the hall")
     check(not E.Command(st, 2, { type = "build", unit = ws[3].id, btype = "lumber_mill", x = lx, y = ly + 5 }), "wc: orcs have no lumber mill")
+    -- A tower shoots enemies in range by itself.
+    local tx, ty = WC.AI.FindSpot(st, hx - 8, hy + 2, 2)
+    local tower = E.SpawnBuilding(st, 1, "guard_tower", tx, ty, true)
+    local foe = E.Spawn(st, 2, "grunt", tx + 4, ty + 1)
+    foe.order = { type = "hold" }
+    local hp0 = foe.hp
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(foe.hp < hp0, "wc: the guard tower shoots")
+    local ax, ay = WC.AI.FindSpot(st, hx + 2, hy + 9, 3)
+    check(E.Command(st, 1, { type = "build", unit = ws[4].id, btype = "altar_kings", x = ax, y = ay }), "wc: humans can build an altar")
     -- Orcs build from inside.
     st.players[2].gold, st.players[2].lumber = 5000, 5000
     local oh = E.Hall(st, 2)

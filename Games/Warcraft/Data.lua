@@ -41,6 +41,12 @@ B.barracks = { hotkey = "B", name = "Barracks", hp = 1000, armor = 5, size = 3, 
     trains = { "footman", "rifleman" }, icon = I .. "INV_Sword_27" }
 B.lumber_mill = { hotkey = "L", name = "Lumber Mill", hp = 900, armor = 5, size = 3, cost = { 120, 0 }, time = 30, food = 0,
     dropoff = "lumber", icon = I .. "INV_Axe_10" }
+-- Towers shoot enemy units in range on their own.
+B.guard_tower = { hotkey = "T", name = "Guard Tower", hp = 500, armor = 5, size = 2, cost = { 100, 70 }, time = 30, food = 0,
+    attack = { damage = 13, cooldown = 0.9, range = 7 }, icon = I .. "INV_Misc_Spyglass_03" }
+-- The altar: heroes come later.
+B.altar_kings = { hotkey = "A", name = "Altar of Kings", hp = 900, armor = 5, size = 3, cost = { 180, 50 }, time = 40, food = 0,
+    icon = I .. "Spell_Holy_SealOfMight" }
 B.great_hall = { hotkey = "H", name = "Great Hall", hp = 1500, armor = 5, size = 4, cost = { 385, 185 }, time = 60, food = 12,
     trains = { "peon" }, dropoff = true, hall = true, icon = I .. "INV_BannerPVP_01" }
 B.orc_burrow = { hotkey = "O", name = "Orc Burrow", hp = 600, armor = 5, size = 2, cost = { 80, 40 }, time = 18, food = 6,
@@ -48,14 +54,18 @@ B.orc_burrow = { hotkey = "O", name = "Orc Burrow", hp = 600, armor = 5, size = 
     icon = I .. "INV_Misc_Bone_01" }
 B.orc_barracks = { hotkey = "B", name = "Orc Barracks", hp = 1200, armor = 5, size = 3, cost = { 180, 50 }, time = 30, food = 0,
     trains = { "grunt", "headhunter" }, icon = I .. "INV_Axe_02" }
+B.watch_tower = { hotkey = "T", name = "Watch Tower", hp = 500, armor = 5, size = 2, cost = { 110, 80 }, time = 30, food = 0,
+    attack = { damage = 16, cooldown = 1.0, range = 8 }, icon = I .. "INV_Spear_02" }
+B.altar_storms = { hotkey = "A", name = "Altar of Storms", hp = 900, armor = 5, size = 3, cost = { 180, 50 }, time = 40, food = 0,
+    icon = I .. "Spell_Nature_Lightning" }
 B.gold_mine = { name = "Gold Mine", hp = 1, armor = 0, size = 3, neutral = true, icon = I .. "INV_Misc_Coin_02" }
 
 local F = {}
 ns.WC.Factions = F
-F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm", barracks = "barracks", alarm = "callToArms",
-    melee = "footman", ranged = "rifleman", builds = { "farm", "barracks", "lumber_mill", "town_hall" } }
-F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", alarm = "battleStations",
-    melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "great_hall" } }
+F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm", barracks = "barracks", tower = "guard_tower", alarm = "callToArms",
+    melee = "footman", ranged = "rifleman", builds = { "farm", "barracks", "lumber_mill", "guard_tower", "altar_kings", "town_hall" } }
+F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", tower = "watch_tower", alarm = "battleStations",
+    melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "watch_tower", "altar_storms", "great_hall" } }
 
 -- Art from the WoW game files (file ids from the community listfile; all
 -- vanilla-era files). World models are shown in a ModelScene that fits each
@@ -78,8 +88,18 @@ ns.WC.ART = {
         barracks = { file = 189445, grow = 1.5, y = 6 },       -- duskwood/duskwoodbarn
         lumber_mill = { file = 242697, grow = 1.25, y = 5 },   -- redridge_lumbermill (gallery 44)
         great_hall = { file = 189200, grow = 1.6, y = 8 },     -- burningsteppes/orctents/orctent
-        orc_burrow = { file = 199389, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent02
-        orc_barracks = { file = 190175, grow = 1.6, y = 12 },  -- stranglethorn/buildings/trollwatchtower
+        orc_burrow = { file = 199387, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent01 (gallery 24)
+        orc_barracks = { file = 1910329, grow = 1.6, y = 6 },  -- 8or_warfronts_barracks_v2 (gallery 114)
+        guard_tower = { file = 2061082, grow = 2.4, y = 16 },  -- 8hu_warfronts_magictower_v3 (gallery 112)
+        watch_tower = { file = 2061081, grow = 2.4, y = 16 },  -- 8or_warfronts_magictower_v3 (gallery 115)
+        altar_kings = { file = 197831, grow = 1.3, y = 2 },    -- generic/human/altars/altar01 (gallery 52)
+        altar_storms = { file = 189141, grow = 1.3, y = 2 },   -- lavaaltar (gallery 54)
+    },
+    -- Models whose bounding box is smaller than what is drawn: more room
+    -- around them (margin) and the camera aimed higher (up, in radii).
+    fit = {
+        [2061082] = { margin = 1.6, up = 0.4 },
+        [2061081] = { margin = 1.6, up = 0.4 },
     },
 }
 

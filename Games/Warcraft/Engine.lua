@@ -954,15 +954,16 @@ local function BuildingStep(st, b, dt)
         end
         return
     end
+    -- Towers always shoot; burrows only with peons inside.
     local gar = b.garrison
-    if gar and #gar > 0 and d.attack then
+    if d.attack and b.progress >= 1 and (not gar or #gar > 0) then
         b.cd = (b.cd or 0) - dt
         if b.cd <= 0 then
             local cx, cy = Center(b)
             local t = Nearest(st, { x = cx, y = cy, owner = b.owner, kind = "unit" }, d.attack.range + b.size / 2)
             if t then
                 Strike(st, b, t, d.attack.damage, true)
-                b.cd = d.attack.cooldown / #gar -- more peons, faster spears
+                b.cd = d.attack.cooldown / (gar and #gar or 1) -- more peons, faster spears
             end
         end
     end

@@ -35,7 +35,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, Classic-set class cards (secrets, combo, stealth, enrage), a card choice for Tracking.
 
-- [ ] Warcraft III next: fog of war, more units and buildings (towers, casters, heroes), upgrades, WoW creature models for units, PvP (lockstep: both clients run the engine with the same commands), difficulty levels.
+- [ ] Warcraft III next: heroes from the altars (Altar of Kings / Altar of Storms are buildable but empty), Blacksmith/War Mill upgrades, Scout Tower to Guard Tower upgrade, orc War Mill as lumber drop-off, the AI building lumber mills, more buildings (gallery picks pending), casters, fog of war, PvP (lockstep: both clients run the engine with the same commands).
 
 - [ ] Flaky test: "a made-up roll is not verified" (group games) failed once in ~5 runs on 2026-10-07; look at its timing.
 

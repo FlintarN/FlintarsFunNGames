@@ -215,7 +215,7 @@ H.RULES = {
             .. "building to carry on building it. With a building selected, right-click sets its rally point." },
         { "Command card", "As in Warcraft III. Units: Move (M), Stop (S), Hold Position (H), Attack (A: click an "
             .. "enemy, or the ground to attack-move). Workers also: Gather (G), Return Resources (R) and Build "
-            .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Lumber Mill L, Hall H). Halls and barracks "
+            .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Lumber Mill L, Tower T, Altar A, Hall H). Towers shoot enemies in range. Halls and barracks "
             .. "train (Peasant/Peon P, Footman F, Rifleman R, Grunt G, Headhunter T) and Set Rally Point (Y)." },
         { "Workers", "One worker at a time goes into the gold mine; the others wait at the door, so about five "
             .. "keep a mine busy. Harvesting workers walk through each other. A building only goes up while "
