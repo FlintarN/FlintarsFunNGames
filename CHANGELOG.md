@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 (not released yet)
+## 1.1.0 (2026-10-08)
 
 ### New
 - **Blizzard Games**: a third section on the home page, next to Casino and Arcade, for Hearthstone and Warcraft III.
