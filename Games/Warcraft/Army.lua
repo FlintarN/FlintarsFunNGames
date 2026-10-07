@@ -170,7 +170,7 @@ end
 function E.Drums(st, u)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner == u.owner and U[e.type] and U[e.type].drums
+        if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and U[e.type] and U[e.type].drums
             and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 81 then
             return U[e.type].drums
         end
@@ -192,7 +192,7 @@ local function Friends(st, u, r, pred)
     local best, bv
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner == u.owner and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= r * r then
+        if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= r * r then
             local v = pred(e)
             if v and (not bv or v > bv) then best, bv = e, v end
         end
@@ -202,7 +202,7 @@ end
 local function EnemyNear(st, u, r)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner > 0 and e.owner ~= u.owner and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= r * r
+        if e and e.kind == "unit" and E.Foe(st, e.owner, u.owner) and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= r * r
             and not (E.Hidden(e) or E.Untouchable(e)) then
             return e
         end
@@ -233,7 +233,7 @@ AUTO.slow = function(st, u, a)
     local best
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner > 0 and e.owner ~= u.owner and not (e.buffs and e.buffs.slow)
+        if e and e.kind == "unit" and E.Foe(st, e.owner, u.owner) and not (e.buffs and e.buffs.slow)
             and not (E.Hidden(e) or E.Untouchable(e)) and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= a.range * a.range then
             if not best or E.IsHero(e) then best = e end
         end
@@ -256,7 +256,7 @@ AUTO.healing_ward = function(st, u, a)
     local hurt = 0
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner == u.owner and e.hp < e.maxHp * 0.7 and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 36 then
+        if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and e.hp < e.maxHp * 0.7 and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 36 then
             hurt = hurt + 1
         end
         if e and e.type == "healing_ward" and e.owner == u.owner and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 36 then
@@ -284,7 +284,7 @@ function E.ArmyTick(st, u, dt)
             u.healT = u.healT - 1
             for _, id in ipairs(st.list) do
                 local e = st.ents[id]
-                if e and e.kind == "unit" and e.owner == u.owner and e ~= u and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 25 then
+                if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and e ~= u and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= 25 then
                     e.hp = math.min(e.maxHp, e.hp + e.maxHp * 0.02)
                 end
             end

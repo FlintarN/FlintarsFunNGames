@@ -426,8 +426,23 @@ end
 ---------------------------------------------------------------------------
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
+-- Teams: players with the same team number are allies (they don't fight,
+-- share sight, help each other); without teams everyone is on their own.
+function E.Team(st, p) return st.teams and st.teams[p] or p end
+-- Do players a and b fight each other? (0 is nobody: gold mines.)
+function E.Foe(st, a, b)
+    return a ~= nil and b ~= nil and a > 0 and b > 0 and a ~= b and E.Team(st, a) ~= E.Team(st, b)
+end
+-- Are a and b on the same side (or the same player)?
+function E.Ally(st, a, b)
+    return a ~= nil and b ~= nil and a > 0 and b > 0 and (a == b or E.Team(st, a) == E.Team(st, b))
+end
+
 -- opts: factions = { "human", "orc" } (one per player), seed, difficulty
--- ("easy", "normal", "hard"; the AI side), map (a key in WC.Maps; Maps.lua).
+-- ("easy", "normal", "hard"; the AI side), map (a key in WC.Maps; Maps.lua),
+-- teams = { 1, 2, 1, 2 } (a team per player; default: everyone alone),
+-- difficulties = { [2] = "hard" } (per computer player), starts = { 1, 3 }
+-- (which of the map's starts each player gets; default: in order).
 E.NearestFree = NearestFree
 
 function E.New(opts)
@@ -435,13 +450,13 @@ function E.New(opts)
     local map = D().ParseMap(key)
     local st = { rng = math.floor(opts.seed or 1) % 2147483646 + 1, time = 0, nextId = 0, w = map.w, h = map.h,
         trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false, difficulty = opts.difficulty or "normal",
-        map = key }
+        map = key, teams = opts.teams }
     -- A hall for each player on its start, then the gold mines.
     for p = 1, #opts.factions do
         local f = D().Factions[opts.factions[p]]
         st.players[p] = { faction = opts.factions[p], gold = D().START.gold, lumber = D().START.lumber,
-            food = 0, foodCap = 0, up = {}, busy = {} }
-        local s = map.starts[p]
+            food = 0, foodCap = 0, up = {}, busy = {}, difficulty = opts.difficulties and opts.difficulties[p] }
+        local s = map.starts[opts.starts and opts.starts[p] or p]
         NewBuilding(st, p, f.hall, s[1], s[2], true)
     end
     for _, m in ipairs(map.mines) do
@@ -757,7 +772,7 @@ local function Hit(st, u, t)
         local near = {}
         for _, id in ipairs(st.list) do
             local e = st.ents[id]
-            if e and e ~= t and not e.dead and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine"
+            if e and e ~= t and not e.dead and E.Foe(st, e.owner, u.owner) and e.kind ~= "mine"
                 and not (e.kind == "unit" and D().Units[e.type].air) then
                 local ex, ey = Center(e)
                 local r = d.splash + (e.size or 0) / 2
@@ -801,7 +816,7 @@ local function Nearest(st, u, range)
     local best, bd, bestB, bdB
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine"
+        if e and E.Foe(st, e.owner, u.owner) and e.kind ~= "mine"
             and not (E.Untouchable and (E.Untouchable(e) or E.Hidden(e)))
             and not (E.CanHit and not E.CanHit(st, u, e)) then
             local g = Gap(u, e)
@@ -1562,15 +1577,26 @@ function E.Step(st, dt)
     for _, id in ipairs(st.list) do if st.ents[id] then table.insert(keep, id) end end
     st.list = keep
     E.Food(st)
-    -- Whoever has no buildings left has lost.
-    local has = { false, false }
+    -- Whoever has no buildings left is out; the last team standing wins.
+    local has, teams, last = {}, {}, nil
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e.kind == "building" and e.owner > 0 then has[e.owner] = true end
     end
-    if not has[1] or not has[2] then
+    local alive = 0
+    for p = 1, #st.players do
+        if has[p] then
+            local t = E.Team(st, p)
+            if not teams[t] then teams[t], alive = true, alive + 1 end
+            last = last or p
+        elseif not st.players[p].out then
+            st.players[p].out = true
+            Emit("defeated", { owner = p })
+        end
+    end
+    if alive <= 1 then
         st.over = true
-        st.winner = (has[1] and 1) or (has[2] and 2) or 0
+        st.winner = last or 0 -- a player of the winning team
         Emit("over", { winner = st.winner })
     end
     EV = nil

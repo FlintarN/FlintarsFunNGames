@@ -89,12 +89,16 @@ function E.Aura(st, u, key, field)
     if not u.owner or u.owner < 1 then return 0 end
     local best = 0
     local x, y = u.x + (u.size or 0) / 2, u.y + (u.size or 0) / 2
-    for _, h in ipairs(Heroes(st, u.owner)) do
-        local lv = Skill(h, key)
-        if lv > 0 then
-            local a = WC.Abilities[key]
-            local dx, dy = h.x - x, h.y - y
-            if dx * dx + dy * dy <= a.radius * a.radius then best = math.max(best, At(a[field or "amount"], lv)) end
+    for q = 1, #st.players do
+        if E.Ally(st, q, u.owner) then
+            for _, h in ipairs(Heroes(st, q)) do
+                local lv = Skill(h, key)
+                if lv > 0 then
+                    local a = WC.Abilities[key]
+                    local dx, dy = h.x - x, h.y - y
+                    if dx * dx + dy * dy <= a.radius * a.radius then best = math.max(best, At(a[field or "amount"], lv)) end
+                end
+            end
         end
     end
     return best
@@ -234,7 +238,7 @@ function E.AreaDamage(st, caster, x, y, r, amount, buildingsOnly)
     local hits = {}
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and not e.dead and e.owner > 0 and e.owner ~= caster.owner and e.kind ~= "mine"
+        if e and not e.dead and E.Foe(st, e.owner, caster.owner) and e.kind ~= "mine"
             and (not buildingsOnly or e.kind == "building") then
             local cx, cy = E.Center(e)
             local dx, dy = cx - x, cy - y
@@ -315,7 +319,7 @@ function E.WorldTick(st, dt)
                 if z.slow then
                     for _, id in ipairs(st.list) do
                         local e = st.ents[id]
-                        if e and e.kind == "unit" and e.owner ~= z.owner and e.owner > 0
+                        if e and e.kind == "unit" and E.Foe(st, e.owner, z.owner)
                             and (e.x - z.x) ^ 2 + (e.y - z.y) ^ 2 <= z.r * z.r then
                             E.AddBuff(e, "slow", 1)
                         end
@@ -443,7 +447,7 @@ CAST.wind_walk = function(st, u, lv, a)
     -- Enemies chasing it lose it.
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner ~= u.owner and e.order and e.order.type == "attack" and e.order.target == u.id then
+        if e and E.Foe(st, e.owner, u.owner) and e.order and e.order.type == "attack" and e.order.target == u.id then
             e.order, e.path = nil, nil
         end
     end
@@ -475,7 +479,7 @@ CAST.chain_lightning = function(st, u, lv, a, t)
         local nxt, nd
         for _, id in ipairs(st.list) do
             local e = st.ents[id]
-            if e and not e.dead and e.kind == "unit" and e.owner > 0 and e.owner ~= u.owner and not hit[e.id]
+            if e and not e.dead and e.kind == "unit" and E.Foe(st, e.owner, u.owner) and not hit[e.id]
                 and not E.Untouchable(e) then
                 local d = (e.x - cx) ^ 2 + (e.y - cy) ^ 2
                 if d <= 25 and (not nd or d < nd) then nxt, nd = e, d end
@@ -495,7 +499,7 @@ CAST.healing_wave = function(st, u, lv, a, t)
         local nxt, worst
         for _, id in ipairs(st.list) do
             local e = st.ents[id]
-            if e and e.kind == "unit" and e.owner == u.owner and not hit[e.id] and e.hp < e.maxHp
+            if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and not hit[e.id] and e.hp < e.maxHp
                 and (e.x - cur.x) ^ 2 + (e.y - cur.y) ^ 2 <= 25 then
                 local missing = e.maxHp - e.hp
                 if not worst or missing > worst then nxt, worst = e, missing end
@@ -516,7 +520,7 @@ CAST.shockwave = function(st, u, lv, a, t, x, y)
     local hits = {}
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner > 0 and e.owner ~= u.owner then
+        if e and e.kind == "unit" and E.Foe(st, e.owner, u.owner) then
             local px, py = e.x - u.x, e.y - u.y
             local along = px * dx + py * dy
             local side = math.abs(px * dy - py * dx)
@@ -537,7 +541,7 @@ end
 CAST.big_bad_voodoo = function(st, u, lv, a)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner == u.owner and not E.IsHero(e)
+        if e and e.kind == "unit" and E.Ally(st, e.owner, u.owner) and not E.IsHero(e)
             and (e.x - u.x) ^ 2 + (e.y - u.y) ^ 2 <= a.radius * a.radius then
             E.AddBuff(e, "invuln", At(a.duration, lv))
         end
@@ -549,11 +553,11 @@ function E.ValidTarget(st, u, a, t)
     if not t or t.dead then return false, "no target" end
     local k = a.target
     if k == "enemy" then
-        if t.owner == u.owner or t.owner == 0 or t.kind ~= "unit" then return false, "target an enemy unit" end
+        if not E.Foe(st, t.owner, u.owner) or t.kind ~= "unit" then return false, "target an enemy unit" end
         if E.Untouchable(t) then return false, "it can't be touched now" end
         if a == WC.Abilities.siphon_mana and not E.IsHero(t) then return false, "target an enemy hero" end
     elseif k == "ally" then
-        if t.owner ~= u.owner or t.kind ~= "unit" then return false, "target a friendly unit" end
+        if not E.Ally(st, t.owner, u.owner) or t.kind ~= "unit" then return false, "target a friendly unit" end
     elseif k == "unit" then
         if t.kind ~= "unit" then return false, "target a unit" end
     elseif k == "friend" then

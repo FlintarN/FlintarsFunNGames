@@ -20,10 +20,13 @@ local BAR = 22                  -- resource bar
 local VIEW_H = 344              -- the map view
 local TILE = 20                 -- pixels per tile
 local STEP = 0.05               -- engine step
-local ME, CPU = 1, 2           -- your chair and the computer's (nil in PvP)
+local ME = 1                   -- your chair
+local CPUS = { 2 }             -- the chairs the computer plays here (none in PvP)
 local MM_SCALE = 2              -- minimap pixels per tile
 local EDGE, SCROLL = 28, 650    -- edge scrolling: pixels from the map's edge, speed
-local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 } }
+-- Player colours (Warcraft III's, blue and red first as before).
+local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 }, { 0.1, 0.9, 0.75 }, { 0.6, 0.3, 0.9 }, { 1, 0.95, 0.2 },
+    { 1, 0.55, 0.1 }, { 0.2, 0.8, 0.2 }, { 1, 0.5, 0.8 }, { 0.6, 0.6, 0.6 }, { 0.6, 0.85, 1 } }
 local BUILDING_ART = {
     town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks", guard_tower = "WcFarm", altar_kings = "WcFarm",
     watch_tower = "WcBurrow", altar_storms = "WcBurrow",
@@ -652,34 +655,8 @@ function P.New(parent, kind)
         btn.key = key
         self.diffButtons[i] = btn
     end
-    -- The map: < name > (the maps for two players; Maps.lua).
-    local mapRow = CreateFrame("Frame", nil, o)
-    mapRow:SetSize(420, 26)
-    mapRow:SetPoint("TOP", 0, -352)
-    local mapLabel = W.Label(mapRow, "Map:", "GameFontNormal")
-    mapLabel:SetPoint("LEFT", 0, 0)
-    mapRow.name = W.Label(mapRow, "", "GameFontHighlightLarge")
-    mapRow.name:SetPoint("LEFT", mapLabel, "RIGHT", 52, 0)
-    mapRow.name:SetWidth(150)
-    local function Step(dir)
-        local list = WC().MapsFor(2)
-        local cur = Save().map or "riverford"
-        local i = 1
-        for k, key in ipairs(list) do if key == cur then i = k end end
-        i = (i - 1 + dir) % #list + 1
-        Save().map = list[i]
-        self:DrawMapRow()
-    end
-    mapRow.prev = W.Button(mapRow, "<", 26, function() Step(-1) end, 22)
-    mapRow.prev:SetPoint("LEFT", mapLabel, "RIGHT", 16, 0)
-    mapRow.next = W.Button(mapRow, ">", 26, function() Step(1) end, 22)
-    mapRow.next:SetPoint("LEFT", mapRow.name, "RIGHT", 6, 0)
-    mapRow.text = W.Label(mapRow, "", "GameFontHighlightSmall")
-    mapRow.text:SetPoint("TOPLEFT", mapLabel, "BOTTOMLEFT", 0, -6)
-    mapRow.text:SetWidth(420)
-    mapRow.text:SetJustifyH("LEFT")
-    mapRow:Hide()
-    self.mapRow = mapRow
+    -- The lobby (UI/WarcraftLobby.lua): seats, races, teams and the map.
+    ns.WarcraftLobby.Build(self, o)
 
     self.againButton = W.Button(o, "Main menu", 110, function() self:ShowMenu() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
@@ -703,8 +680,7 @@ function P.New(parent, kind)
     box:SetSize(340, 268)
     box:SetPoint("TOP", 0, -92)
     self.soloButton = W.MenuButton(box, "Single Player", "Play against the computer", 290, 62, function()
-        self.mode = "solo"
-        self:ShowStart()
+        self:ShowLobby()
     end)
     self.soloButton:SetPoint("TOP", 0, -22)
     self.queueButton = W.MenuButton(box, "Find an Opponent", "Anyone on your realm who wants a game", 290, 62, function()
@@ -761,6 +737,7 @@ function P.New(parent, kind)
     local saved = Save().game
     if saved and saved.players and not saved.over then
         self.st = saved
+        ME, CPUS = saved.me or 1, saved.cpus or { 2 }
         self:CenterOn(E().Hall(saved, ME))
         self:Resume()
         ns.Solo.SetRunning(kind, true)
@@ -787,18 +764,9 @@ function P:ShowMenu()
 end
 
 -- Everything the overlay can show, off.
--- The map you'll play: its name and what it's like.
-function P:DrawMapRow()
-    local key = Save().map or "riverford"
-    local m = WC().Maps[key] or WC().Maps.riverford
-    local p = WC().ParseMap(key) or WC().ParseMap("riverford")
-    self.mapRow.name:SetText(m.name)
-    self.mapRow.text:SetText(m.text .. string.format(" |cff888888(%d x %d)|r", p.w, p.h))
-end
-
 function P:HideScreens()
     self.mainMenu:Hide()
-    self.mapRow:Hide()
+    ns.WarcraftLobby.Hide(self)
     for _, p in ipairs(self.picks) do p:Hide() end
     self.diffLabel:Hide()
     for _, b in ipairs(self.diffButtons) do b:Hide() end
@@ -826,8 +794,40 @@ function P:ShowStart()
         b:SetEnabled(b.key ~= chosen) -- the chosen one is greyed out
     end
     self.backButton:SetShown(not self.pvp)
-    self.mapRow:SetShown(solo)
-    if solo then self:DrawMapRow() end
+end
+
+-- Single Player: the lobby (seats, races, teams, the map), then Start Game.
+function P:ShowLobby()
+    if not self.ls then self:Pause() end
+    self.mode = "solo"
+    self.overlay:Show()
+    self:HideScreens()
+    self.overTitle:SetText("Single Player")
+    self.overTitle:SetTextColor(1, 0.82, 0)
+    self.overSub:SetText("")
+    self.backButton:Show()
+    ns.WarcraftLobby.Show(self)
+end
+
+-- A game from the lobby: o from WarcraftLobby.GameOptions (factions, teams,
+-- starts, difficulties, map; me = your player, cpus = the computer's).
+function P:StartSkirmish(o, seed)
+    ME, CPUS = o.me or 1, o.cpus or {}
+    self.groups, self.lastClick, self.lastGroup = {}, nil, nil
+    self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
+    self.st = E().New({ factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
+        map = o.map, seed = seed or math.random(1, 2000000000), difficulty = "normal" })
+    self.st.me, self.st.cpus = ME, CPUS
+    Save().game = self.st
+    self.sel, self.place, self.targeting = {}, nil, nil
+    self.counted = false
+    self.treeDirty = true
+    self:BuildMinimapTrees()
+    self:CenterOn(E().Hall(self.st, ME))
+    ns.Solo.SetRunning(self.kind, true)
+    self:Resume()
+    W.PlaySound("IG_MAINMENU_OPTION")
+    ns.Changed()
 end
 
 function P:PickSide(faction)
@@ -842,12 +842,13 @@ function P:PickSide(faction)
 end
 
 function P:NewGame(faction, seed)
-    ME, CPU = 1, 2
+    ME, CPUS = 1, { 2 }
     local other = faction == "human" and "orc" or "human"
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000),
         difficulty = Save().difficulty or "normal", map = Save().map })
+    self.st.me, self.st.cpus = ME, CPUS
     Save().game = self.st
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted = false
@@ -890,7 +891,7 @@ end
 function P:GameOver()
     local st = self.st
     local rec = Save()
-    local won = st.winner == ME
+    local won = E().Ally(st, st.winner, ME)
     if not self.counted then
         self.counted = true
         if won then
@@ -941,9 +942,9 @@ function P:Tick(elapsed)
             self:Events(events)
             if st.demo then self:DemoTick(STEP) end
             self.think = self.think + STEP
-            if self.think >= 1 and CPU then
+            if self.think >= 1 and #CPUS > 0 then
                 self.think = 0
-                WC().AI.Think(st, CPU)
+                for _, c in ipairs(CPUS) do WC().AI.Think(st, c) end
             end
             if st.over then break end
         end
@@ -1278,7 +1279,7 @@ function P:Smart(x, y)
         return
     end
     local q = Shift()
-    if target and target.owner ~= ME and target.owner > 0 then
+    if target and E().Foe(st, target.owner, ME) then
         return self:Cmd({ type = "attack", units = units, target = target.id, queue = q })
     end
     local workers, others = {}, {}
@@ -1385,7 +1386,7 @@ function P:AttackAt(x, y)
     if #units == 0 then return end
     local target = self:SeenAt(x, y)
     self:Mark(x, y)
-    if target and target.owner ~= ME and target.owner > 0 then
+    if target and (E().Foe(self.st, target.owner, ME) or (target.owner > 0 and target.owner ~= ME and IsControlKeyDown and IsControlKeyDown())) then
         self:Cmd({ type = "attack", units = units, target = target.id, queue = Shift() })
     else
         self:Cmd({ type = "attackMove", units = units, x = x, y = y, queue = Shift() })
@@ -1579,7 +1580,7 @@ function P:UpdateFog()
     local vis, explored = {}, self.explored
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner == ME and not e.inside then
+        if e and E().Ally(st, e.owner, ME) and not e.inside then -- allies share their sight
             local cx, cy = e.x, e.y
             if e.kind ~= "unit" then cx, cy = e.x + e.size / 2, e.y + e.size / 2 end
             local r = ViewOf(e)
@@ -1629,7 +1630,7 @@ end
 
 -- Can you see this entity now?
 function P:Sees(e)
-    if e.owner == ME then return true end
+    if e.owner == ME or E().Ally(self.st, e.owner, ME) then return true end
     if e.kind ~= "unit" then return self.known[e.id] == true or self:TileSeen(e) end
     if E().Hidden and E().Hidden(e) then return false end
     return self.vis[math.floor(e.y) * self.st.w + math.floor(e.x)] == true
@@ -2377,7 +2378,8 @@ function P:DrawPanel()
                 status = "Right-click the map to set a rally point."
             end
         end
-        if first.owner ~= ME and first.owner > 0 then status = "Enemy" end
+        if E().Foe(self.st, first.owner, ME) then status = "Enemy"
+        elseif first.owner ~= ME and first.owner > 0 then status = "Ally" end
         self.selStatus:SetText(status)
     end
     local bagHero = sel[1] and sel[1].owner == ME and E().IsHero(sel[1]) and not sel[1].illusion and sel[1]
@@ -2816,7 +2818,7 @@ function P:PvpScreen(title, sub, lobby, keys)
     for _, b in ipairs(self.diffButtons) do b:Hide() end
     for _, b in ipairs({ self.againButton, self.resumeButton, self.backButton }) do b:Hide() end
     self.mainMenu:Hide()
-    self.mapRow:Hide()
+    ns.WarcraftLobby.Hide(self)
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(sub or "")
@@ -2857,7 +2859,7 @@ function P:StartPvp(s)
     local me = ns.Me()
     local seat = self.G.Seat(s, me) or 1
     ME = seat
-    CPU = s.test and (3 - seat) or nil -- practice: the computer plays the bot
+    CPUS = s.test and { 3 - seat } or {} -- practice: the computer plays the bot
     local factions = { s.races[s.players[1].name], s.races[s.players[2].name] }
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
@@ -2943,9 +2945,9 @@ function P:LeavePvp()
     self.ls, self.pvp, self.pvpGame, self.setupOpen = nil, nil, nil, false
     self.surrender:Hide()
     self.claim:Hide()
-    ME, CPU = 1, 2
     local saved = Save().game
     self.st = (saved and saved.players and not saved.over) and saved or nil
+    ME, CPUS = self.st and self.st.me or 1, self.st and self.st.cpus or { 2 }
     if self.st then self:CenterOn(E().Hall(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
     self.mode = nil
     self:ShowMenu()
@@ -3475,7 +3477,7 @@ local DEMO_HEROES = { "paladin", "archmage", "mountain_king", "blood_mage", "bla
 
 function P:StartDemo()
     if self.pvp or self.ls then return end
-    ME, CPU = 1, nil
+    ME, CPUS = 1, {}
     local st = E().New({ factions = { "human", "orc" }, seed = 7, difficulty = "normal" })
     st.demo, st.peace = true, true
     local all = {}

@@ -43,7 +43,7 @@ local function EnemiesNear(st, p, x, y, r)
     local out = {}
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" and e.owner > 0 and e.owner ~= p and not (E().Untouchable(e) or E().Hidden(e))
+        if e and e.kind == "unit" and E().Foe(st, e.owner, p) and not (E().Untouchable(e) or E().Hidden(e))
             and (e.x - x) ^ 2 + (e.y - y) ^ 2 <= r * r then
             table.insert(out, e)
         end
@@ -108,7 +108,7 @@ function AI.HeroCast(st, p, h)
                 if key == "earthquake" then
                     for _, id in ipairs(st.list) do
                         local e = st.ents[id]
-                        if e and e.kind == "building" and e.owner > 0 and e.owner ~= p and Dist2(e, h) <= range * range then
+                        if e and e.kind == "building" and E().Foe(st, e.owner, p) and Dist2(e, h) <= range * range then
                             local cx, cy = E().Center(e)
                             cmd = { x = cx, y = cy }
                             break
@@ -167,7 +167,8 @@ AI.RESEARCH = { "keep", "stronghold", "guard_tower", "swords", "melee_o", "gunpo
 
 function AI.Think(st, p)
     st.ai = st.ai or {}
-    local diff = D().DIFFICULTY[st.difficulty or "normal"] or D().DIFFICULTY.normal
+    local level = st.players[p].difficulty or st.difficulty or "normal"
+    local diff = D().DIFFICULTY[level] or D().DIFFICULTY.normal
     local mem = st.ai[p] or { wave = diff.wave, waves = 0 }
     st.ai[p] = mem
     st.players[p].income = diff.income
@@ -299,7 +300,7 @@ function AI.Think(st, p)
                     revived = E_.Command(st, p, { type = "revive", building = altar.id, utype = ut })
                 end
             end
-            if not revived and heroes < (AI.HERO_COUNT[st.difficulty or "normal"] or 2) then
+            if not revived and heroes < (AI.HERO_COUNT[level] or 2) then
                 for _, ut in ipairs(AI.HEROES[pl.faction] or {}) do
                     if E_.CanTrainHero(st, p, ut) then
                         if E_.Command(st, p, { type = "train", building = altar.id, utype = ut }) then
@@ -366,7 +367,7 @@ function AI.Think(st, p)
     local threat
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner ~= p and e.owner > 0 and e.kind == "unit" then
+        if e and E().Foe(st, e.owner, p) and e.kind == "unit" then
             if (e.x - hx) ^ 2 + (e.y - hy) ^ 2 < 14 * 14 then threat = e break end
         end
     end
@@ -389,14 +390,22 @@ function AI.Think(st, p)
     if pl.gold >= cheapest then mem.broke = nil elseif not mem.broke then mem.broke = st.time end
     local stuck = mem.broke and st.time - mem.broke > 45 and #army >= 3
     if (#army >= mem.wave or stuck) and st.time >= diff.firstAttack then
-        local target = E_.Hall(st, 3 - p)
-        local tx, ty
-        if target then
-            tx, ty = E_.Center(target)
-        else
-            for _, id in ipairs(st.list) do
-                local e = st.ents[id]
-                if e and e.owner == 3 - p and e.kind == "building" then tx, ty = E_.Center(e) break end
+        -- The nearest enemy player's hall (or any building of theirs).
+        local tx, ty, best
+        for q = 1, #st.players do
+            if E_.Foe(st, p, q) then
+                local target = E_.Hall(st, q)
+                if not target then
+                    for _, id in ipairs(st.list) do
+                        local e = st.ents[id]
+                        if e and e.owner == q and e.kind == "building" then target = e break end
+                    end
+                end
+                if target then
+                    local cx, cy = E_.Center(target)
+                    local d = (cx - hx) ^ 2 + (cy - hy) ^ 2
+                    if not best or d < best then tx, ty, best = cx, cy, d end
+                end
             end
         end
         if tx then

@@ -69,6 +69,7 @@ UI\BattleshipPage.lua
 UI\AgarioPage.lua
 UI\HearthstonePage.lua
 UI\HearthstoneDecks.lua
+UI\WarcraftLobby.lua
 UI\WarcraftPage.lua
 UI\WarcraftDepthTest.lua
 UI\Help.lua
