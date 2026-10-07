@@ -279,7 +279,7 @@ function WcDemo()
     local types = {}
     for _, id in ipairs(st.list) do if st.ents[id] then types[st.ents[id].type] = true end end
     local missing = {}
-    for k in pairs(WC.Buildings) do if not types[k] then table.insert(missing, k) end end
+    for k, b in pairs(WC.Buildings) do if not types[k] and not rawget(b, "base") then table.insert(missing, k) end end
     for _, k in ipairs({ "footman", "knight", "gryphon_rider", "tauren", "wind_rider", "paladin", "shadow_hunter" }) do
         if not types[k] then table.insert(missing, k) end
     end
@@ -396,7 +396,7 @@ function WcDemo()
     -- Every unit has a voice, every hero ability a sound.
     local mute = {}
     for k, u in pairs(WC.Units) do
-        if not u.summon and k ~= "catapult" and k ~= "target_dummy" and k ~= "sheep" and not k:find("%d$")
+        if not u.summon and not rawget(u, "base") and k ~= "catapult" and k ~= "target_dummy" and k ~= "sheep" and not k:find("%d$")
             and not (S.Voices[k] and S.Voices[k].what) then table.insert(mute, k) end
     end
     for k, a in pairs(WC.Abilities) do

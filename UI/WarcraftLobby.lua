@@ -78,7 +78,7 @@ end
 -- difficulties; which players the computer plays. Random races are rolled.
 function L.GameOptions(lobby, roll)
     roll = roll or math.random
-    local o = { map = lobby.map, factions = {}, teams = {}, starts = {}, difficulties = {}, cpus = {}, me = nil, names = {} }
+    local o = { map = lobby.map, mode = lobby.mode or "melee", factions = {}, teams = {}, starts = {}, difficulties = {}, cpus = {}, me = nil, names = {} }
     for _, p in ipairs(L.Players(lobby)) do
         local i = #o.factions + 1
         local race = p.s.race
@@ -133,13 +133,22 @@ function L.Build(view, o)
     end
 
     -- Maps.
-    local mh = W.Label(f, "Map", "GameFontNormalLarge")
+    local mh = W.Label(f, "Game and map", "GameFontNormalLarge")
     mh:SetPoint("TOPLEFT", 470, -62)
+    -- The game mode (Melee, Footmen Frenzy...): the maps follow it.
+    f.modes = {}
+    for i, key in ipairs(WC().MODE_ORDER) do
+        local b = W.Button(f, WC().Modes[key].name, 118, function() L.PickMode(view, key) end, 22)
+        b:SetPoint("TOPLEFT", 470 + (i - 1) * 122, -84)
+        W.Tooltip(b, WC().Modes[key].name, WC().Modes[key].text)
+        b.key = key
+        f.modes[i] = b
+    end
     f.maps = {}
-    for i = 1, 8 do
+    for i = 1, 6 do
         local b = CreateFrame("Button", nil, f)
         b:SetSize(240, 20)
-        b:SetPoint("TOPLEFT", 470, -84 - (i - 1) * 21)
+        b:SetPoint("TOPLEFT", 470, -112 - (i - 1) * 21)
         b.bg = b:CreateTexture(nil, "BACKGROUND")
         b.bg:SetAllPoints()
         b.bg:SetColorTexture(1, 0.82, 0, 0.18)
@@ -157,7 +166,7 @@ function L.Build(view, o)
     -- The preview: the map's trees, starts and mines.
     f.preview = CreateFrame("Frame", nil, f)
     f.preview:SetSize(160, 104)
-    f.preview:SetPoint("TOPLEFT", 470, -262)
+    f.preview:SetPoint("TOPLEFT", 470, -246)
     local pbg = f.preview:CreateTexture(nil, "BACKGROUND")
     pbg:SetAllPoints()
     pbg:SetColorTexture(0.2, 0.32, 0.14, 1)
@@ -237,6 +246,22 @@ function L.Click(view, i, what)
     elseif what == "team" then
         s.team = s.team % m.players + 1
     end
+    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    L.Draw(view)
+end
+
+-- The game mode: Melee or a custom game; the first map for it.
+function L.PickMode(view, key)
+    if Online(view) then
+        ns.Session.Act(view.kind, "mode:" .. key)
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        return
+    end
+    local lobby = Lobby(view)
+    if lobby.mode == key then return end
+    lobby.mode = key
+    lobby.map = WC().MapsFor(1, key)[1] or lobby.map
+    L.Fit(lobby)
     W.PlaySound("U_CHAT_SCROLL_BUTTON")
     L.Draw(view)
 end
@@ -353,8 +378,11 @@ function L.Draw(view)
             r.team:SetEnabled(yours)
         end
     end
+    for _, b in ipairs(f.modes) do
+        b:SetEnabled(host and b.key ~= (lobby.mode or "melee")) -- the chosen one is greyed out
+    end
     local i = 0
-    for _, key in ipairs(WC().MAP_ORDER) do
+    for _, key in ipairs(WC().MapsFor(1, lobby.mode)) do
         i = i + 1
         local b = f.maps[i]
         if b then

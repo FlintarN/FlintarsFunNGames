@@ -44,6 +44,8 @@ A small real-time strategy game against the computer: Human or Orc, workers gath
 
 **Warcraft 4 sound**: the original Warcraft III unit voices from WoW's own files, combat, spells and warnings. Settings has two switches: Game sounds and Alerts.
 
+**Warcraft 4: Footmen Frenzy**: the classic custom game for four, with friends or computers.
+
 **Warcraft 4 with friends**: up to eight players in teams, with computers in the empty seats.
 
 **Warcraft 4 maps**: pick from five maps, from a quick duel to a four-player map.

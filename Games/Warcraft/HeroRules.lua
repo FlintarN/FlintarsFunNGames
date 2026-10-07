@@ -71,10 +71,12 @@ end
 local function Heroes(st, p)
     local c = st.heroCache
     if not c or c.time ~= st.time then
-        c = { time = st.time, [1] = {}, [2] = {} }
+        c = { time = st.time }
+        for p2 = 1, #st.players do c[p2] = {} end
         for _, id in ipairs(st.list) do
             local e = st.ents[id]
             if e and E.IsHero(e) and not e.illusion and e.owner > 0 and not (e.buffs and e.buffs.reinc) then
+                c[e.owner] = c[e.owner] or {}
                 table.insert(c[e.owner], e)
             end
         end
@@ -213,8 +215,8 @@ function E.OnDeath(st, t)
     local d = U[t.type]
     local xp = d.hero and (80 + 60 * (t.level or 1)) or (d.food or 1) * 25
     local near = {}
-    for p = 1, 2 do
-        if p ~= t.owner then
+    for p = 1, #st.players do
+        if E.Foe(st, p, t.owner) then -- (heroes of the other side learn from it)
             for _, h in ipairs(Heroes(st, p)) do
                 local dx, dy = h.x - t.x, h.y - t.y
                 if h.level < 10 and dx * dx + dy * dy <= WC.XP_RANGE * WC.XP_RANGE then table.insert(near, h) end
@@ -605,7 +607,8 @@ end
 function E.ReviveCost(st, p, utype)
     local f = st.players[p].fallen and st.players[p].fallen[utype]
     local lv = f and f.level or 1
-    return { math.floor(U[utype].cost[1] * math.min(1, 0.4 + 0.1 * lv)), 0 }
+    -- (A mode's heroes can have their own price to come back: reviveCost.)
+    return { math.floor((U[utype].reviveCost or U[utype].cost[1]) * math.min(1, 0.4 + 0.1 * lv)), 0 }
 end
 
 function E.ReviveTime(st, p, utype)

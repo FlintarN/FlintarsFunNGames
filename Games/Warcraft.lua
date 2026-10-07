@@ -130,7 +130,7 @@ function G:Begin(s)
     end
     local view = G.LobbyView(s)
     local o = ns.WarcraftLobby.GameOptions(view, math.random)
-    s.game = { map = o.map, factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
+    s.game = { map = o.map, mode = o.mode, factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
         cpus = o.cpus, names = o.names }
     s.seed = math.random(1, 2000000000)
     s.stage = "play"
@@ -181,9 +181,17 @@ end
 local function LobbyAct(s, name, verb, arg)
     local lobby = s.lobby
     local host = name == s.host
+    if verb == "mode" then
+        if not host or not ns.WC.Modes[arg] or lobby.mode == arg then return false end
+        local maps = ns.WC.MapsFor(#s.players, arg)
+        if #maps == 0 then return false end
+        lobby.mode, lobby.map = arg, maps[1]
+        Fit(lobby)
+        return true
+    end
     if verb == "map" then
         local m = ns.WC.Maps[arg]
-        if not host or not m or m.players < #s.players then return false end
+        if not host or not m or m.players < #s.players or (m.mode or "melee") ~= (lobby.mode or "melee") then return false end
         lobby.map = arg
         Fit(lobby)
         return true

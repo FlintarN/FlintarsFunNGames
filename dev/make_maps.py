@@ -24,6 +24,29 @@ class Map:
         s.trees(0, 0, s.w, n); s.trees(0, s.h - n, s.w, n); s.trees(0, 0, n, s.h); s.trees(s.w - n, 0, n, s.h)
     def start(s, n, x, y): s.anchors.append((str(n), x, y, 4))
     def mine(s, x, y): s.anchors.append(('G', x, y, 3))
+    def shop(s, x, y): s.anchors.append(('S', x, y, 2))
+    def mirror4(s):
+        # Four corners alike: trees and anchors mirrored left-right and top-bottom
+        # (start 1 top left, 3 top right, 4 bottom left, 2 bottom right).
+        g2 = [row[:] for row in s.g]
+        for y in range(s.h):
+            for x in range(s.w):
+                for (xx, yy) in ((s.w - 1 - x, y), (x, s.h - 1 - y), (s.w - 1 - x, s.h - 1 - y)):
+                    if s.g[yy][xx] == 'T': g2[y][x] = 'T'
+        s.g = g2
+        swapx = {'1': '3', '3': '1', '2': '4', '4': '2'}
+        swapy = {'1': '4', '4': '1', '2': '3', '3': '2'}
+        both = {'1': '2', '2': '1', '3': '4', '4': '3'}
+        for ch, x, y, size in list(s.anchors):
+            s.anchors.append((swapx.get(ch, ch), s.w - x - size, y, size))
+            s.anchors.append((swapy.get(ch, ch), x, s.h - y - size, size))
+            s.anchors.append((both.get(ch, ch), s.w - x - size, s.h - y - size, size))
+        # (the middle shop mirrors onto itself: keep one)
+        seen, keep = set(), []
+        for a in s.anchors:
+            if (a[1], a[2]) not in seen:
+                seen.add((a[1], a[2])); keep.append(a)
+        s.anchors = keep
     def rot180(s, pairs={'1': '2', '3': '4', '5': '6', '7': '8'}):
         # Trees: union with the turned copy. Anchors: turned copies.
         g2 = [row[:] for row in s.g]
@@ -96,11 +119,27 @@ m.rot180()
 maps.append(dict(key='four_crowns', name='Four Crowns', players=4, symmetry='rot180', rows=m.rows(),
     text='2v2 or four players (96 x 64): a base in each corner, expansions round a central clearing.'))
 
+# Frenzy Fields (64 x 64): Footmen Frenzy for four, a barracks in each corner
+# behind a wall with two gaps (to the neighbours and to the middle); a shop
+# in the middle.
+m = Map(64, 64); m.border()
+m.start(1, 6, 6)
+m.trees(2, 16, 10, 3); m.trees(16, 2, 3, 10)      # the corner's walls
+m.trees(15, 15, 4, 4)                              # a pillar by the diagonal gap
+m.trees(26, 10, 3, 6); m.trees(10, 26, 6, 3)       # cover on the edges
+m.trees(24, 24, 3, 3)                              # round the middle
+m.shop(31, 31)
+m.mirror4()
+maps.append(dict(key='frenzy_fields', name='Frenzy Fields', players=4, symmetry='rot180', modes='footmen', rows=m.rows(),
+    text='Footmen Frenzy for four: a barracks in each corner, paths to both neighbours and the middle, a shop in the centre.'))
+
 def lua_str(s): return '"' + s + '"'
 out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   .  open ground        T  tree
 --   1..9  a start (the top-left tile of its 4 x 4 hall)
 --   G  a gold mine (the top-left tile of its 3 x 3 footprint)
+--   S  a shop for everyone (the top-left tile of its 2 x 2 footprint)
+-- mode: the game mode the map is for ("melee", "footmen").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
 -- (dev/make_maps.py), but fine to edit by hand: keep it symmetric.
@@ -111,7 +150,7 @@ WC.Maps = {}
 WC.MAP_ORDER = {}
 ''']
 for m in maps:
-    out.append(f'WC.Maps.{m["key"]} = {{ name = {lua_str(m["name"])}, players = {m["players"]}, symmetry = "{m["symmetry"]}",')
+    out.append(f'WC.Maps.{m["key"]} = {{ name = {lua_str(m["name"])}, players = {m["players"]}, symmetry = "{m["symmetry"]}", mode = "{m.get("modes", "melee")}",')
     out.append(f'    text = {lua_str(m["text"])},')
     out.append('    grid = {')
     for r in m['rows']: out.append('        ' + lua_str(r) + ',')
@@ -123,7 +162,7 @@ function WC.ParseMap(key)
     local m = WC.Maps[key]
     if not m then return nil end
     if m.parsed then return m.parsed end
-    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {} }
+    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {} }
     for y, row in ipairs(m.grid) do
         for x = 1, #row do
             local c = row:sub(x, x)
@@ -131,6 +170,8 @@ function WC.ParseMap(key)
                 table.insert(p.trees, { x - 1, y - 1 })
             elseif c == "G" then
                 table.insert(p.mines, { x - 1, y - 1 })
+            elseif c == "S" then
+                table.insert(p.shops, { x - 1, y - 1 })
             elseif c:match("%d") then
                 p.starts[tonumber(c)] = { x - 1, y - 1 }
             end
@@ -140,11 +181,12 @@ function WC.ParseMap(key)
     return p
 end
 
--- The maps that fit a game of n players.
-function WC.MapsFor(n)
+-- The maps that fit a game of n players (in a mode: default melee).
+function WC.MapsFor(n, mode)
     local out = {}
     for _, key in ipairs(WC.MAP_ORDER) do
-        if WC.Maps[key].players >= (n or 2) then table.insert(out, key) end
+        local m = WC.Maps[key]
+        if m.players >= (n or 2) and (m.mode or "melee") == (mode or "melee") then table.insert(out, key) end
     end
     return out
 end
@@ -177,7 +219,7 @@ function WC.CheckMap(key)
             table.insert(bad, "no start " .. n)
         else
             if not Clear(s[1], s[2], 4) then table.insert(bad, "start " .. n .. " is not clear") end
-            local near
+            local near = (m.mode or "melee") ~= "melee" -- (only melee needs mines)
             for _, g in ipairs(p.mines) do
                 if math.abs(g[1] - s[1]) + math.abs(g[2] - s[2]) <= 16 then near = true end
             end
@@ -187,11 +229,17 @@ function WC.CheckMap(key)
     for _, g in ipairs(p.mines) do
         if not Clear(g[1], g[2], 3) then table.insert(bad, "mine at " .. g[1] .. "," .. g[2] .. " is not clear") end
     end
+    for _, g in ipairs(p.shops) do
+        if not Clear(g[1], g[2], 2) then table.insert(bad, "shop at " .. g[1] .. "," .. g[2] .. " is not clear") end
+    end
     -- Every start reaches start 1 (open tiles, four ways).
     local open, seen = {}, {}
     for y = 0, p.h - 1 do for x = 0, p.w - 1 do open[y * p.w + x] = Tile(x, y) ~= "T" end end
     for _, g in ipairs(p.mines) do
         for yy = g[2], g[2] + 2 do for xx = g[1], g[1] + 2 do open[yy * p.w + xx] = false end end
+    end
+    for _, g in ipairs(p.shops) do
+        for yy = g[2], g[2] + 1 do for xx = g[1], g[1] + 1 do open[yy * p.w + xx] = false end end
     end
     local s1 = p.starts[1]
     if s1 then

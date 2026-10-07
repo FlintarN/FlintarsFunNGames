@@ -615,6 +615,8 @@ await Section('Warcraft III armies', async () => {
   await p.run('WcDemo()');
   await p.run(readFileSync(join(here, 'tests_wcmaps.lua'), 'utf8'));
   await p.run('WcMapTests()');
+  await p.run(readFileSync(join(here, 'tests_wcfootmen.lua'), 'utf8'));
+  await p.run('WcFootmenTests()');
 });
 
 await Section('Warcraft III lockstep', async () => {

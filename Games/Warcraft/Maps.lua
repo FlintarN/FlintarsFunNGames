@@ -2,6 +2,8 @@
 --   .  open ground        T  tree
 --   1..9  a start (the top-left tile of its 4 x 4 hall)
 --   G  a gold mine (the top-left tile of its 3 x 3 footprint)
+--   S  a shop for everyone (the top-left tile of its 2 x 2 footprint)
+-- mode: the game mode the map is for ("melee", "footmen").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
 -- (dev/make_maps.py), but fine to edit by hand: keep it symmetric.
@@ -11,7 +13,7 @@ local WC = ns.WC
 WC.Maps = {}
 WC.MAP_ORDER = {}
 
-WC.Maps.riverford = { name = "Riverford", players = 2, symmetry = "rot180",
+WC.Maps.riverford = { name = "Riverford", players = 2, symmetry = "rot180", mode = "melee",
     text = "The first map: two bases in opposite corners, a gold mine each and one to expand to.",
     grid = {
         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -57,7 +59,7 @@ WC.Maps.riverford = { name = "Riverford", players = 2, symmetry = "rot180",
     } }
 table.insert(WC.MAP_ORDER, "riverford")
 
-WC.Maps.echo_ford = { name = "Echo Ford", players = 2, symmetry = "rot180",
+WC.Maps.echo_ford = { name = "Echo Ford", players = 2, symmetry = "rot180", mode = "melee",
     text = "Bigger (80 x 56): a forest band splits the map, crossed at three fords. A natural expansion by each base, two contested mines in the middle.",
     grid = {
         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -119,7 +121,7 @@ WC.Maps.echo_ford = { name = "Echo Ford", players = 2, symmetry = "rot180",
     } }
 table.insert(WC.MAP_ORDER, "echo_ford")
 
-WC.Maps.lost_grove = { name = "Lost Grove", players = 2, symmetry = "rot180",
+WC.Maps.lost_grove = { name = "Lost Grove", players = 2, symmetry = "rot180", mode = "melee",
     text = "Square (64 x 64), bases top and bottom. A walled grove in the centre holds two mines; the side paths go round it.",
     grid = {
         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -189,7 +191,7 @@ WC.Maps.lost_grove = { name = "Lost Grove", players = 2, symmetry = "rot180",
     } }
 table.insert(WC.MAP_ORDER, "lost_grove")
 
-WC.Maps.duel_pass = { name = "Duel Pass", players = 2, symmetry = "rot180",
+WC.Maps.duel_pass = { name = "Duel Pass", players = 2, symmetry = "rot180", mode = "melee",
     text = "Small and quick (48 x 32): one mine each, a pass in the middle and a long way round. Rush or be rushed.",
     grid = {
         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -227,7 +229,7 @@ WC.Maps.duel_pass = { name = "Duel Pass", players = 2, symmetry = "rot180",
     } }
 table.insert(WC.MAP_ORDER, "duel_pass")
 
-WC.Maps.four_crowns = { name = "Four Crowns", players = 4, symmetry = "rot180",
+WC.Maps.four_crowns = { name = "Four Crowns", players = 4, symmetry = "rot180", mode = "melee",
     text = "2v2 or four players (96 x 64): a base in each corner, expansions round a central clearing.",
     grid = {
         "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
@@ -297,12 +299,82 @@ WC.Maps.four_crowns = { name = "Four Crowns", players = 4, symmetry = "rot180",
     } }
 table.insert(WC.MAP_ORDER, "four_crowns")
 
+WC.Maps.frenzy_fields = { name = "Frenzy Fields", players = 4, symmetry = "rot180", mode = "footmen",
+    text = "Footmen Frenzy for four: a barracks in each corner, paths to both neighbours and the middle, a shop in the centre.",
+    grid = {
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT....1.........TTT..........................TTT......3.......TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT.......TTT......TTT.......TTT..............TT",
+        "TT..............TTT.......TTT......TTT.......TTT..............TT",
+        "TT........................TTT......TTT........................TT",
+        "TT........................TTT......TTT........................TT",
+        "TT........................TTT......TTT........................TT",
+        "TT.............TTTT.......TTT......TTT.......TTTT.............TT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT......................TTT..........TTT......................TT",
+        "TT......................TTT..........TTT......................TT",
+        "TT........TTTTTT........TTT..........TTT........TTTTTT........TT",
+        "TT........TTTTTT................................TTTTTT........TT",
+        "TT........TTTTTT................................TTTTTT........TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT.............................S..............................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT........TTTTTT................................TTTTTT........TT",
+        "TT........TTTTTT................................TTTTTT........TT",
+        "TT........TTTTTT........TTT..........TTT........TTTTTT........TT",
+        "TT......................TTT..........TTT......................TT",
+        "TT......................TTT..........TTT......................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TT............................................................TT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TTTTTTTTTTTT...TTTT..........................TTTT...TTTTTTTTTTTT",
+        "TT.............TTTT.......TTT......TTT.......TTTT.............TT",
+        "TT........................TTT......TTT........................TT",
+        "TT........................TTT......TTT........................TT",
+        "TT........................TTT......TTT........................TT",
+        "TT..............TTT.......TTT......TTT.......TTT..............TT",
+        "TT..............TTT.......TTT......TTT.......TTT..............TT",
+        "TT....4.........TTT..........................TTT......2.......TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TT..............TTT..........................TTT..............TT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    } }
+table.insert(WC.MAP_ORDER, "frenzy_fields")
+
 -- Read a map's grid once: size, trees, starts, mines.
 function WC.ParseMap(key)
     local m = WC.Maps[key]
     if not m then return nil end
     if m.parsed then return m.parsed end
-    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {} }
+    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {} }
     for y, row in ipairs(m.grid) do
         for x = 1, #row do
             local c = row:sub(x, x)
@@ -310,6 +382,8 @@ function WC.ParseMap(key)
                 table.insert(p.trees, { x - 1, y - 1 })
             elseif c == "G" then
                 table.insert(p.mines, { x - 1, y - 1 })
+            elseif c == "S" then
+                table.insert(p.shops, { x - 1, y - 1 })
             elseif c:match("%d") then
                 p.starts[tonumber(c)] = { x - 1, y - 1 }
             end
@@ -319,11 +393,12 @@ function WC.ParseMap(key)
     return p
 end
 
--- The maps that fit a game of n players.
-function WC.MapsFor(n)
+-- The maps that fit a game of n players (in a mode: default melee).
+function WC.MapsFor(n, mode)
     local out = {}
     for _, key in ipairs(WC.MAP_ORDER) do
-        if WC.Maps[key].players >= (n or 2) then table.insert(out, key) end
+        local m = WC.Maps[key]
+        if m.players >= (n or 2) and (m.mode or "melee") == (mode or "melee") then table.insert(out, key) end
     end
     return out
 end
@@ -356,7 +431,7 @@ function WC.CheckMap(key)
             table.insert(bad, "no start " .. n)
         else
             if not Clear(s[1], s[2], 4) then table.insert(bad, "start " .. n .. " is not clear") end
-            local near
+            local near = (m.mode or "melee") ~= "melee" -- (only melee needs mines)
             for _, g in ipairs(p.mines) do
                 if math.abs(g[1] - s[1]) + math.abs(g[2] - s[2]) <= 16 then near = true end
             end
@@ -366,11 +441,17 @@ function WC.CheckMap(key)
     for _, g in ipairs(p.mines) do
         if not Clear(g[1], g[2], 3) then table.insert(bad, "mine at " .. g[1] .. "," .. g[2] .. " is not clear") end
     end
+    for _, g in ipairs(p.shops) do
+        if not Clear(g[1], g[2], 2) then table.insert(bad, "shop at " .. g[1] .. "," .. g[2] .. " is not clear") end
+    end
     -- Every start reaches start 1 (open tiles, four ways).
     local open, seen = {}, {}
     for y = 0, p.h - 1 do for x = 0, p.w - 1 do open[y * p.w + x] = Tile(x, y) ~= "T" end end
     for _, g in ipairs(p.mines) do
         for yy = g[2], g[2] + 2 do for xx = g[1], g[1] + 2 do open[yy * p.w + xx] = false end end
+    end
+    for _, g in ipairs(p.shops) do
+        for yy = g[2], g[2] + 1 do for xx = g[1], g[1] + 1 do open[yy * p.w + xx] = false end end
     end
     local s1 = p.starts[1]
     if s1 then

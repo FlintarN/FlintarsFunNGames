@@ -324,6 +324,8 @@ function E.CanResearch(st, p, key, b)
     if st.players[p].busy[key] then return false, "already being researched" end
     local miss = E.Missing(st, p, r.requires and r.requires[level])
     if miss then return false, "requires " .. miss end
+    local at = r.minTime and r.minTime[level]
+    if at and st.time < at then return false, string.format("ready at %d:%02d", math.floor(at / 60), at % 60) end
     return true
 end
 
@@ -450,12 +452,22 @@ function E.New(opts)
     local map = D().ParseMap(key)
     local st = { rng = math.floor(opts.seed or 1) % 2147483646 + 1, time = 0, nextId = 0, w = map.w, h = map.h,
         trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false, difficulty = opts.difficulty or "normal",
-        map = key, teams = opts.teams }
-    -- A hall for each player on its start, then the gold mines.
+        map = key, teams = opts.teams, mode = opts.mode and D().Modes and D().Modes[opts.mode] and opts.mode or "melee" }
     for p = 1, #opts.factions do
-        local f = D().Factions[opts.factions[p]]
         st.players[p] = { faction = opts.factions[p], gold = D().START.gold, lumber = D().START.lumber,
             food = 0, foodCap = 0, up = {}, busy = {}, difficulty = opts.difficulties and opts.difficulties[p] }
+    end
+    -- A mode can start the game its own way (Modes.lua).
+    local mode = D().Modes and D().Modes[st.mode]
+    if mode and mode.New then
+        for _, t in ipairs(map.trees) do st.trees[Idx(st, t[1], t[2])] = D().TREE_LUMBER end
+        mode.New(st, opts, map)
+        E.Food(st)
+        return st
+    end
+    -- A hall for each player on its start, then the gold mines.
+    for p = 1, #st.players do
+        local f = D().Factions[st.players[p].faction]
         local s = map.starts[opts.starts and opts.starts[p] or p]
         NewBuilding(st, p, f.hall, s[1], s[2], true)
     end
@@ -487,6 +499,17 @@ function E.Hall(st, p)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and e.owner == p and e.kind == "building" and Def(e).hall and e.progress >= 1 then return e end
+    end
+end
+
+-- Where a player's base is: the hall, or any building of theirs (modes
+-- without halls).
+function E.Home(st, p)
+    local hall = E.Hall(st, p)
+    if hall then return hall end
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and e.kind == "building" then return e end
     end
 end
 
@@ -577,7 +600,7 @@ function E.At(st, x, y)
 end
 
 function E.Food(st)
-    for p = 1, 2 do
+    for p = 1, #st.players do
         st.players[p].food, st.players[p].foodCap = 0, 0
     end
     for _, id in ipairs(st.list) do
@@ -594,7 +617,7 @@ function E.Food(st)
             end
         end
     end
-    for p = 1, 2 do st.players[p].foodCap = math.min(D().FOOD_MAX, st.players[p].foodCap) end
+    for p = 1, #st.players do st.players[p].foodCap = math.min(D().FOOD_MAX, st.players[p].foodCap) end
 end
 
 ---------------------------------------------------------------------------

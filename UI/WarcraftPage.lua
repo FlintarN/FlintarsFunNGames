@@ -38,12 +38,18 @@ local BUILDING_ART = {
 }
 -- A building's flat art (ghost, plans, the fallback): one for every building.
 local function ArtOf(btype)
-    return ART .. (BUILDING_ART[btype] or "WcBarracks")
+    return ART .. (BUILDING_ART[btype] or BUILDING_ART[ns.WC.BaseOf(btype)] or "WcBarracks")
 end
 
 local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
 local function Snd() return ns.WC.Sounds end
+-- A mode's variant looks and sounds like the normal one (Modes.lua: BaseOf).
+local function Base(key) return ns.WC.BaseOf and ns.WC.BaseOf(key) or key end
+local function VoiceOf(key)
+    local V = ns.WC.Sounds and ns.WC.Sounds.Voices
+    return V and (V[key] or V[Base(key)])
+end
 local function Now() return GetTime and GetTime() or 0 end
 local ATAN2 = math.atan2 or math.atan
 
@@ -462,7 +468,7 @@ function P.New(parent, kind)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
-        D = true, E = true, U = true, N = true, V = true, X = true, K = true,
+        D = true, E = true, U = true, N = true, V = true, X = true, K = true, Z = true,
         L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
@@ -740,7 +746,7 @@ function P.New(parent, kind)
     if saved and saved.players and not saved.over then
         self.st = saved
         ME, CPUS = saved.me or 1, saved.cpus or { 2 }
-        self:CenterOn(E().Hall(saved, ME))
+        self:CenterOn(E().Home(saved, ME))
         self:Resume()
         ns.Solo.SetRunning(kind, true)
     else
@@ -818,14 +824,14 @@ function P:StartSkirmish(o, seed)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
-        map = o.map, seed = seed or math.random(1, 2000000000), difficulty = "normal" })
+        map = o.map, mode = o.mode, seed = seed or math.random(1, 2000000000), difficulty = "normal" })
     self.st.me, self.st.cpus = ME, CPUS
     Save().game = self.st
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted = false
     self.treeDirty = true
     self:BuildMinimapTrees()
-    self:CenterOn(E().Hall(self.st, ME))
+    self:CenterOn(E().Home(self.st, ME))
     ns.Solo.SetRunning(self.kind, true)
     self:Resume()
     W.PlaySound("IG_MAINMENU_OPTION")
@@ -856,7 +862,7 @@ function P:NewGame(faction, seed)
     self.counted = false
     self.treeDirty = true
     self:BuildMinimapTrees()
-    self:CenterOn(E().Hall(self.st, ME))
+    self:CenterOn(E().Home(self.st, ME))
     ns.Solo.SetRunning(self.kind, true)
     self:Resume()
     W.PlaySound("IG_MAINMENU_OPTION")
@@ -1192,11 +1198,11 @@ function P:SelectAt(x, y, add)
     else
         self.sel = { e.id }
     end
-    if e.owner == ME and e.kind == "unit" and Snd() and Snd().Voices[e.type] then
+    if e.owner == ME and e.kind == "unit" and VoiceOf(e.type) then
         self:Voice(e, "what")
     elseif e.owner == ME and e.kind == "building" and Snd() then
         local S = Snd()
-        W.PlayFile(S.Buildings[S.BUILDING_KIND[e.type] or "default"], "game")
+        W.PlayFile(S.Buildings[S.BUILDING_KIND[e.type] or S.BUILDING_KIND[Base(e.type)] or "default"], "game")
     else
         W.PlaySound("U_CHAT_SCROLL_BUTTON")
     end
@@ -1833,7 +1839,7 @@ function P:PlanDepth()
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and e.kind ~= "unit" then
-            local look = ns.WC.ART.models[e.type]
+            local look = ns.WC.ART.models[e.type] or ns.WC.ART.models[Base(e.type)]
             Add(e.y + e.size, look and RADIUS[look.file] or 30)
         end
     end
@@ -2043,7 +2049,7 @@ function P:Draw()
             end
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             local size = e.size * TILE
-            local look = ns.WC.ART.models[e.type]
+            local look = ns.WC.ART.models[e.type] or ns.WC.ART.models[Base(e.type)]
             if t.model == nil then t.model = MakeDoodad(self.buildLayer) or false end
             local alpha = (e.progress or 1) < 1 and 0.45 + 0.55 * e.progress or 1
             if not t.shadow then
@@ -2182,7 +2188,7 @@ function P:Draw()
                     f.ring:SetShown(not m.loaded)
                     -- Its look: the unit's size, then what its buffs do.
                     local ud = WC().Units[e.type]
-                    local k = UNIT_LOOK[look] or (ud and ud.hero and HERO_LOOK) or 1
+                    local k = UNIT_LOOK[look] or UNIT_LOOK[Base(look)] or (ud and ud.hero and HERO_LOOK) or 1
                     local desat, speed, spin, alpha = 0, 1, false, nil
                     for buff in pairs(e.buffs or {}) do
                         local L = BUFF_LOOK[buff]
@@ -2424,6 +2430,7 @@ function P:DrawCommands(sel)
     end
     if not hasWorker and self.menu == "build" then self.menu = nil end
     if not hero and self.menu == "learn" then self.menu = nil end
+    if self.menu == "heroes" and not (#mine == 1 and mine[1].kind == "building" and E().Def(mine[1]).ffRace) then self.menu = nil end
     local function Cost(c) return c[1] .. " gold" .. (c[2] > 0 and (", " .. c[2] .. " lumber") or "") end
     local function Add(item) table.insert(list, item) end
     local A = WC().Abilities
@@ -2524,87 +2531,123 @@ function P:DrawCommands(sel)
     end
     local b = #mine == 1 and mine[1].kind == "building" and mine[1].progress >= 1 and mine[1]
     if b then
-        for _, ut in ipairs(E().Def(b).trains or {}) do
-            local ud = WC().Units[ut]
-            local fallen = st.players[ME].fallen and st.players[ME].fallen[ut]
-            local miss = E().Missing(st, ME, ud.requires)
-            if ud.hero and not miss then
-                local ok, why = E().CanTrainHero(st, ME, ut)
-                if not ok and not fallen then miss = why:gsub("^requires ", "") end
-            end
-            if fallen then
-                local cost = E().ReviveCost(st, ME, ut)
-                Add({ icon = ud.icon, key = ud.hotkey, title = "Revive " .. ud.name .. " (" .. ud.hotkey .. ")", cost = cost,
-                    tip = string.format("%s. Back at level %d with all its skills.", Cost(cost), fallen.level),
-                    enabled = not fallen.reviving, action = function() self:Revive(ut) end })
-            else
-            local tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food,
-                E().MaxHp(st, ME, ut), ud.damage, ud.range > 1.5 and ", ranged" or "")
-            if miss then tip = "|cffff6060Requires " .. miss .. ".|r " .. tip end
-            if ud.hero then
-                tip = string.format("%s, %d food. A hero: gains levels, learns four abilities (the last at level 6).",
-                    Cost(ud.cost), ud.food)
-                if miss then tip = "|cffff6060" .. miss:sub(1, 1):upper() .. miss:sub(2) .. ".|r " .. tip end
-            end
-            Add({ icon = ud.icon, key = ud.hotkey, title = "Train " .. ud.name .. " (" .. ud.hotkey .. ")", cost = ud.cost,
-                tip = tip, enabled = miss == nil, action = function() self:Train(ut) end })
+        -- Footmen Frenzy: the heroes sit behind one button (Hire a Hero).
+        local heroMenu = E().Def(b).ffRace ~= nil
+        local onlyHeroes = heroMenu and self.menu == "heroes"
+        if heroMenu and not onlyHeroes then
+            Add({ icon = IC .. "INV_Misc_Head_Human_01", key = "H", title = "Hire a Hero (H)",
+                tip = "One hero, " .. WC().Modes.footmen.HERO_COST .. " gold: pick from all eight. Revive it here when it falls.",
+                action = function() self.menu = "heroes" end })
+        end
+        if not heroMenu or onlyHeroes then
+            for _, ut in ipairs(E().Def(b).trains or {}) do
+                local ud = WC().Units[ut]
+                local fallen = st.players[ME].fallen and st.players[ME].fallen[ut]
+                local miss = E().Missing(st, ME, ud.requires)
+                if ud.hero and not miss then
+                    local ok, why = E().CanTrainHero(st, ME, ut)
+                    if not ok and not fallen then miss = why:gsub("^requires ", "") end
+                end
+                if fallen then
+                    local cost = E().ReviveCost(st, ME, ut)
+                    Add({ icon = ud.icon, key = ud.hotkey, title = "Revive " .. ud.name .. " (" .. ud.hotkey .. ")", cost = cost,
+                        tip = string.format("%s. Back at level %d with all its skills.", Cost(cost), fallen.level),
+                        enabled = not fallen.reviving, action = function() self:Revive(ut) end })
+                else
+                local tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food,
+                    E().MaxHp(st, ME, ut), ud.damage, ud.range > 1.5 and ", ranged" or "")
+                if miss then tip = "|cffff6060Requires " .. miss .. ".|r " .. tip end
+                if ud.hero then
+                    tip = string.format("%s, %d food. A hero: gains levels, learns four abilities (the last at level 6).",
+                        Cost(ud.cost), ud.food)
+                    if miss then tip = "|cffff6060" .. miss:sub(1, 1):upper() .. miss:sub(2) .. ".|r " .. tip end
+                end
+                Add({ icon = ud.icon, key = ud.hotkey, title = "Train " .. ud.name .. " (" .. ud.hotkey .. ")", cost = ud.cost,
+                    tip = tip, enabled = miss == nil, action = function() self:Train(ut) end })
+                end
             end
         end
-        -- A shop: items for the hero standing next to it.
-        if E().Def(b).sells then
-            local cx, cy = E().Center(b)
-            local buyer
-            for _, id in ipairs(st.list) do
-                local e = st.ents[id]
-                if e and e.owner == ME and E().IsHero(e) and not e.illusion
-                    and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then buyer = e break end
+        if onlyHeroes then
+            list[12] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands.",
+                action = function() self.menu = nil end }
+        else
+            -- A shop: items for the hero standing next to it.
+            if E().Def(b).sells then
+                local cx, cy = E().Center(b)
+                local buyer
+                for _, id in ipairs(st.list) do
+                    local e = st.ents[id]
+                    if e and e.owner == ME and E().IsHero(e) and not e.illusion
+                        and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then buyer = e break end
+                end
+                for _, key in ipairs(E().Def(b).sells) do
+                    local it = WC().Items[key]
+                    local hk = WC().ITEM_KEYS[key]
+                    local tip = it.cost .. " gold. " .. it.text
+                    if not buyer then tip = "|cffff6060Bring a hero next to the shop.|r " .. tip end
+                    Add({ icon = it.icon, key = hk, title = "Buy " .. it.name .. " (" .. hk .. ")", cost = { it.cost, 0 }, tip = tip,
+                        enabled = buyer ~= nil, action = function()
+                            local ok, why = self:Cmd({ type = "buy", building = b.id, unit = buyer.id, item = key })
+                            if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                        end })
+                end
             end
-            for _, key in ipairs(E().Def(b).sells) do
-                local it = WC().Items[key]
-                local hk = WC().ITEM_KEYS[key]
-                local tip = it.cost .. " gold. " .. it.text
-                if not buyer then tip = "|cffff6060Bring a hero next to the shop.|r " .. tip end
-                Add({ icon = it.icon, key = hk, title = "Buy " .. it.name .. " (" .. hk .. ")", cost = { it.cost, 0 }, tip = tip,
-                    enabled = buyer ~= nil, action = function()
-                        local ok, why = self:Cmd({ type = "buy", building = b.id, unit = buyer.id, item = key })
-                        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
-                    end })
+            -- Research and upgrades done here.
+            for _, key in ipairs(WC().AI.RESEARCH) do
+                local r = WC().Research[key]
+                local level = E().Level(st, ME, key) + 1
+                if r.building == b.type and level <= (r.levels or 1) then
+                    local name = r.names and r.names[level] or r.name
+                    local ok, why = E().CanResearch(st, ME, key, b)
+                    local tip = Cost(r.cost[level]) .. ". " .. (r.text or "")
+                    if (r.levels or 1) > 1 then tip = tip .. string.format(" (level %d of %d)", level, r.levels) end
+                    if not ok then tip = "|cffff6060" .. why:sub(1, 1):upper() .. why:sub(2) .. ".|r " .. tip end
+                    Add({ icon = r.icon, key = r.hotkey, title = name .. " (" .. r.hotkey .. ")", cost = r.cost[level],
+                        tip = tip, enabled = ok, action = function() self:Research(key) end })
+                end
             end
-        end
-        -- Research and upgrades done here.
-        for _, key in ipairs(WC().AI.RESEARCH) do
-            local r = WC().Research[key]
-            local level = E().Level(st, ME, key) + 1
-            if r.building == b.type and level <= (r.levels or 1) then
-                local name = r.names and r.names[level] or r.name
-                local ok, why = E().CanResearch(st, ME, key, b)
-                local tip = Cost(r.cost[level]) .. ". " .. (r.text or "")
-                if (r.levels or 1) > 1 then tip = tip .. string.format(" (level %d of %d)", level, r.levels) end
-                if not ok then tip = "|cffff6060" .. why:sub(1, 1):upper() .. why:sub(2) .. ".|r " .. tip end
-                Add({ icon = r.icon, key = r.hotkey, title = name .. " (" .. r.hotkey .. ")", cost = r.cost[level],
-                    tip = tip, enabled = ok, action = function() self:Research(key) end })
+            local fac = WC().Factions[st.players[ME].faction]
+            if E().Def(b).hall or (E().Def(b).garrison and fac.alarm == "battleStations") then
+                if fac.alarm == "callToArms" then
+                    list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "C", title = "Call to Arms (C)",
+                        tip = "Ring the alarm: peasants nearby run to the hall and fight as Militia for 45 seconds.",
+                        action = function() self:Alarm() end }
+                else
+                    list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "B", title = "Battle Stations (B)",
+                        tip = "Peons nearby run into the burrows (4 each); burrows with peons attack enemies.",
+                        action = function() self:Alarm() end }
+                end
+                list[10] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
+                    tip = "Everyone called to arms goes back to work.", action = function()
+                        self:Cmd({ type = "backToWork" })
+                    end }
             end
-        end
-        local fac = WC().Factions[st.players[ME].faction]
-        if E().Def(b).hall or (E().Def(b).garrison and fac.alarm == "battleStations") then
-            if fac.alarm == "callToArms" then
-                list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "C", title = "Call to Arms (C)",
-                    tip = "Ring the alarm: peasants nearby run to the hall and fight as Militia for 45 seconds.",
-                    action = function() self:Alarm() end }
-            else
-                list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "B", title = "Battle Stations (B)",
-                    tip = "Peons nearby run into the burrows (4 each); burrows with peons attack enemies.",
-                    action = function() self:Alarm() end }
+            -- Footmen Frenzy: where your barracks sends its soldiers.
+            if E().Def(b).ffRace then
+                local F = WC().Modes.footmen
+                local t = st.players[ME].ff and st.players[ME].ff.target or 0
+                local s = ns.Session.Get(self.kind)
+                local function Name(q)
+                    if q == 0 then return "the middle" end
+                    local n = s and s.game and s.game.names and s.game.names[q]
+                    return n or ("Player " .. q)
+                end
+                list[11] = { icon = IC .. "Ability_Warrior_Charge", key = "Z", title = "Send to: " .. Name(t) .. " (Z)",
+                    tip = "Where your barracks sends its soldiers. Click for the next: the middle, or an enemy's barracks.",
+                    action = function()
+                        local q = t
+                        for _ = 1, #st.players + 1 do
+                            q = (q + 1) % (#st.players + 1)
+                            if q == 0 or (E().Foe(st, ME, q) and F.Barracks(st, q)) then break end
+                        end
+                        self:Cmd({ type = "sendTo", target = q })
+                    end }
             end
-            list[10] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
-                tip = "Everyone called to arms goes back to work.", action = function()
-                    self:Cmd({ type = "backToWork" })
-                end }
-        end
-        if E().Def(b).trains then
-            list[12] = { icon = IC .. "INV_BannerPVP_02", key = "Y", title = "Set Rally Point (Y)",
-                tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
-                action = function() self:Target("rally", "Click where new units should go") end }
+            if E().Def(b).trains then
+                list[12] = { icon = IC .. "INV_BannerPVP_02", key = "Y", title = "Set Rally Point (Y)",
+                    tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
+                    action = function() self:Target("rally", "Click where new units should go") end }
+            end
         end
     end
     -- Cancel: a building going up, an upgrade, or the last unit in training.
@@ -2661,7 +2704,7 @@ end
 
 -- A unit says something: what (selected), yes, attack, ready, pissed, done.
 function P:Voice(e, kind)
-    local v = e and Snd() and Snd().Voices[e.type]
+    local v = e and VoiceOf(e.type)
     if not v then return end
     -- Clicked again and again: it gets annoyed (Warcraft III).
     if kind == "what" then
@@ -2753,7 +2796,7 @@ function P:Sounds(events)
                 elseif at == "magic" then list = S.Hit.magic
                 elseif ev.ranged then list = S.GUNS[a.type] and S.Hit.gun or S.Hit.pierce
                 elseif t.kind ~= "unit" then list = S.Hit.building end
-                local v = S.Voices[a.type]
+                local v = VoiceOf(a.type)
                 if v and v.hit and math.random() < 0.3 then list = v.hit end
                 W.PlayFile(list, "game")
             end
@@ -2762,7 +2805,7 @@ function P:Sounds(events)
             if ev.what == "building" then
                 W.PlayFile(S.Collapse, "game")
             elseif f and Room() then
-                local v = S.Voices[ev.type]
+                local v = VoiceOf(ev.type)
                 if v and v.death then W.PlayFile(v.death, "game") end
             end
         elseif k == "cast" then
@@ -2786,6 +2829,9 @@ function P:Sounds(events)
             if u and (ev.owner == ME or self:OnScreen(u.x, u.y)) then W.PlayFile(S.Items[ev.item] or S.ItemDefault, "game") end
         elseif k == "levelUp" and ev.owner == ME then
             W.PlayFile(S.LevelUp, "game")
+        elseif k == "bounty" and ev.owner == ME and (not self.coinT or Now() - self.coinT > 0.4) then
+            self.coinT = Now()
+            W.PlayFile(S.Buy, "game")
         end
     end
 end
@@ -2873,14 +2919,14 @@ function P:StartPvp(s)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = g.factions, teams = g.teams, starts = g.starts, difficulties = g.difficulties,
-        map = g.map, seed = s.seed, difficulty = "normal" })
+        map = g.map, mode = g.mode, seed = s.seed, difficulty = "normal" })
     local factions = g.factions
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted, self.reported, self.pvpGame = false, false, s.recordId
     self.acc, self.think = 0, 0
     self.treeDirty = true
     self:BuildMinimapTrees()
-    self:CenterOn(E().Hall(self.st, ME))
+    self:CenterOn(E().Home(self.st, ME))
     -- Lockstep with every other player (none: just you and computers).
     local peers = {}
     for p, name in pairs(g.names or {}) do
@@ -2969,7 +3015,7 @@ function P:LeavePvp()
     local saved = Save().game
     self.st = (saved and saved.players and not saved.over) and saved or nil
     ME, CPUS = self.st and self.st.me or 1, self.st and self.st.cpus or { 2 }
-    if self.st then self:CenterOn(E().Hall(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
+    if self.st then self:CenterOn(E().Home(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
     self.mode = nil
     self:ShowMenu()
 end

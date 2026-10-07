@@ -315,7 +315,10 @@ function E.ArmyCommand(st, p, cmd)
         local shop = st.ents[cmd.building]
         local hero = st.ents[cmd.unit]
         local it = WC.Items[cmd.item]
-        if not (shop and shop.owner == p and shop.progress >= 1 and E.Def(shop).sells) or not it then return false, "not here" end
+        -- Your own shop, or a neutral one (owner 0: the middle of some maps).
+        if not (shop and (shop.owner == p or shop.owner == 0) and shop.progress >= 1 and E.Def(shop).sells) or not it then
+            return false, "not here"
+        end
         if not (hero and hero.owner == p and E.IsHero(hero)) or hero.illusion then return false, "a hero buys" end
         local cx, cy = E.Center(shop)
         if (hero.x - cx) ^ 2 + (hero.y - cy) ^ 2 > WC.SHOP_RANGE ^ 2 then return false, "bring a hero next to the shop" end

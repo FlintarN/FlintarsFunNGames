@@ -253,6 +253,12 @@ H.RULES = {
         { "Fog of war", "You only see around your own units and buildings. Black is ground you've never "
             .. "seen; dim is ground you've seen, but nothing of yours is there now. Enemy buildings you've found "
             .. "stay on the map." },
+        { "Lobby", "Single Player and Play a Friend open the lobby: seats on the left (you, players, computers on "
+            .. "Easy, Normal or Hard, open or closed; a race and a team each), the game and map on the right. Players "
+            .. "on one team are allies: shared sight, auras and heals; the last team standing wins. Up to eight players." },
+        { "Footmen Frenzy", "A game mode (pick it in the lobby): one tough barracks each, no workers. It sends out "
+            .. "your soldiers every few seconds (Send to, Z: the middle or an enemy). Kills give gold: buy the next tier of "
+            .. "soldiers (from 3:00), Weapons and Armor levels, and one hero (Hire a Hero, H). The last barracks standing wins." },
         { "PvP", "Play a friend opens a lobby (group, guild, realm or a private code); Find an opponent looks for "
             .. "someone on your realm. You each pick a race. Both addons run the same game: your orders reach the "
             .. "other side in a moment, so they take effect about half a second after you click. If the other "
