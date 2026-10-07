@@ -122,11 +122,12 @@ local function NewGame(s)
     s.hand = s.recordId -- private hands are per game
     local d1, d2 = s._decks[s.players[1].name], s._decks[s.players[2].name]
     local st, events = E().New({ heroes = { d1.hero, d2.hero }, decks = { d1.cards or false, d2.cards or false },
-        seed = math.random(1, 2000000000) })
+        seed = math.random(1, 2000000000), mulligan = true })
     s._st = st
     s.stage = "play"
     s.result = nil
     s.turnNo = nil
+    s.missed = { 0, 0 }
     Publish(s, events)
     s.banner = s.players[st.active].name .. " goes first."
 end
@@ -150,7 +151,10 @@ function G:Expect() return nil end
 function G:IsTurn(s, name)
     if s.phase ~= "rolling" then return false end
     if s.stage == "decks" then return s.chosen ~= nil and not s.chosen[name] end
-    return s.stage == "play" and s.view ~= nil and not s.view.over and s.view.active == G.Seat(s, name)
+    if s.stage ~= "play" or not s.view or s.view.over then return false end
+    local seat = G.Seat(s, name)
+    if E().Mulliganing(s.view) then return seat ~= nil and s.view.players[seat].mulligan == true end
+    return s.view.active == seat
 end
 
 function G:Act(s, name, action)
@@ -181,19 +185,49 @@ function G:Act(s, name, action)
         end
         NewGame(s)
         return true
+    elseif verb == "mull" then
+        if s.stage ~= "play" then return false end
+        local ids = {}
+        for id in arg:gmatch("%d+") do table.insert(ids, tonumber(id)) end
+        local ok, events = E().Mulligan(s._st, seat, ids)
+        if not ok then return false, events end
+        Publish(s, events)
+        return true
     elseif verb == "do" then
         if s.stage ~= "play" or s._st.active ~= seat then return false end
         local a = G.DecodeAction(arg)
         if not a then return false end
         local ok, events = E().Apply(s._st, a)
         if not ok then return false, events end
+        s.missed[seat] = 0
         Publish(s, events)
         return true
     elseif verb == "timeout" then
-        -- The host's clock: the turn took too long, it ends.
+        -- The host's clock: the turn took too long, it ends. Choosing opening
+        -- cards too long keeps them. Two missed turns in a row lose the game
+        -- (someone who went away or lost their connection).
         if name ~= s.host or s.stage ~= "play" or tonumber(arg) ~= s.turnNo then return false end
-        local ok, events = E().Apply(s._st, { type = "end" })
-        if not ok then return false end
+        local st, events = s._st, {}
+        if E().Mulliganing(st) then
+            for i = 1, 2 do
+                if st.players[i].mulligan then
+                    local _, ev = E().Mulligan(st, i, {})
+                    for _, e in ipairs(ev or {}) do table.insert(events, e) end
+                end
+            end
+        else
+            local idle = st.active
+            s.missed[idle] = (s.missed[idle] or 0) + 1
+            if s.missed[idle] >= 2 then
+                st.over, st.winner = true, 3 - idle
+                Publish(s, { { kind = "over", winner = 3 - idle } })
+                s.banner = s.players[idle].name .. " missed two turns and loses."
+                return true
+            end
+            local ok
+            ok, events = E().Apply(st, { type = "end" })
+            if not ok then return false end
+        end
         Publish(s, events)
         return true
     elseif verb == "concede" then
@@ -206,8 +240,21 @@ function G:Act(s, name, action)
     return false
 end
 
+-- The host skipped a player who went offline (group lobbies): they lose.
+function G:Drop(s, name)
+    local seat = G.Seat(s, name)
+    if s.stage ~= "play" or not seat or not s._st or s._st.over then return end
+    s._st.over, s._st.winner = true, 3 - seat
+    Publish(s, { { kind = "over", winner = 3 - seat } })
+    s.banner = name .. " left; the game is over."
+end
+
 -- Practice bot: a random hero with its basic deck, then the computer's moves.
 function G:BotAct(s, name)
+    local seat = G.Seat(s, name)
+    if s.stage == "play" and s._st and s._st.players[seat].mulligan then
+        return "mull:" .. table.concat(ns.HS.AI.Mulligan(s._st, seat), ",")
+    end
     if s.stage == "decks" then
         local heroes = {}
         for key in pairs(ns.HS.Heroes) do table.insert(heroes, key) end

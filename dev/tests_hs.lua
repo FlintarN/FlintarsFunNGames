@@ -289,6 +289,16 @@ function HsPageTests()
     check(st and st.players[1].heroKey == "jaina" and not view.overlay:IsShown(), "hs page: a game as Jaina")
     check(ns.Solo.Running("hearthstone"), "hs page: the tab stays while a game is on")
     check(ns.db.hearthstone.game == st, "hs page: the game is saved")
+    -- The mulligan: our opening cards, big; swap the first one.
+    check(view.mull:IsShown() and view.mull.cards[1]:IsShown(), "hs page: the mulligan shows our opening cards")
+    local first = st.players[1].hand[1].id
+    view.mull.cards[1]._scripts.OnClick()
+    check(view.mull.cards[1].cross:IsShown(), "hs page: a card marked to swap")
+    view.mull.confirm._scripts.OnClick()
+    for _ = 1, 3 do Settle() end
+    local still = false
+    for _, c in ipairs(st.players[1].hand) do if c.id == first then still = true end end
+    check(not still and not ns.HS.Engine.Mulliganing(st), "hs page: the card was swapped and the game starts")
     -- Wait for our turn.
     for _ = 1, 40 do
         if st.active == 1 then break end

@@ -84,6 +84,17 @@ function AI.Choose(st)
     return best
 end
 
+-- Which opening cards to swap: the expensive ones (more than 3 mana), like
+-- a player looking for an early curve.
+function AI.Mulligan(st, i)
+    local ids = {}
+    for _, c in ipairs(st.players[i].hand) do
+        local card = E().Card(c.key)
+        if card and card.cost > 3 then table.insert(ids, c.id) end
+    end
+    return ids
+end
+
 -- Play a whole turn (tests and bot-vs-bot): returns every event.
 function AI.PlayTurn(st, limit)
     local me = st.active

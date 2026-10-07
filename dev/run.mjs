@@ -548,6 +548,7 @@ await Section('Hearthstone PvP', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_hspvp.lua'), 'utf8'));
   await p.run('HsMirrorTests()');
+  await p.run('HsMulliganTests()');
   await p.run('HsPvpPractice()');
 });
 

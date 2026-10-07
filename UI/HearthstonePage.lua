@@ -639,6 +639,40 @@ function P.New(parent, kind)
     self.status:SetPoint("CENTER", b, "TOPLEFT", CX, -Y.mid)
     self.status:SetTextColor(1, 0.9, 0.5)
 
+    -- The mulligan: your opening cards, big; click the ones to swap.
+    local mull = CreateFrame("Frame", nil, b)
+    mull:SetAllPoints()
+    mull:SetFrameLevel(b:GetFrameLevel() + 45)
+    mull:EnableMouse(true)
+    local mshade = mull:CreateTexture(nil, "BACKGROUND")
+    mshade:SetAllPoints()
+    mshade:SetColorTexture(0, 0, 0, 0.6)
+    mull.title = W.BigLabel(mull, 22, "GameFontNormalHuge")
+    mull.title:SetPoint("TOP", 0, -60)
+    mull.sub = W.Label(mull, "", "GameFontHighlight")
+    mull.sub:SetPoint("TOP", mull.title, "BOTTOM", 0, -6)
+    mull.cards = {}
+    for i = 1, 4 do
+        local c = MakeCard(mull, 120, 168)
+        c:SetFrameLevel(mull:GetFrameLevel() + 2)
+        c.cross = c.top:CreateTexture(nil, "OVERLAY", nil, 5)
+        c.cross:SetSize(70, 70)
+        c.cross:SetPoint("CENTER", 0, 10)
+        c.cross:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+        c.cross:Hide()
+        c:SetScript("OnClick", function()
+            if not c.id then return end
+            self.mullMarked = self.mullMarked or {}
+            self.mullMarked[c.id] = not self.mullMarked[c.id] or nil
+            self:DrawMulligan()
+        end)
+        mull.cards[i] = c
+    end
+    mull.confirm = W.Button(mull, "Confirm", 120, function() self:ConfirmMulligan() end, 26)
+    mull.confirm:SetPoint("BOTTOM", 0, 40)
+    mull:Hide()
+    self.mull = mull
+
     self.preview = MakeCard(b, 150, 209)
     self.preview:SetPoint("LEFT", 6, 8)
     self.preview:SetFrameLevel(b:GetFrameLevel() + 40)
@@ -784,6 +818,55 @@ function P.New(parent, kind)
     self.backButton = W.Button(o, "Back", 100, function() self:ShowStart() end, 24)
     self.backButton:SetPoint("LEFT", self.newDeckButton, "RIGHT", 12, 0)
 
+    -- Leaderboards: wins against the computer and PvP wins, guild or realm.
+    self.boardButton = W.Button(o, "Leaderboard", 110, function()
+        self.boardOpen = not self.boardOpen
+        if self.boardOpen then
+            ns.Scores.Ask(self.kind)
+            ns.Scores.Ask("hearthstonepvp")
+        end
+        self:DrawBoards()
+    end, 22)
+    self.boardButton:SetPoint("TOPRIGHT", -16, -14)
+    local bp = CreateFrame("Frame", nil, o)
+    bp:SetSize(520, 300)
+    bp:SetPoint("TOP", 0, -88)
+    bp:SetFrameLevel(o:GetFrameLevel() + 10)
+    bp:EnableMouse(true)
+    local bbg = bp:CreateTexture(nil, "BACKGROUND")
+    bbg:SetAllPoints()
+    bbg:SetColorTexture(0.05, 0.04, 0.03, 0.96)
+    bp.scope = "guild"
+    bp.tabs = {}
+    for i, sc in ipairs({ { "guild", "Guild" }, { "realm", "Realm" } }) do
+        local t = W.Button(bp, sc[2], 70, function()
+            bp.scope = sc[1]
+            self:DrawBoards()
+        end, 20)
+        t:SetPoint("TOPLEFT", 12 + (i - 1) * 74, -10)
+        t.scope = sc[1]
+        bp.tabs[i] = t
+    end
+    bp.lists = {}
+    for i, col in ipairs({ { self.kind, "Wins vs computer" }, { "hearthstonepvp", "PvP wins" } }) do
+        local title = W.Label(bp, col[2], "GameFontNormal")
+        title:SetPoint("TOPLEFT", 16 + (i - 1) * 256, -42)
+        local rows = {}
+        for r = 1, 10 do
+            local name = W.Label(bp, "", "GameFontHighlightSmall")
+            name:SetPoint("TOPLEFT", 16 + (i - 1) * 256, -48 - r * 22)
+            name:SetWidth(180)
+            name:SetJustifyH("LEFT")
+            local score = W.Label(bp, "", "GameFontHighlightSmall")
+            score:SetPoint("TOPRIGHT", bp, "TOPLEFT", 240 + (i - 1) * 256, -48 - r * 22)
+            rows[r] = { name = name, score = score }
+        end
+        bp.lists[i] = { game = col[1], rows = rows, empty = W.Label(bp, "", "GameFontDisableSmall") }
+        bp.lists[i].empty:SetPoint("TOPLEFT", 16 + (i - 1) * 256, -70)
+    end
+    bp:Hide()
+    self.boardPanel = bp
+
     self.friendButton = W.Button(o, "Play a friend", 140, function()
         self.setupOpen = true
         self:Refresh()
@@ -850,6 +933,8 @@ function P:ShowStart()
     self:PvpButtons({})
     self.lobbyText:SetText("")
     self.friendButton:SetShown(not self.pvp)
+    self.boardButton:SetShown(not self.pvp)
+    self:DrawBoards()
     for _, b in ipairs(self.pick) do b:Show() end
     for _, r in ipairs(self.deckRows) do r:Hide() end
     self.newDeckButton:Hide()
@@ -880,6 +965,9 @@ function P:ShowDecks(heroKey)
     self.againButton:Hide()
     self.resumeButton:Hide()
     self.friendButton:Hide()
+    self.boardButton:Hide()
+    self.boardOpen = false
+    self:DrawBoards()
     local decks = ns.HearthstoneDecks.For(heroKey)
     for i, row in ipairs(self.deckRows) do
         local d = decks[i]
@@ -904,7 +992,7 @@ function P:NewGame(heroKey, seed, cards)
     for key in pairs(ns.HS.Heroes) do if key ~= heroKey then table.insert(others, key) end end
     table.sort(others)
     local foe = others[math.random(#others)]
-    local st = E().New({ heroes = { heroKey, foe }, decks = cards and { cards } or nil,
+    local st = E().New({ heroes = { heroKey, foe }, decks = cards and { cards } or nil, mulligan = true,
         seed = seed or math.random(1, 2000000000) })
     self.st = st
     Save().game = st
@@ -979,6 +1067,55 @@ end
 
 function P:MyTurn()
     return self.st and not self.st.over and self.st.active == ME and not self:Busy()
+        and not E().Mulliganing(self.st)
+end
+
+-- The mulligan panel: shown while you choose; "waiting" once you have.
+function P:DrawMulligan()
+    local st, m = self.st, self.mull
+    if not st or not E().Mulliganing(st) or st.over then
+        m:Hide()
+        self.mullMarked = nil
+        return
+    end
+    m:Show()
+    local mine = st.players[ME].mulligan
+    local hand = st.players[ME].hand
+    m.title:SetText(mine and "Your starting hand" or "Waiting for your opponent...")
+    m.sub:SetText(mine and "Click the cards you want to swap, then Confirm." or "")
+    m.confirm:SetShown(mine == true)
+    self.mullMarked = self.mullMarked or {}
+    local n = #hand
+    for i, c in ipairs(m.cards) do
+        local card = hand[i]
+        c:SetShown(mine == true and card ~= nil)
+        if mine and card then
+            c.id = card.id
+            c:SetCard(card.key)
+            c:ClearAllPoints()
+            c:SetPoint("CENTER", m, "TOPLEFT", CX + (i - (n + 1) / 2) * 132, -230)
+            c.cross:SetShown(self.mullMarked[card.id] == true)
+            c.frame:SetAlpha(self.mullMarked[card.id] and 0.55 or 1)
+        end
+    end
+end
+
+function P:ConfirmMulligan()
+    local st = self.st
+    if not (st and st.players[ME].mulligan) then return end
+    local ids = {}
+    for id in pairs(self.mullMarked or {}) do table.insert(ids, id) end
+    table.sort(ids)
+    self.mullMarked = nil
+    if self.pvp then
+        ns.Session.Act(self.kind, "mull:" .. table.concat(ids, ","))
+        self.mull:Hide()
+        return
+    end
+    local before = self:Positions()
+    local ok, events = E().Mulligan(st, ME, ids)
+    if ok then self:Animate(events, before) end
+    self:Draw()
 end
 
 function P:Do(action)
@@ -1189,6 +1326,14 @@ function P:Tick()
     end
     if self.pvp then return self:PvpTick() end
     if not st or st.over or self.overlay:IsShown() then return end
+    if E().Mulliganing(st) then
+        if st.players[AIP].mulligan then
+            local before = self:Positions()
+            local ok, events = E().Mulligan(st, AIP, ns.HS.AI.Mulligan(st, AIP))
+            if ok then self:Animate(events, before) end
+        end
+        return
+    end
     if st.active == AIP and not self:Busy() then
         local wait = self.aiWait or 0
         if wait == 0 then
@@ -1756,6 +1901,7 @@ function P:Draw(animate, before)
         end
     end
 
+    self:DrawMulligan()
     self.endButton:SetEnabled(myTurn and not self:Busy() and not self.overlay:IsShown())
     self.endButton:SetText(st.over and "GAME OVER" or (st.active == ME and "END TURN" or "ENEMY TURN"))
     local moves = false
@@ -1853,9 +1999,12 @@ function P:PvpScreen(title, sub, lobby, keys)
     self.overlay:Show()
     for _, b in ipairs(self.pick) do b:Hide() end
     for _, r in ipairs(self.deckRows) do r:Hide() end
-    for _, b in ipairs({ self.newDeckButton, self.backButton, self.againButton, self.resumeButton, self.friendButton }) do
+    for _, b in ipairs({ self.newDeckButton, self.backButton, self.againButton, self.resumeButton, self.friendButton,
+        self.boardButton }) do
         b:Hide()
     end
+    self.boardOpen = false
+    self:DrawBoards()
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(sub or "")
@@ -2041,7 +2190,12 @@ function P:PvpOver(s)
         self.counted = true
         local rec = Save()
         rec.pvpWins, rec.pvpLosses = rec.pvpWins or 0, rec.pvpLosses or 0
-        if won then rec.pvpWins = rec.pvpWins + 1 elseif not draw then rec.pvpLosses = rec.pvpLosses + 1 end
+        if won then
+            rec.pvpWins = rec.pvpWins + 1
+            ns.Scores.Submit("hearthstonepvp", rec.pvpWins)
+        elseif not draw then
+            rec.pvpLosses = rec.pvpLosses + 1
+        end
         W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
     end
     local score = {}
@@ -2052,6 +2206,28 @@ function P:PvpOver(s)
         "Score: " .. table.concat(score, "  -  ") .. string.format("\nYour PvP record: %d wins, %d losses.",
             rec.pvpWins or 0, rec.pvpLosses or 0), keys)
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
+end
+
+-- The leaderboard panel (start screen).
+function P:DrawBoards()
+    local bp = self.boardPanel
+    bp:SetShown(self.boardOpen == true)
+    self.boardButton:SetText(self.boardOpen and "Close" or "Leaderboard")
+    if not self.boardOpen then return end
+    for _, t in ipairs(bp.tabs) do t:SetEnabled(t.scope ~= bp.scope) end
+    for _, l in ipairs(bp.lists) do
+        local list = ns.Scores.Board(l.game, bp.scope, #l.rows)
+        for r, row in ipairs(l.rows) do
+            local e = list[r]
+            row.name:SetText(e and (r .. ". " .. e.name) or "")
+            row.score:SetText(e and tostring(e.score) or "")
+            if e then
+                local col = e.me and { 1, 0.82, 0 } or K.ClassColor(e.class)
+                row.name:SetTextColor(col[1], col[2], col[3])
+            end
+        end
+        l.empty:SetText(#list == 0 and "No wins yet." or "")
+    end
 end
 
 -- Every frame in PvP: the turn clock on the End Turn button.

@@ -50,9 +50,9 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [x] Lobby: group, guild, realm or code (Arcade lobbies), practice vs bot; both pick a hero and deck; the host deals.
 - [x] The host runs the engine and sends each player their view (`E.View`): your own hand, the opponent's hand only as card backs; hidden cards go by whisper, like poker hole cards.
 - [x] Moves go to the host as commands (play card, attack, hero power, end turn); the host checks them with the same rules as against the computer.
-- [x] A turn timer (75 s, counting down on End Turn), concede. - [ ] A win if the other player disconnects (Session drop handling only so far).
-- [ ] Mulligan at the start (needed for PvP fairness).
-- [x] Wins and losses in the stats (history + your PvP record). - [ ] A guild/realm PvP leaderboard.
+- [x] A turn timer (75 s, counting down on End Turn), concede; two missed turns in a row lose; a skipped (offline) player loses.
+- [x] Mulligan at the start (PvP and against the computer).
+- [x] Wins and losses in the stats (history + your PvP record); guild/realm leaderboards on the start screen.
 
 ### Warcraft III PvP (second: real time)
 - [ ] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.

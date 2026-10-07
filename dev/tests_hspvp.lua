@@ -72,7 +72,13 @@ local function PlayMine(s, me)
     local v = View()
     v:Refresh()
     if s.phase ~= "rolling" or s.stage ~= "play" or not v.st or v.st.over then return end
-    if v.st.active ~= 1 then return end
+    if v.st.players[1].mulligan then
+        -- Swap the first opening card.
+        v.mullMarked = { [v.st.players[1].hand[1].id] = true }
+        v:ConfirmMulligan()
+        return
+    end
+    if E.Mulliganing(v.st) or v.st.active ~= 1 then return end
     v.busyUntil = 0
     local seat = G.Seat(s, me)
     -- Choose with the real game on the host; a guest only has its view, so it
@@ -133,6 +139,13 @@ function HsPvpPractice()
     Advance(1)
     v:Refresh()
     check(not v.pvp and S.Get("hearthstone") == nil, "hs pvp: closing the lobby goes back to the start")
+    -- The leaderboards on the start screen.
+    ns.Scores.Submit("hearthstonepvp", 3)
+    v.boardButton._scripts.OnClick()
+    check(v.boardPanel:IsShown() and v.boardPanel.lists[2].rows[1].name:GetText() == "1. " .. ns.Me()
+        and v.boardPanel.lists[2].rows[1].score:GetText() == "3", "hs pvp: PvP wins on the leaderboard")
+    v.boardButton._scripts.OnClick()
+    check(not v.boardPanel:IsShown(), "hs pvp: the leaderboard closes")
 end
 
 -- Two players over a private code.
@@ -196,4 +209,24 @@ end
 function HsPvpEnd()
     local s = S.Get("hearthstone")
     check(s and s.phase == "done" and s.result, "hs pvp: " .. PLAYER_NAME .. " sees the game end")
+end
+
+function HsMulliganTests()
+    local st = E.New({ heroes = { "jaina", "thrall" }, seed = 5, first = 1, mulligan = true })
+    check(E.Mulliganing(st) and #st.players[1].hand == 3 and #st.players[2].hand == 4,
+        "hs mulligan: 3 and 4 opening cards, no coin yet")
+    check(#E.Legal(st) == 0 and not E.Apply(st, { type = "end" }), "hs mulligan: nothing else until both have chosen")
+    local swap = { st.players[1].hand[1].id, st.players[1].hand[2].id }
+    local deck = #st.players[1].deck
+    local ok = E.Mulligan(st, 1, swap)
+    check(ok and #st.players[1].hand == 3 and #st.players[1].deck == deck, "hs mulligan: two swapped, still 3 cards")
+    local kept = 0
+    for _, c in ipairs(st.players[1].hand) do if c.id == swap[1] or c.id == swap[2] then kept = kept + 1 end end
+    check(kept == 0, "hs mulligan: never the same cards back")
+    check(not E.Mulligan(st, 1, {}), "hs mulligan: only once")
+    E.Mulligan(st, 2, {})
+    local coin = false
+    for _, c in ipairs(st.players[2].hand) do if c.key == "coin" then coin = true end end
+    check(not E.Mulliganing(st) and coin and st.turn == 1 and #st.players[1].hand == 4,
+        "hs mulligan: then the coin and the first turn (with its draw)")
 end

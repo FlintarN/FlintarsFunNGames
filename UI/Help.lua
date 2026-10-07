@@ -243,7 +243,11 @@ H.RULES = {
         { "Play a friend", "On the start screen, Play a friend opens a lobby: your group, guild, realm or a private "
             .. "code (or practice against a bot). When you're both in, the host clicks Start and you each pick a hero "
             .. "and deck. You never see each other's hand. A turn lasts 75 seconds (the End Turn button counts down "
-            .. "at the end); Concede gives up, and the host can offer a rematch." },
+            .. "at the end); miss two turns in a row and you lose. Concede gives up, and the host can offer a "
+            .. "rematch." },
+        { "Mulligan", "Every game starts with your opening cards (3 if you go first, 4 if not): click the ones "
+            .. "you want to swap, then Confirm. You get new cards, never the same ones back. The player going "
+            .. "second then gets The Coin." },
         { "Playing", "Drag a card from your hand onto the board to play it: minions land where you drop them, "
             .. "spells can be dropped right on their target. Or click a card, then its target (right-click "
             .. "cancels). Click one of your minions, then an enemy, to attack. Minions can't attack the turn "

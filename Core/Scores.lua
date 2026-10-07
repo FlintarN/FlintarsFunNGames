@@ -14,6 +14,8 @@ ns.Scores = Sc
 
 local KEEP_DAYS = 30
 local SCOPES = { "guild", "realm" }
+-- Boards that aren't a game of their own (letters and digits only).
+Sc.EXTRA = { hearthstonepvp = true } -- Hearthstone: PvP wins
 
 local function DB()
     ns.db.scores = ns.db.scores or {}
@@ -96,7 +98,7 @@ end
 ns.Net.On("SC", function(sender, data)
     local scope, game, score, class = data:match("^(%a+)\t([%w]+)\t(%-?[%d%.]+)\t(%u*)$")
     score = tonumber(score)
-    if not (scope and score and ns.Games[game]) or (scope ~= "guild" and scope ~= "realm") then return end
+    if not (scope and score and (ns.Games[game] or Sc.EXTRA[game])) or (scope ~= "guild" and scope ~= "realm") then return end
     local _, boards = DB()
     boards[game] = boards[game] or {}
     boards[game][scope] = boards[game][scope] or {}

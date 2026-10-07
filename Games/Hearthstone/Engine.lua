@@ -14,6 +14,9 @@
 --   { type = "attack", attacker = id, target = id }
 --   { type = "power",  target = id or nil }
 --   { type = "end" }
+-- With opts.mulligan, both players first see their opening hand and may
+-- swap cards with E.Mulligan(st, i, ids); the coin and the first turn come
+-- when both have. Until then E.Legal is empty and E.Apply refuses.
 -- Events (for the UI to animate), each { kind, ... }:
 --   draw, burn, fatigue, play, summon, damage, heal, shield, freeze,
 --   transform, buff, death, attack, power, mana, armor, turn, over,
@@ -572,14 +575,55 @@ function E.New(opts)
     EV = events
     -- First player draws 3, the second 4 and gets The Coin.
     Draw(st, st.active, 3)
-    local second = 3 - st.active
-    Draw(st, second, 4)
-    table.insert(st.players[second].hand, { id = NewId(st), key = "coin" })
-    Emit("draw", { owner = second, id = st.nextId, key = "coin" })
-    E.StartTurn(st)
+    Draw(st, 3 - st.active, 4)
+    if opts.mulligan then
+        st.players[1].mulligan, st.players[2].mulligan = true, true
+    else
+        E.FirstTurn(st)
+    end
     EV = nil
     st.startEvents = nil
     return st, events
+end
+
+-- The second player's coin, then the first turn.
+function E.FirstTurn(st)
+    local second = 3 - st.active
+    table.insert(st.players[second].hand, { id = NewId(st), key = "coin" })
+    Emit("draw", { owner = second, id = st.nextId, key = "coin" })
+    E.StartTurn(st)
+end
+
+-- Is someone still choosing which opening cards to swap?
+function E.Mulliganing(st)
+    return st.players[1].mulligan == true or st.players[2].mulligan == true
+end
+
+-- Player i swaps these opening cards (ids; none: keep them all): new cards
+-- are drawn first (so never the same ones back), then the old ones are
+-- shuffled into the deck. Returns ok, events.
+function E.Mulligan(st, i, ids)
+    local p = st.players[i]
+    if not p or not p.mulligan then return false, "nothing to swap now" end
+    local events = {}
+    EV = events
+    local back = {}
+    for _, id in ipairs(ids or {}) do
+        for j, c in ipairs(p.hand) do
+            if c.id == id then
+                table.insert(back, table.remove(p.hand, j))
+                break
+            end
+        end
+    end
+    Draw(st, i, #back)
+    for _, c in ipairs(back) do table.insert(p.deck, c.key) end
+    Shuffle(st, p.deck)
+    p.mulligan = nil
+    Emit("mulligan", { owner = i, n = #back })
+    if not E.Mulliganing(st) then E.FirstTurn(st) end
+    EV = nil
+    return true, events
 end
 
 function E.StartTurn(st)
@@ -711,7 +755,7 @@ end
 -- Every action the active player can take now.
 function E.Legal(st)
     local out = {}
-    if st.over then return out end
+    if st.over or E.Mulliganing(st) then return out end
     local i = st.active
     local p = st.players[i]
     for _, c in ipairs(p.hand) do
@@ -819,6 +863,7 @@ end
 
 function E.Apply(st, a)
     if st.over then return false, "the game is over" end
+    if E.Mulliganing(st) then return false, "choose your opening cards first" end
     local events = {}
     EV = events
     local ok, why
