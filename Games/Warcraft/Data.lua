@@ -249,3 +249,23 @@ ns.WC.MILITIA_TIME = 45   -- Call to Arms lasts this long
 ns.WC.ALARM_RADIUS = 22   -- workers this close to the hall answer the alarm
 
 -- The maps are in Maps.lua.
+
+-- Variants (game modes, neutral buildings): a unit or building that's another
+-- one with a few things changed; everything else (model, sounds, effects)
+-- comes from the normal one. WC.BaseOf gives the normal one.
+function ns.WC.Derive(list, key, base, over)
+    local t = ns.WC[list]
+    over.base = base
+    t[key] = setmetatable(over, { __index = t[base] })
+    return t[key]
+end
+
+-- The normal unit or building a variant comes from (itself if none).
+function ns.WC.BaseOf(key)
+    local d = ns.WC.Units[key] or ns.WC.Buildings[key]
+    local base = d and rawget(d, "base")
+    if base and base ~= key then return ns.WC.BaseOf(base) end
+    return key
+end
+
+

@@ -26,6 +26,7 @@ class Map:
     def mine(s, x, y): s.anchors.append(('G', x, y, 3))
     def shop(s, x, y): s.anchors.append(('S', x, y, 2))
     def camp(s, kind, x, y): s.anchors.append((kind, x, y, 1))  # e / m / h
+    def merc(s, x, y): s.anchors.append(('X', x, y, 2))
     def mirror4(s):
         # Four corners alike: trees and anchors mirrored left-right and top-bottom
         # (start 1 top left, 3 top right, 4 bottom left, 2 bottom right).
@@ -74,11 +75,12 @@ def with_camps(rows, camps):
     g = [list(r) for r in rows]
     w, h = len(g[0]), len(g)
     for kind, x, y in camps:
-        for (xx, yy) in ((x, y), (w - 1 - x, h - 1 - y)):
+        size = 2 if kind in 'SX' else 1
+        for (xx, yy) in ((x, y), (w - x - size, h - y - size)):
             g[yy][xx] = kind
     return [''.join(r) for r in g]
 
-RIVERFORD = with_camps(RIVERFORD, [('m', 16, 33), ('e', 32, 4), ('h', 31, 22)])
+RIVERFORD = with_camps(RIVERFORD, [('m', 16, 33), ('e', 32, 4), ('h', 31, 22), ('S', 40, 12), ('X', 20, 30)])
 maps.append(dict(key='riverford', name='Riverford', players=2, symmetry='rot180', rows=RIVERFORD,
     text='The first map: two bases in opposite corners, a gold mine each and one to expand to.'))
 
@@ -91,6 +93,7 @@ m.clear(14, 26, 5, 3)                                     # a ford on the west
 m.trees(22, 8, 4, 10); m.trees(10, 14, 6, 3)              # base edge
 m.mine(36, 16)                                            # middle mine, north of the band
 m.camp('m', 8, 23); m.camp('h', 39, 20); m.camp('e', 30, 6)
+m.shop(42, 8); m.merc(10, 36)
 m.trees(50, 4, 6, 6); m.trees(28, 36, 4, 4)
 m.rot180()
 maps.append(dict(key='echo_ford', name='Echo Ford', players=2, symmetry='rot180', rows=m.rows(),
@@ -105,6 +108,7 @@ m.trees(24, 26, 16, 3); m.clear(30, 26, 4, 3)            # the grove's north wal
 m.trees(22, 29, 2, 6)                                     # the grove's sides
 m.mine(26, 30)                                            # inside the grove
 m.camp('h', 30, 31); m.camp('m', 6, 18); m.camp('e', 46, 6)
+m.shop(8, 30); m.merc(44, 16)
 m.trees(40, 10, 6, 6); m.trees(12, 8, 4, 4)
 m.rot180()
 maps.append(dict(key='lost_grove', name='Lost Grove', players=2, symmetry='rot180', rows=m.rows(),
@@ -116,6 +120,7 @@ m = Map(48, 32); m.border()
 m.start(1, 4, 4); m.mine(11, 3)
 m.trees(16, 2, 4, 12); m.trees(2, 16, 22, 3); m.clear(20, 16, 4, 3)
 m.camp('e', 26, 6)
+m.shop(30, 12)
 m.rot180()
 maps.append(dict(key='duel_pass', name='Duel Pass', players=2, symmetry='rot180', rows=m.rows(),
     text='Small and quick (48 x 32): one mine each, a pass in the middle and a long way round. Rush or be rushed.'))
@@ -130,6 +135,7 @@ m.trees(40, 26, 16, 3); m.clear(46, 26, 4, 3)
 m.trees(2, 24, 14, 3); m.trees(80, 24, 14, 3)
 m.trees(24, 10, 4, 8); m.trees(68, 10, 4, 8)
 m.camp('m', 31, 15); m.camp('m', 63, 15); m.camp('h', 47, 31); m.camp('e', 8, 20); m.camp('e', 86, 20)
+m.shop(44, 20); m.merc(20, 30)
 m.rot180()
 maps.append(dict(key='four_crowns', name='Four Crowns', players=4, symmetry='rot180', rows=m.rows(),
     text='2v2 or four players (96 x 64): a base in each corner, expansions round a central clearing.'))
@@ -153,7 +159,8 @@ out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   .  open ground        T  tree
 --   1..9  a start (the top-left tile of its 4 x 4 hall)
 --   G  a gold mine (the top-left tile of its 3 x 3 footprint)
---   S  a shop for everyone (the top-left tile of its 2 x 2 footprint)
+--   S  a shop for everyone (the top-left tile of its 2 x 2 footprint): a Goblin Merchant
+--   X  a Mercenary Camp (2 x 2): hire creeps there
 --   e m h  a creep camp: easy, medium, hard (its middle; Creeps.lua)
 -- mode: the game mode the map is for ("melee", "footmen").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
@@ -178,7 +185,7 @@ function WC.ParseMap(key)
     local m = WC.Maps[key]
     if not m then return nil end
     if m.parsed then return m.parsed end
-    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {}, camps = {} }
+    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {}, camps = {}, mercs = {} }
     for y, row in ipairs(m.grid) do
         for x = 1, #row do
             local c = row:sub(x, x)
@@ -188,6 +195,8 @@ function WC.ParseMap(key)
                 table.insert(p.mines, { x - 1, y - 1 })
             elseif c == "S" then
                 table.insert(p.shops, { x - 1, y - 1 })
+            elseif c == "X" then
+                table.insert(p.mercs, { x - 1, y - 1 })
             elseif c == "e" or c == "m" or c == "h" then
                 table.insert(p.camps, { x - 1, y - 1, c })
             elseif c:match("%d") then
@@ -247,8 +256,10 @@ function WC.CheckMap(key)
     for _, g in ipairs(p.mines) do
         if not Clear(g[1], g[2], 3) then table.insert(bad, "mine at " .. g[1] .. "," .. g[2] .. " is not clear") end
     end
-    for _, g in ipairs(p.shops) do
-        if not Clear(g[1], g[2], 2) then table.insert(bad, "shop at " .. g[1] .. "," .. g[2] .. " is not clear") end
+    for _, list in ipairs({ p.shops, p.mercs }) do
+        for _, g in ipairs(list) do
+            if not Clear(g[1], g[2], 2) then table.insert(bad, "shop at " .. g[1] .. "," .. g[2] .. " is not clear") end
+        end
     end
     -- Every start reaches start 1 (open tiles, four ways).
     local open, seen = {}, {}
@@ -256,8 +267,10 @@ function WC.CheckMap(key)
     for _, g in ipairs(p.mines) do
         for yy = g[2], g[2] + 2 do for xx = g[1], g[1] + 2 do open[yy * p.w + xx] = false end end
     end
-    for _, g in ipairs(p.shops) do
-        for yy = g[2], g[2] + 1 do for xx = g[1], g[1] + 1 do open[yy * p.w + xx] = false end end
+    for _, list in ipairs({ p.shops, p.mercs }) do
+        for _, g in ipairs(list) do
+            for yy = g[2], g[2] + 1 do for xx = g[1], g[1] + 1 do open[yy * p.w + xx] = false end end
+        end
     end
     local s1 = p.starts[1]
     if s1 then
@@ -286,6 +299,7 @@ function WC.CheckMap(key)
     if m.symmetry == "rot180" then
         local pair = { ["1"] = "2", ["2"] = "1", ["3"] = "4", ["4"] = "3", ["5"] = "6", ["6"] = "5", ["7"] = "8", ["8"] = "7" }
         local function Same(a, b) return (a == "T") == (b == "T") and (a:match("[emh]") or ".") == (b:match("[emh]") or ".") end
+        -- (2 x 2 anchors land on the other corner of their footprint when turned: checked by their twins)
         for y = 0, p.h - 1 do
             for x = 0, p.w - 1 do
                 if not Same(Tile(x, y), Tile(p.w - 1 - x, p.h - 1 - y)) then

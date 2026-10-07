@@ -484,7 +484,8 @@ function E.New(opts)
         mine.gold = D().MINE_GOLD
     end
     for _, t in ipairs(map.trees) do st.trees[Idx(st, t[1], t[2])] = D().TREE_LUMBER end
-    -- Creep camps (Creeps.lua), when the game has them (the lobby's choice).
+    -- Neutral shops, and creep camps when the game has them (the lobby's choice).
+    if E.SetupNeutrals then E.SetupNeutrals(st, map) end
     if E.SetupCreeps and opts.creeps then E.SetupCreeps(st, map) end
     -- Workers, sent to the mine.
     for p = 1, #st.players do

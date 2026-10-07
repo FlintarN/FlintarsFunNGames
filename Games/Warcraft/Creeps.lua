@@ -51,6 +51,55 @@ WC.Items.tome_xp_big = { name = "Tome of Greater Experience", cost = 0, icon = I
 WC.Items.claws_9 = { name = "Claws of Attack +9", cost = 0, icon = I .. "INV_Gauntlets_05", damage = 9, text = "+9 damage." }
 WC.Items.ring_3 = { name = "Ring of Protection +3", cost = 0, icon = I .. "INV_Jewelry_Ring_04", armor = 3, text = "+3 armour." }
 
+-- Neutral buildings: the Goblin Merchant (items for any hero next to it)
+-- and the Mercenary Camp (creeps for hire, for anyone with a unit there).
+WC.Derive("Buildings", "goblin_merchant", "arcane_vault", { name = "Goblin Merchant", requires = false, cost = { 0, 0 },
+    sells = { "healing_potion", "mana_potion", "town_portal", "boots", "claws", "ring" }, neutral = true })
+WC.Derive("Buildings", "mercenary_camp", "voodoo_lounge", { name = "Mercenary Camp", requires = false, cost = { 0, 0 },
+    sells = false, hires = { "creep_gnoll", "creep_thug", "creep_murloc", "creep_ogre" }, neutral = true })
+WC.MERC_COST = { creep_gnoll = 120, creep_thug = 175, creep_murloc = 140, creep_ogre = 340 }
+WC.MERC_KEYS = { creep_gnoll = "G", creep_thug = "T", creep_murloc = "M", creep_ogre = "O" }
+
+-- The map's neutral buildings (every melee game).
+function E.SetupNeutrals(st, map)
+    for _, s in ipairs(map.shops or {}) do E.SpawnBuilding(st, 0, "goblin_merchant", s[1], s[2], true) end
+    for _, s in ipairs(map.mercs or {}) do E.SpawnBuilding(st, 0, "mercenary_camp", s[1], s[2], true) end
+end
+
+-- Hire a mercenary: one of your units next to the camp, and the gold.
+function E.Hire(st, p, cmd)
+    local b = st.ents[cmd.building]
+    local d = b and E.Def(b)
+    if not (d and d.hires) then return false, "not here" end
+    local ok = false
+    for _, ut in ipairs(d.hires) do if ut == cmd.utype then ok = true end end
+    if not ok then return false, "not here" end
+    local cx, cy = E.Center(b)
+    local near
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and e.kind == "unit" and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC.SHOP_RANGE ^ 2 then near = e break end
+    end
+    if not near then return false, "bring a unit next to the camp" end
+    local cost = WC.MERC_COST[cmd.utype] or 200
+    local pl = st.players[p]
+    if pl.gold < cost then return false, "not enough gold" end
+    local fx, fy = E.NearestFree(st, math.floor(cx), math.floor(b.y + b.size + 0.5))
+    if not fx then return false, "no room" end
+    pl.gold = pl.gold - cost
+    local u = E.Spawn(st, p, cmd.utype, fx + 0.5, fy + 0.5)
+    E.Emit("trained", { id = u.id, owner = p, type = u.type })
+    return true
+end
+
+do
+    local Command = E.Command
+    function E.Command(st, p, cmd)
+        if type(cmd) == "table" and cmd.type == "hire" then return E.Hire(st, p, cmd) end
+        return Command(st, p, cmd)
+    end
+end
+
 local AGGRO = 5     -- they come at you inside this many tiles of their camp
 local LEASH = 9     -- and give up beyond this
 local BOUNTY = 12   -- gold per creep level

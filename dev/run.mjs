@@ -621,6 +621,7 @@ await Section('Warcraft III armies', async () => {
   await p.run('WcCasterTests()');
   await p.run(readFileSync(join(here, 'tests_wccreeps.lua'), 'utf8'));
   await p.run('WcCreepTests()');
+  await p.run('WcNeutralTests()');
 });
 
 await Section('Warcraft III lockstep', async () => {

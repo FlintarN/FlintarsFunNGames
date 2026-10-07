@@ -72,7 +72,7 @@ function G.LobbyView(s, me)
     for _, p in ipairs(s.players) do
         if p.name ~= s.host then table.insert(others, p.name) end
     end
-    local out = { map = lobby.map, mode = lobby.mode, slots = {}, online = true }
+    local out = { map = lobby.map, mode = lobby.mode, creeps = lobby.creeps, slots = {}, online = true }
     local k = 0
     for i, slot in ipairs(lobby.slots) do
         local v = { race = slot.race, team = slot.team, diff = slot.diff, kind = slot.kind }
@@ -181,6 +181,11 @@ end
 local function LobbyAct(s, name, verb, arg)
     local lobby = s.lobby
     local host = name == s.host
+    if verb == "creeps" then
+        if not host then return false end
+        lobby.creeps = arg ~= "off"
+        return true
+    end
     if verb == "mode" then
         if not host or not ns.WC.Modes[arg] or lobby.mode == arg then return false end
         local maps = ns.WC.MapsFor(#s.players, arg)

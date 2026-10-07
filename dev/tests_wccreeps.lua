@@ -55,3 +55,45 @@ function WcCreepTests()
     -- The lobby's games have creeps.
     check(ns.WarcraftLobby.GameOptions(ns.WarcraftLobby.Default("riverford")).creeps == true, "creeps: lobby games have them")
 end
+
+-- The Goblin Merchant and the Mercenary Camp; the lobby's creeps switch.
+function WcNeutralTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 2, map = "riverford" })
+    local shop, merc
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.type == "goblin_merchant" then shop = e end
+        if e.type == "mercenary_camp" then merc = e end
+    end
+    check(shop and merc and shop.owner == 0 and merc.owner == 0, "neutral: a Goblin Merchant and a Mercenary Camp on Riverford")
+    check(not st.creeps, "neutral: no creeps unless the game has them")
+    local mx, my = E.Center(merc)
+    local fm = E.Spawn(st, 1, "footman", mx + 2, my)
+    local gold = st.players[1].gold
+    local ok = E.Command(st, 1, { type = "hire", building = merc.id, utype = "creep_gnoll" })
+    local hired
+    for _, id in ipairs(st.list) do if st.ents[id].owner == 1 and st.ents[id].type == "creep_gnoll" then hired = st.ents[id] end end
+    check(ok and hired and st.players[1].gold == gold - WC.MERC_COST.creep_gnoll, "neutral: hire a gnoll for gold")
+    fm.x, fm.y = 5, 35
+    hired.x, hired.y = 6, 35
+    local ok2, why = E.Command(st, 1, { type = "hire", building = merc.id, utype = "creep_gnoll" })
+    check(not ok2 and why == "bring a unit next to the camp", "neutral: only with a unit next to the camp")
+    local sx, sy = E.Center(shop)
+    local pal = E.Spawn(st, 1, "paladin", sx + 2, sy)
+    check(E.Command(st, 1, { type = "buy", building = shop.id, unit = pal.id, item = "boots" }) and pal.items[1] == "boots",
+        "neutral: a hero buys boots from the Goblin Merchant")
+    -- The lobby switch.
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    ns.db.warcraft.lobby = nil
+    view:ShowLobby()
+    local f = view.lobbyFrame
+    check(f.creeps:GetText() == "Creeps: On", "neutral: creeps on by default")
+    f.creeps._scripts.OnClick()
+    check(f.creeps:GetText() == "Creeps: Off" and ns.WarcraftLobby.GameOptions(ns.db.warcraft.lobby).creeps == false,
+        "neutral: the lobby switch turns them off")
+    ns.db.warcraft.lobby = nil
+    view:ShowMenu()
+end

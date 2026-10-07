@@ -2734,6 +2734,8 @@ function P:DrawCommands(sel)
         end
     end
     local b = #mine == 1 and mine[1].kind == "building" and mine[1].progress >= 1 and mine[1]
+    -- A neutral building (Goblin Merchant, Mercenary Camp): its wares.
+    if not b and #sel == 1 and sel[1].kind == "building" and sel[1].owner == 0 and E().Def(sel[1]).neutral then b = sel[1] end
     if b then
         -- Footmen Frenzy: the heroes sit behind one button (Hire a Hero).
         local heroMenu = E().Def(b).ffRace ~= nil
@@ -2796,7 +2798,28 @@ function P:DrawCommands(sel)
                         end })
                 end
             end
-            -- Research and upgrades done here.
+            -- Mercenaries for hire (one of your units next to the camp).
+        if E().Def(b).hires then
+            local cx, cy = E().Center(b)
+            local near
+            for _, id in ipairs(st.list) do
+                local e = st.ents[id]
+                if e and e.owner == ME and e.kind == "unit" and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then near = e break end
+            end
+            for _, ut in ipairs(E().Def(b).hires) do
+                local ud = WC().Units[ut]
+                local cost = WC().MERC_COST[ut] or 200
+                local hk = WC().MERC_KEYS[ut]
+                local tip = string.format("%d gold. %d health, %d damage.", cost, ud.hp, ud.damage)
+                if not near then tip = "|cffff6060Bring a unit next to the camp.|r " .. tip end
+                Add({ icon = ud.icon, key = hk, title = "Hire " .. ud.name .. " (" .. hk .. ")", cost = { cost, 0 }, tip = tip,
+                    enabled = near ~= nil, action = function()
+                        local ok, why = self:Cmd({ type = "hire", building = b.id, utype = ut })
+                        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                    end })
+            end
+        end
+        -- Research and upgrades done here.
             for _, key in ipairs(WC().AI.RESEARCH) do
                 local r = WC().Research[key]
                 local level = E().Level(st, ME, key) + 1

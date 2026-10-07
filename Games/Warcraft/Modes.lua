@@ -15,21 +15,6 @@ local U, B, R = WC.Units, WC.Buildings, WC.Research
 WC.Modes = {}
 WC.MODE_ORDER = { "melee", "footmen" }
 
-function WC.Derive(list, key, base, over)
-    local t = WC[list]
-    over.base = base
-    t[key] = setmetatable(over, { __index = t[base] })
-    return t[key]
-end
-
--- The normal unit or building a variant comes from (itself if none).
-function WC.BaseOf(key)
-    local d = U[key] or B[key]
-    local base = d and rawget(d, "base")
-    if base and base ~= key then return WC.BaseOf(base) end
-    return key
-end
-
 function WC.Mode(st) return WC.Modes[st and st.mode or "melee"] or WC.Modes.melee end
 
 WC.Modes.melee = { key = "melee", name = "Melee", text = "The normal game: a hall, workers and a gold mine. Build up and destroy every enemy building." }

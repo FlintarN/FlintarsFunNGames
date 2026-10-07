@@ -182,7 +182,11 @@ function L.Build(view, o)
     f.mapLong:SetJustifyH("LEFT")
 
     f.why = W.Label(f, "", "GameFontHighlightSmall")
-    f.why:SetPoint("BOTTOMRIGHT", -150, 24)
+    f.why:SetPoint("BOTTOMRIGHT", -16, 48)
+    -- Creep camps on the map, or not.
+    f.creeps = W.Button(f, "", 120, function() L.ToggleCreeps(view) end, 26)
+    f.creeps:SetPoint("BOTTOMRIGHT", -146, 16)
+    W.Tooltip(f.creeps, "Creeps", "Neutral monster camps guarding the expansions: experience, gold and items for whoever clears them.")
     f.start = W.Button(f, "Start Game", 120, function() L.Start(view) end, 26)
     f.start:SetPoint("BOTTOMRIGHT", -16, 16)
 end
@@ -248,6 +252,18 @@ function L.Click(view, i, what)
     end
     W.PlaySound("U_CHAT_SCROLL_BUTTON")
     L.Draw(view)
+end
+
+function L.ToggleCreeps(view)
+    local lobby = Lobby(view)
+    local on = lobby.creeps == false
+    if Online(view) then
+        ns.Session.Act(view.kind, "creeps:" .. (on and "on" or "off"))
+    else
+        lobby.creeps = on
+        L.Draw(view)
+    end
+    W.PlaySound("U_CHAT_SCROLL_BUTTON")
 end
 
 -- The game mode: Melee or a custom game; the first map for it.
@@ -399,6 +415,9 @@ function L.Draw(view)
     L.DrawPreview(view, lobby.map)
     f.mapText:SetText(string.format("%s\n%d x %d\n%d players", m.name, p.w, p.h, m.players))
     f.mapLong:SetText(m.text)
+    f.creeps:SetText("Creeps: " .. (lobby.creeps == false and "Off" or "On"))
+    f.creeps:SetShown((lobby.mode or "melee") == "melee")
+    f.creeps:SetEnabled(host)
     local ok, why = L.CanStart(lobby)
     f.start:SetShown(host)
     f.start:SetEnabled(ok)
