@@ -285,10 +285,14 @@ function WcDemo()
     end
     table.sort(missing)
     check(#missing == 0, "wc demo: every building and the units are there (" .. table.concat(missing, ", ") .. ")")
-    local cast = {}
+    local cast, fights = {}, 0
     local real = ns.UI.pages.warcraft.view.SpellEvents
     view.SpellEvents = function(self, events)
-        for _, ev in ipairs(events) do if ev.kind == "cast" then cast[ev.ability] = true end end
+        for _, ev in ipairs(events) do
+            if ev.kind == "cast" then cast[ev.ability] = true end
+            local a = ev.kind == "hit" and st.ents[ev.id]
+            if a and a.kind == "unit" and not E.IsHero(a) then fights = fights + 1 end
+        end
         return real(self, events)
     end
     for _ = 1, 30 * 20 do view:Tick(0.05) end
@@ -306,5 +310,25 @@ function WcDemo()
         .. table.concat(missed, ", ") .. ")")
     check(ns.db.warcraft.game == saved, "wc demo: your saved game is left alone")
     check(view.demoText[1] and view.demoText[1]:IsShown(), "wc demo: names under everything")
+    check(fights == 0, "wc demo: nobody picks a fight by themselves (" .. fights .. " hits)")
+    -- Attack a Target Dummy on purpose.
+    local dummy, knight
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.type == "target_dummy" and not dummy and e.x > st.w - 12 then dummy = e end
+        if e and e.type == "knight" then knight = e end
+    end
+    E.Command(st, 1, { type = "attack", units = { knight.id }, target = dummy.id })
+    local before = dummy.hp
+    for _ = 1, 15 * 20 do view:Tick(0.05) end
+    local hits = 0
+    view.SpellEvents = function(self, events)
+        for _, ev in ipairs(events) do if ev.kind == "hit" and ev.id == knight.id and ev.target == dummy.id then hits = hits + 1 end end
+        return real(self, events)
+    end
+    for _ = 1, 5 * 20 do view:Tick(0.05) end
+    view.SpellEvents = nil
+    check(hits > 0, "wc demo: a knight attacks the Target Dummy when told (" .. hits .. " hits)")
+    check(knight.order and knight.order.type == "attack", "wc demo: still on it")
     view:ShowMenu()
 end

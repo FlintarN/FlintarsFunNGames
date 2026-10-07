@@ -831,6 +831,7 @@ end
 
 -- The nearest enemy a unit can see (units before buildings).
 local function Nearest(st, u, range)
+    if st.peace then return nil end -- the Showcase: nobody picks fights by themselves
     local best, bd, bestB, bdB
     for _, id in ipairs(st.list) do
         local e = st.ents[id]

@@ -3199,7 +3199,7 @@ function P:StartDemo()
     if self.pvp or self.ls then return end
     ME, CPU = 1, nil
     local st = E().New({ factions = { "human", "orc" }, seed = 7, difficulty = "normal" })
-    st.demo = true
+    st.demo, st.peace = true, true
     local all = {}
     for _, id in ipairs(st.list) do table.insert(all, st.ents[id]) end
     for _, e in ipairs(all) do E().Remove(st, e) end
@@ -3243,6 +3243,11 @@ function P:StartDemo()
         end
         y = y + 3
     end
+    -- Target dummies to attack with anything you like (right-click them).
+    for i = 0, 2 do
+        local d = E().Spawn(st, 2, "target_dummy", st.w - 10 + i * 3, y - 4)
+        Label(d, "Target Dummy")
+    end
     -- The arena: each hero with an enemy dummy and a friend to heal.
     y = y + 1
     self.demoHeroes = {}
@@ -3257,7 +3262,7 @@ function P:StartDemo()
         h.points = 0
         h.order = { type = "hold" }
         Label(h, WC().Units[ht].name)
-        local foe = E().Spawn(st, 2, "footman", x + 2, y + 1.5)
+        local foe = E().Spawn(st, 2, "target_dummy", x + 2, y + 1.5)
         foe.order = { type = "hold" }
         local friend = E().Spawn(st, 1, "footman", x - 1.5, y + 1.5)
         friend.order = { type = "hold" }
@@ -3280,7 +3285,7 @@ function P:StartDemo()
     self:BuildMinimapTrees()
     self.camX, self.camY = 0, 0
     self:Resume()
-    self:Say("Showcase: scroll around to see everything")
+    self:Say("Showcase: nobody fights by themselves. Right-click a Target Dummy to attack it.")
 end
 
 -- Twice a second: everyone topped up; walkers turn round; each hero casts
@@ -3294,8 +3299,12 @@ function P:DemoTick(dt)
         self.demoWalkFlip = not self.demoWalkFlip
         for _, w in ipairs(self.demoWalkers) do
             local u = st.ents[w.id]
-            if u then
+            -- Only the idle ones (or still on the last walk): your orders come first.
+            if u and (not u.order or u.order.demoWalk) and not w.yours then
                 E().Command(st, 1, { type = "move", units = { u.id }, x = w.x + (self.demoWalkFlip and 2.5 or 0), y = w.y })
+                if u.order then u.order.demoWalk = true end
+            elseif u and u.order and not u.order.demoWalk then
+                w.yours = true -- you gave it something to do: it stays yours
             end
         end
     end

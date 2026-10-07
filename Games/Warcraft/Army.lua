@@ -71,6 +71,9 @@ U.tauren = Unit({ npc = 7725, hotkey = "T", name = "Tauren", hp = 1300, armor = 
     icon = I .. "Ability_Warrior_WarStomp" })
 U.healing_ward = Unit({ npc = 8179, name = "Healing Ward", hp = 5, armor = 0, damage = 0, cooldown = 1, range = 0, speed = 0,
     cost = { 0, 0 }, time = 0, food = 0, summon = true, noAttack = true, icon = I .. "Spell_Nature_HealingWaveLesser" })
+-- The Showcase's punching bag (the engineers' Target Dummy).
+U.target_dummy = Unit({ npc = 2673, name = "Target Dummy", hp = 100000, armor = 0, damage = 0, cooldown = 1, range = 0, speed = 0,
+    cost = { 0, 0 }, time = 0, food = 0, noAttack = true, icon = I .. "INV_Gizmo_01" })
 
 -- Training: who trains what.
 table.insert(B.barracks.trains, "knight")
