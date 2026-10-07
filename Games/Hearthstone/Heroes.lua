@@ -48,19 +48,19 @@ H.uther = {
         text = "Summon a 1/1 Silver Hand Recruit.", effects = { { op = "summon", card = "silver_hand_recruit" } } },
 }
 H.anduin = {
-    key = "anduin", npc = 107574, display = 82047, -- King Anduin (adult), by model id
+    key = "anduin", npc = 1284, -- Archbishop Benedictus: an adult human priest (no adult Anduin in classic)
     name = "Anduin Wrynn", class = "PRIEST", health = 30, deck = "basic_priest",
     power = { name = "Lesser Heal", school = "holy", cost = 2, target = "any", art = I .. "Spell_Holy_LesserHeal",
         text = "Restore 2 Health.", effects = { { op = "heal", to = "target", amount = 2 } } },
 }
 H.valeera = {
-    key = "valeera", npc = 242381, display = 26365, -- Valeera Sanguinar, by model id
+    key = "valeera", npc = 4163, -- Syurna: an elf woman, rogue trainer (no blood elves in classic)
     name = "Valeera Sanguinar", class = "ROGUE", health = 30, deck = "basic_rogue",
     power = { name = "Dagger Mastery", school = "physical", cost = 2, art = I .. "INV_Weapon_ShortBlade_01",
         text = "Equip a 1/2 Dagger.", effects = { { op = "equip", card = "wicked_knife" } } },
 }
 H.guldan = {
-    key = "guldan", npc = 104154, display = 68500, -- Gul'dan (the corrupted orc), by model id
+    key = "guldan", npc = 3216, -- Neeru Fireblade: a hooded orc warlock
     name = "Gul'dan", class = "WARLOCK", health = 30, deck = "basic_warlock",
     power = { name = "Life Tap", school = "arcane", cost = 2, art = I .. "Spell_Shadow_BurningSpirit",
         text = "Draw a card and take 2 damage.",
