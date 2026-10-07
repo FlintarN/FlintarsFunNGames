@@ -40,7 +40,7 @@ The card game, in WoW, against the computer or **a friend (PvP)**.
 
 A small real-time strategy game against the computer: Human or Orc, workers gathering gold and lumber, farms, barracks, lumber mills and towers, an army of Footmen and Riflemen (or Grunts and Troll Headhunters). Select with a box, right-click to command, attack-move with A, and watch the minimap: the computer attacks in growing waves.
 
-**Warcraft III Showcase**: every building, unit and hero on one map, heroes casting all their spells.
+**Warcraft III Showcase**: every building, unit and hero on one map to try out yourself, with Target Dummies.
 
 **Warcraft III spell effects**: every hero ability shows with WoW's own spell models.
 

@@ -291,7 +291,7 @@ function E.ArmyTick(st, u, dt)
         end
         return false
     end
-    if d.autocast and not E.CantAttack(u) then
+    if d.autocast and not st.peace and not E.CantAttack(u) then -- (the Showcase: only what you tell them)
         u.castT = (u.castT or 0) - dt
         if u.castT <= 0 then
             u.castT = 1

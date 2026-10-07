@@ -3181,9 +3181,10 @@ do
 end
 
 ---------------------------------------------------------------------------
--- Showcase: every building, unit and hero on one open map, with names;
--- units walk to and fro, heroes fight dummies and cast all their spells in
--- turn. Nothing is saved or counted. Main menu > Showcase, or /wcdemo.
+-- Showcase: every building, unit and hero on one open map, with names, for
+-- you to try out. Nothing moves or fights unless you tell it to; heroes know
+-- every ability, mana and cooldowns refill, Target Dummies to hit. Nothing
+-- is saved or counted. Main menu > Showcase, or /wcdemo.
 ---------------------------------------------------------------------------
 local DEMO_EXTRA = { human = { "keep", "castle", "guard_tower" }, orc = { "stronghold", "fortress" } }
 local DEMO_UNITS = {
@@ -3228,8 +3229,7 @@ function P:StartDemo()
     local mine = E().SpawnBuilding(st, 0, "gold_mine", st.w - 5, 2, true)
     mine.gold = 99999
     Label(mine, "Gold Mine")
-    -- Units: a row per side; they walk to and fro.
-    self.demoWalkers = {}
+    -- Units: a row per side.
     y = y + 1
     for _, f in ipairs({ "human", "orc" }) do
         local x = 2
@@ -3237,20 +3237,13 @@ function P:StartDemo()
             if WC().Units[ut] then
                 local u = E().Spawn(st, 1, ut, x, y)
                 Label(u, WC().Units[ut].name)
-                table.insert(self.demoWalkers, { id = u.id, x = x, y = y })
                 x = x + 3.5
             end
         end
         y = y + 3
     end
-    -- Target dummies to attack with anything you like (right-click them).
-    for i = 0, 2 do
-        local d = E().Spawn(st, 2, "target_dummy", st.w - 10 + i * 3, y - 4)
-        Label(d, "Target Dummy")
-    end
-    -- The arena: each hero with an enemy dummy and a friend to heal.
+    -- Heroes, knowing every ability.
     y = y + 1
-    self.demoHeroes = {}
     local x = 3
     for _, ht in ipairs(DEMO_HEROES) do
         if x > st.w - 4 then x, y = 3, y + 6 end
@@ -3260,21 +3253,20 @@ function P:StartDemo()
             h.skills[key] = WC().Abilities[key].ult and 1 or 3
         end
         h.points = 0
-        h.order = { type = "hold" }
         Label(h, WC().Units[ht].name)
-        local foe = E().Spawn(st, 2, "target_dummy", x + 2, y + 1.5)
-        foe.order = { type = "hold" }
-        local friend = E().Spawn(st, 1, "footman", x - 1.5, y + 1.5)
-        friend.order = { type = "hold" }
-        table.insert(self.demoHeroes, { id = h.id, foe = foe.id, friend = friend.id, x = x, y = y, n = 0 })
         x = x + 7
+    end
+    -- Target Dummies below them: right-click one to attack, or cast on it.
+    y = y + 5
+    for i = 0, 5 do
+        local d = E().Spawn(st, 2, "target_dummy", 6 + i * 9, y)
+        Label(d, "Target Dummy")
     end
     -- Player 2 needs a building, or the game would end.
     E().SpawnBuilding(st, 2, "orc_burrow", st.w - 3, st.h - 3, true)
     E().Food(st)
     st.players[1].gold, st.players[1].lumber = 99999, 99999
     self.demoLabels = labels
-    self.demoT, self.demoWalkT, self.demoWalkFlip = 0, 0, false
     self.st = st
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
@@ -3285,63 +3277,19 @@ function P:StartDemo()
     self:BuildMinimapTrees()
     self.camX, self.camY = 0, 0
     self:Resume()
-    self:Say("Showcase: nobody fights by themselves. Right-click a Target Dummy to attack it.")
+    self:Say("Showcase: everything is yours to try. Right-click a Target Dummy to attack it.")
 end
 
--- Twice a second: everyone topped up; walkers turn round; each hero casts
--- its next spell every few seconds.
+-- Every step: health, mana and cooldowns refill, so you can keep trying.
 function P:DemoTick(dt)
     local st = self.st
-    self.demoT = self.demoT + dt
-    self.demoWalkT = self.demoWalkT + dt
-    if self.demoWalkT >= 5 then
-        self.demoWalkT = 0
-        self.demoWalkFlip = not self.demoWalkFlip
-        for _, w in ipairs(self.demoWalkers) do
-            local u = st.ents[w.id]
-            -- Only the idle ones (or still on the last walk): your orders come first.
-            if u and (not u.order or u.order.demoWalk) and not w.yours then
-                E().Command(st, 1, { type = "move", units = { u.id }, x = w.x + (self.demoWalkFlip and 2.5 or 0), y = w.y })
-                if u.order then u.order.demoWalk = true end
-            elseif u and u.order and not u.order.demoWalk then
-                w.yours = true -- you gave it something to do: it stays yours
-            end
-        end
-    end
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and e.kind == "unit" then
             if e.owner == 2 then e.maxHp = math.max(e.maxHp, 100000) end
             if e.hp < e.maxHp * 0.6 then e.hp = e.maxHp end
             if e.maxMana then e.mana = e.maxMana end
-        end
-    end
-    if self.demoT < 3 then return end
-    self.demoT = 0
-    for _, d in ipairs(self.demoHeroes) do
-        local h = st.ents[d.id]
-        if h and not h.dead then
-            local keys = {}
-            for _, key in ipairs(WC().Units[h.type].abilities) do
-                if not WC().Abilities[key].passive then table.insert(keys, key) end
-            end
-            d.n = d.n % #keys + 1
-            local key = keys[d.n]
-            local a = WC().Abilities[key]
-            h.cds, h.mana = {}, 10000
-            h.x, h.y = d.x, d.y
-            local foe, friend = st.ents[d.foe], st.ents[d.friend]
-            if foe then foe.x, foe.y, foe.buffs = d.x + 2, d.y + 1.5, nil end
-            if friend then
-                friend.x, friend.y = d.x - 1.5, d.y + 1.5
-                friend.hp = math.floor(friend.maxHp / 2)
-            end
-            local cmd = { type = "cast", unit = h.id, ability = key }
-            if a.target == "enemy" or a.target == "unit" then cmd.target = foe and foe.id
-            elseif a.target == "ally" or a.target == "friend" then cmd.target = friend and friend.id
-            elseif a.target == "point" then cmd.x, cmd.y = d.x + 2, d.y + 1.5 end
-            E().Command(st, 1, cmd)
-            d.last = a.name
+            if e.cds then e.cds = {} end
         end
     end
 end
@@ -3352,7 +3300,6 @@ function P:DrawDemoLabels()
     local st = self.st
     local on = st and st.demo and self.demoLabels
     local casts = {}
-    for _, d in ipairs(on and self.demoHeroes or {}) do casts[d.id] = d.last end
     for i, l in ipairs(on or {}) do
         local fs = self.demoText[i]
         if not fs then

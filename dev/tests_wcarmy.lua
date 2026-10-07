@@ -285,37 +285,40 @@ function WcDemo()
     end
     table.sort(missing)
     check(#missing == 0, "wc demo: every building and the units are there (" .. table.concat(missing, ", ") .. ")")
-    local cast, fights = {}, 0
     local real = ns.UI.pages.warcraft.view.SpellEvents
+    local casts, fights = 0, 0
     view.SpellEvents = function(self, events)
         for _, ev in ipairs(events) do
-            if ev.kind == "cast" then cast[ev.ability] = true end
-            local a = ev.kind == "hit" and st.ents[ev.id]
-            if a and a.kind == "unit" and not E.IsHero(a) then fights = fights + 1 end
+            if ev.kind == "cast" then casts = casts + 1 end
+            if ev.kind == "hit" then fights = fights + 1 end
         end
         return real(self, events)
     end
+    local where = {}
+    for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.kind == "unit" then where[id] = e.x + e.y end end
     for _ = 1, 30 * 20 do view:Tick(0.05) end
     view.SpellEvents = nil
-    local n, wanted, missed = 0, 0, {}
-    for _, h in ipairs({ "paladin", "archmage", "mountain_king", "blood_mage", "blademaster", "far_seer", "tauren_chieftain", "shadow_hunter" }) do
-        for _, key in ipairs(WC.Units[h].abilities) do
-            if not WC.Abilities[key].passive then
-                wanted = wanted + 1
-                if cast[key] then n = n + 1 else table.insert(missed, key) end
-            end
-        end
-    end
-    check(not st.over and n >= wanted - 2, "wc demo: 30 s in, still going; " .. n .. " of " .. wanted .. " spells cast (missed: "
-        .. table.concat(missed, ", ") .. ")")
+    local moved = 0
+    for id, p in pairs(where) do local e = st.ents[id] if e and math.abs(e.x + e.y - p) > 0.01 then moved = moved + 1 end end
+    check(not st.over and casts == 0 and fights == 0 and moved == 0,
+        "wc demo: nothing happens by itself (" .. casts .. " casts, " .. fights .. " hits, " .. moved .. " moved)")
     check(ns.db.warcraft.game == saved, "wc demo: your saved game is left alone")
     check(view.demoText[1] and view.demoText[1]:IsShown(), "wc demo: names under everything")
-    check(fights == 0, "wc demo: nobody picks a fight by themselves (" .. fights .. " hits)")
+    -- You cast: every ability is known, mana and cooldowns refill.
+    local am
+    for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.type == "archmage" then am = e end end
+    local d0
+    for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.type == "target_dummy" then d0 = e break end end
+    for round = 1, 2 do
+        local ok, why = E.Command(st, 1, { type = "cast", unit = am.id, ability = "blizzard", x = am.x + 2, y = am.y + 2 })
+        check(ok, "wc demo: Blizzard, round " .. round .. " (" .. tostring(why) .. ")")
+        for _ = 1, 3 * 20 do view:Tick(0.05) end
+    end
     -- Attack a Target Dummy on purpose.
     local dummy, knight
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.type == "target_dummy" and not dummy and e.x > st.w - 12 then dummy = e end
+        if e and e.type == "target_dummy" and not dummy then dummy = e end
         if e and e.type == "knight" then knight = e end
     end
     E.Command(st, 1, { type = "attack", units = { knight.id }, target = dummy.id })
