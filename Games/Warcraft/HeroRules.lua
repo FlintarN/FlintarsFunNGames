@@ -161,6 +161,7 @@ end
 -- Experience: a level up gives a skill point and more health and mana.
 function E.GiveXp(st, u, n)
     u.xp = u.xp + n
+    E.Score(st, u.owner, "xp", n)
     while u.level < 10 and u.xp >= WC.XP_LEVELS[u.level] do
         u.level = u.level + 1
         u.points = u.points + 1
@@ -170,6 +171,7 @@ function E.GiveXp(st, u, n)
         u.mana = u.mana + (u.maxMana - mana)
         E.Emit("levelUp", { id = u.id, owner = u.owner, level = u.level, type = u.type })
         E.Score(st, u.owner, "hero", u.level)
+        if st.score and st.score[u.owner] then st.score[u.owner].heroes[u.type] = u.level end
     end
 end
 

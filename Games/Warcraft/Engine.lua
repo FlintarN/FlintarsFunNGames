@@ -448,15 +448,61 @@ function E.Sight(st) return D().SIGHT * (E.IsNight(st) and 0.75 or 1) end
 
 -- The score (for the end of the game): per player, what they made, killed,
 -- lost and gathered.
+-- (Warcraft III's score screen: units, heroes, resources; see the tabs in
+-- UI\WarcraftPage.lua, ShowScore.)
+local SCORE_FIELDS = { "made", "killed", "lost", "built", "razed", "gold", "lumber", "hero", "madeValue", "builtValue",
+    "killedValue", "razedValue", "army", "heroesKilled", "items", "mercs", "xp", "given", "received", "upkeep" }
 function E.Score(st, p, field, n)
     if not p or p < 1 or not st.players[p] or st.players[p].neutral then return end
     st.score = st.score or {}
     local s = st.score[p]
     if not s then
-        s = { made = 0, killed = 0, lost = 0, built = 0, razed = 0, gold = 0, lumber = 0, hero = 0 }
+        s = { heroes = {} }
+        for _, k in ipairs(SCORE_FIELDS) do s[k] = 0 end
         st.score[p] = s
     end
-    if field == "hero" then s.hero = math.max(s.hero, n) else s[field] = s[field] + (n or 1) end
+    if field == "hero" or field == "army" then s[field] = math.max(s[field] or 0, n)
+    else s[field] = (s[field] or 0) + (n or 1) end
+end
+
+-- What something cost (gold + lumber): for the score.
+local function Worth(e)
+    local d = e.kind == "unit" and D().Units[e.type] or D().Buildings[e.type]
+    local c = d and d.cost
+    return c and ((c[1] or 0) + (c[2] or 0)) or 0
+end
+E.Worth = Worth
+
+-- The scores, as Warcraft III adds them up: Units (what you spent on units and
+-- buildings, and the worth of what you killed and razed), Heroes (experience,
+-- heroes killed, items), Resources (gold and lumber gathered), and the total.
+function E.Scores(st, p)
+    local s = st.score and st.score[p] or {}
+    local units = (s.madeValue or 0) + (s.builtValue or 0) + (s.killedValue or 0) + (s.razedValue or 0)
+    local heroes = (s.xp or 0) + 500 * (s.heroesKilled or 0) + 100 * (s.items or 0)
+    local resources = (s.gold or 0) + (s.lumber or 0)
+    return units, heroes, resources, units + heroes + resources
+end
+
+-- How much of the research a player could do they did (Tech Percentage).
+function E.TechPercent(st, p)
+    local pl = st.players[p]
+    if not pl then return 0 end
+    local have, all = 0, 0
+    local fac = D().Factions[pl.faction]
+    for key, r in pairs(D().Research) do
+        if not r.upgrade and r.building and fac then
+            local mine = false
+            for _, b in ipairs(fac.builds or {}) do if b == r.building then mine = true end end
+            if r.building == fac.hall or r.building == "barracks" and pl.faction == "human"
+                or r.building == "orc_barracks" and pl.faction == "orc" then mine = true end
+            if mine then
+                all = all + (r.levels or 1)
+                have = have + (pl.up[key] or 0)
+            end
+        end
+    end
+    return all > 0 and math.floor(have / all * 100 + 0.5) or 0
 end
 
 -- Teams: players with the same team number are allies (they don't fight,
@@ -532,6 +578,11 @@ function E.New(opts)
         end
     end
     E.Food(st)
+    -- The score starts with what everyone starts with (as in Warcraft III).
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner > 0 then E.Score(st, e.owner, e.kind == "building" and "builtValue" or "madeValue", Worth(e)) end
+    end
     return st
 end
 
@@ -660,7 +711,10 @@ function E.Food(st)
             end
         end
     end
-    for p = 1, #st.players do st.players[p].foodCap = math.min(D().FOOD_MAX, st.players[p].foodCap) end
+    for p = 1, #st.players do
+        st.players[p].foodCap = math.min(D().FOOD_MAX, st.players[p].foodCap)
+        if st.score and st.score[p] then E.Score(st, p, "army", st.players[p].food) end -- (Largest Army)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -826,7 +880,11 @@ local function Strike(st, a, t, damage, ranged, attackType)
         Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type, hero = E.IsHero and E.IsHero(t) or nil })
         if not t.summon and not t.illusion then
             E.Score(st, t.owner, "lost")
-            if E.Foe(st, a.owner, t.owner) then E.Score(st, a.owner, t.kind == "building" and "razed" or "killed") end
+            if E.Foe(st, a.owner, t.owner) then
+                E.Score(st, a.owner, t.kind == "building" and "razed" or "killed")
+                E.Score(st, a.owner, t.kind == "building" and "razedValue" or "killedValue", Worth(t))
+                if E.IsHero and E.IsHero(t) then E.Score(st, a.owner, "heroesKilled") end
+            end
         end
         if E.OnDeath then E.OnDeath(st, t) end
         if t.kind == "building" then
@@ -918,6 +976,7 @@ local function Deposit(st, u)
     if u.carry and u.carry.n > 0 then
         local upkeep = (u.carry.res == "gold" and E.Upkeep) and E.Upkeep(st, u.owner) or 1
         local n = math.floor(u.carry.n * (pl.income or 1) * upkeep + 0.5)
+        if upkeep < 1 then E.Score(st, u.owner, "upkeep", math.floor(u.carry.n * (pl.income or 1) + 0.5) - n) end
         if u.carry.res == "gold" then pl.gold = pl.gold + n else pl.lumber = pl.lumber + n end
         Emit("deposit", { id = u.id, owner = u.owner, res = u.carry.res, n = u.carry.n })
         E.Score(st, u.owner, u.carry.res == "gold" and "gold" or "lumber", u.carry.n)
@@ -1255,6 +1314,7 @@ local function BuildingStep(st, b, dt)
             b.hp = math.min(b.maxHp, math.floor(b.hp + 0.5))
             Emit("built", { id = b.id, owner = b.owner, type = b.type })
             E.Score(st, b.owner, "built")
+            E.Score(st, b.owner, "builtValue", Worth(b))
             local u = st.ents[b.builder or 0]
             if u and u.order and u.order.site == b.id then
                 if u.insideBuild then
@@ -1355,6 +1415,11 @@ local function BuildingStep(st, b, dt)
                 local u = NewUnit(st, b.owner, q, x + 0.5, y + 0.5)
                 Emit("trained", { id = u.id, owner = b.owner, type = q })
                 E.Score(st, b.owner, "made")
+                E.Score(st, b.owner, "madeValue", Worth(u))
+                if E.IsHero and E.IsHero(u) then
+                    local h = st.score[b.owner].heroes
+                    h[u.type] = h[u.type] or 1
+                end
                 if b.rally then
                     local target = b.rally.target and st.ents[b.rally.target]
                     if target and target.kind == "mine" and D().Units[q].worker then
@@ -1589,6 +1654,8 @@ function E.Command(st, p, cmd)
         local pl = st.players[p]
         if n <= 0 or pl.gold < n then return false, "not enough gold" end
         pl.gold, st.players[to].gold = pl.gold - n, st.players[to].gold + n
+        E.Score(st, p, "given", n)
+        E.Score(st, to, "received", n)
         Emit("gave", { owner = p, to = to, amount = n })
         return true
     elseif t == "surrender" then

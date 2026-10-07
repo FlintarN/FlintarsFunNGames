@@ -735,26 +735,49 @@ function P.New(parent, kind)
         btn.key = key
         self.diffButtons[i] = btn
     end
-    -- The score at the end: a row per player.
+    -- The score at the end, as in Warcraft III: tabs (Overview, Units,
+    -- Heroes, Resources) and a row per player, grouped by team.
     local sf = CreateFrame("Frame", nil, o)
-    sf:SetSize(BW - 60, 260)
-    sf:SetPoint("TOP", 0, -150)
+    sf:SetSize(BW - 40, 280)
+    sf:SetPoint("TOP", 0, -112)
     sf:SetFrameLevel(o:GetFrameLevel() + 3)
-    local COLS = { { "Player", 0, "LEFT" }, { "Units made", 200 }, { "Killed", 270 }, { "Lost", 330 }, { "Buildings", 395 },
-        { "Razed", 460 }, { "Gold", 525 }, { "Lumber", 590 }, { "Hero", 645 } }
-    sf.cols = COLS
-    sf.rows = {}
-    for r = 0, 10 do
-        local row = {}
-        for c, col in ipairs(COLS) do
-            local fs = W.Label(sf, r == 0 and col[1] or "", r == 0 and "GameFontNormal" or "GameFontHighlight")
-            fs:SetPoint(col[3] == "LEFT" and "TOPLEFT" or "TOP", sf, "TOPLEFT", col[2] + (col[3] == "LEFT" and 18 or 20), -r * 22)
-            row[c] = fs
+    local sbg = sf:CreateTexture(nil, "BACKGROUND")
+    sbg:SetAllPoints()
+    sbg:SetColorTexture(0, 0, 0, 0.5)
+    sf.tabs = {}
+    for i, name in ipairs({ "Overview", "Units", "Heroes", "Resources" }) do
+        local t = W.Button(sf, name, 110, function()
+            self.scoreTab = name
+            self:DrawScore()
+        end, 22)
+        t:SetPoint("TOPLEFT", 10 + (i - 1) * 114, -8)
+        t.name = name
+        sf.tabs[i] = t
+    end
+    sf.head, sf.rows = {}, {}
+    for c = 1, 6 do
+        local fs = W.Label(sf, "", "GameFontNormal")
+        sf.head[c] = fs
+    end
+    for r = 1, 10 do
+        local row = { cells = {}, icons = {} }
+        row.swatch = sf:CreateTexture(nil, "ARTWORK")
+        row.swatch:SetSize(12, 12)
+        row.swatch:SetPoint("TOPLEFT", 12, -62 - (r - 1) * 21)
+        row.name = W.Label(sf, "", "GameFontHighlight")
+        row.name:SetPoint("TOPLEFT", 30, -61 - (r - 1) * 21)
+        row.name:SetWidth(170)
+        row.name:SetJustifyH("LEFT")
+        for c = 1, 6 do
+            row.cells[c] = W.Label(sf, "", "GameFontHighlight")
         end
-        if r > 0 then
-            row.swatch = sf:CreateTexture(nil, "ARTWORK")
-            row.swatch:SetSize(12, 12)
-            row.swatch:SetPoint("TOPLEFT", 0, -r * 22 - 1)
+        for k = 1, 3 do
+            local ic = sf:CreateTexture(nil, "ARTWORK")
+            ic:SetSize(18, 18)
+            ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            ic.lv = W.Label(sf, "", "NumberFontNormalSmall")
+            ic.lv:SetPoint("BOTTOMRIGHT", ic, "BOTTOMRIGHT", 2, -2)
+            row.icons[k] = ic
         end
         sf.rows[r] = row
     end
@@ -927,31 +950,98 @@ function P:DrawNight(st)
     self.nightTex:SetShown(a > 0)
 end
 
--- The score table: every player's units, buildings, resources and hero.
+-- The score screen (Warcraft III's): Overview, Units, Heroes, Resources.
+local SCORE_TABS = {
+    Overview = { { "Units Score", function(st, p) return (E().Scores(st, p)) end },
+        { "Heroes Score", function(st, p) return select(2, E().Scores(st, p)) end },
+        { "Resources Score", function(st, p) return select(3, E().Scores(st, p)) end },
+        { "Total Score", function(st, p) return select(4, E().Scores(st, p)) end } },
+    Units = { { "Units Produced", "made" }, { "Units Killed", "killed" }, { "Buildings Produced", "built" },
+        { "Buildings Razed", "razed" }, { "Largest Army", "army" } },
+    Heroes = { { "Heroes", "heroes" }, { "Heroes Killed", "heroesKilled" }, { "Items Obtained", "items" },
+        { "Mercenaries Hired", "mercs" }, { "Experience Gained", "xp" } },
+    Resources = { { "Gold Mined", "gold" }, { "Lumber Harvested", "lumber" },
+        { "Resources Traded", function(st, p) local s = st.score and st.score[p] or {}
+            return (s.given or 0) .. " / " .. (s.received or 0) end },
+        { "Tech Percentage", function(st, p) return E().TechPercent(st, p) .. "%" end },
+        { "Gold Lost to Upkeep", "upkeep" } },
+}
+
 function P:ShowScore(st, names)
-    local sf = self.scoreFrame
-    local i = 0
-    for p, pl in ipairs(st.players) do
-        if not pl.neutral then
-            i = i + 1
-            local row = sf.rows[i]
-            if not row then break end
-            local sc = st.score and st.score[p] or {}
-            local name = (names and names[p]) or (p == ME and ((ns.Me and ns.Me()) or "You")) or ("Computer " .. p)
-            local vals = { name .. "  |cffaaaaaa" .. WC().Factions[pl.faction].name .. ", team " .. E().Team(st, p) .. "|r",
-                sc.made or 0, sc.killed or 0, sc.lost or 0, sc.built or 0, sc.razed or 0, sc.gold or 0, sc.lumber or 0,
-                (sc.hero or 0) > 0 and ("level " .. sc.hero) or "-" }
-            for c, v in ipairs(vals) do row[c]:SetText(tostring(v)) end
+    self.scoreSt, self.scoreNames = st, names
+    self.scoreTab = self.scoreTab or "Overview"
+    self.scoreFrame:Show()
+    self:DrawScore()
+end
+
+function P:DrawScore()
+    local sf, st, names = self.scoreFrame, self.scoreSt, self.scoreNames
+    if not st then return end
+    local cols = SCORE_TABS[self.scoreTab or "Overview"]
+    for _, t in ipairs(sf.tabs) do t:SetEnabled(t.name ~= self.scoreTab) end -- the open tab is greyed out
+    -- Columns spread over the space right of the names.
+    local x0, w = 210, (BW - 40 - 220) / #cols
+    for c = 1, 6 do
+        local col = cols[c]
+        local h = sf.head[c]
+        h:SetText(col and col[1] or "")
+        h:ClearAllPoints()
+        h:SetPoint("TOP", sf, "TOPLEFT", x0 + (c - 0.5) * w, -40)
+        h:SetWidth(w - 4)
+    end
+    -- Players, team by team.
+    local order = {}
+    for p, pl in ipairs(st.players) do if not pl.neutral then table.insert(order, p) end end
+    table.sort(order, function(a, b)
+        local ta, tb = E().Team(st, a), E().Team(st, b)
+        if ta ~= tb then return ta < tb end
+        return a < b
+    end)
+    for r, row in ipairs(sf.rows) do
+        local p = order[r]
+        local show = p ~= nil
+        row.swatch:SetShown(show)
+        row.name:SetText("")
+        for _, c in ipairs(row.cells) do c:SetText("") end
+        for _, ic in ipairs(row.icons) do ic:Hide() ic.lv:SetText("") end
+        if show then
+            local pl = st.players[p]
             local col = TEAM[p] or TEAM[1]
             row.swatch:SetColorTexture(col[1], col[2], col[3], 1)
-            row.swatch:Show()
+            local name = (names and names[p]) or (p == ME and ((ns.Me and ns.Me()) or "You")) or ("Computer " .. p)
+            local hex = string.format("|cff%02x%02x%02x", math.floor(col[1] * 255), math.floor(col[2] * 255), math.floor(col[3] * 255))
+            row.name:SetText(hex .. name .. "|r |cff999999" .. WC().Factions[pl.faction].name .. ", team "
+                .. E().Team(st, p) .. (pl.out and ", out" or "") .. "|r")
+            local s = st.score and st.score[p] or {}
+            for c, colDef in ipairs(cols) do
+                local cell = row.cells[c]
+                cell:ClearAllPoints()
+                cell:SetPoint("TOP", sf, "TOPLEFT", x0 + (c - 0.5) * w, -62 - (r - 1) * 21)
+                if colDef[2] == "heroes" then
+                    -- Their heroes: icons with the level reached.
+                    local k = 0
+                    local list = {}
+                    for ut, lv in pairs(s.heroes or {}) do table.insert(list, { ut, lv }) end
+                    table.sort(list, function(a, b) return a[1] < b[1] end)
+                    for _, h in ipairs(list) do
+                        k = k + 1
+                        local ic = row.icons[k]
+                        if not ic then break end
+                        ic:SetTexture(WC().Units[h[1]].icon)
+                        ic:ClearAllPoints()
+                        ic:SetPoint("TOP", sf, "TOPLEFT", x0 + (c - 0.5) * w + (k - 2) * 22, -60 - (r - 1) * 21)
+                        ic.lv:SetText(tostring(h[2]))
+                        ic:Show()
+                    end
+                    if k == 0 then cell:SetText("-") end
+                elseif type(colDef[2]) == "function" then
+                    cell:SetText(tostring(colDef[2](st, p)))
+                else
+                    cell:SetText(tostring(s[colDef[2]] or 0))
+                end
+            end
         end
     end
-    for r = i + 1, 10 do
-        for c in ipairs(sf.cols) do sf.rows[r][c]:SetText("") end
-        sf.rows[r].swatch:Hide()
-    end
-    sf:Show()
 end
 
 function P:HideScreens()

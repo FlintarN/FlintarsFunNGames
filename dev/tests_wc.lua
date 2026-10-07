@@ -311,9 +311,16 @@ function WcPageTests()
     end
     Run(1)
     check(st.over and view.overlay:IsShown() and view.overTitle:GetText() == "Victory!", "wc page: victory")
-    local row = view.scoreFrame.rows[1]
-    check(view.scoreFrame:IsShown() and row[1]:GetText():find("Human", 1, true) and tonumber(row[7]:GetText()) > 0,
-        "wc page: the score: the gold you mined (" .. tostring(row[7]:GetText()) .. ")")
+    local sf = view.scoreFrame
+    check(sf:IsShown() and sf.head[4]:GetText() == "Total Score" and tonumber(sf.rows[1].cells[4]:GetText()) > 0,
+        "wc page: the score screen: Overview with a Total Score (" .. tostring(sf.rows[1].cells[4]:GetText()) .. ")")
+    sf.tabs[4]._scripts.OnClick()
+    check(sf.head[1]:GetText() == "Gold Mined" and tonumber(sf.rows[1].cells[1]:GetText()) > 0
+        and sf.rows[1].name:GetText():find("Human", 1, true), "wc page: the Resources tab: the gold you mined ("
+        .. tostring(sf.rows[1].cells[1]:GetText()) .. ")")
+    sf.tabs[2]._scripts.OnClick()
+    check(sf.head[1]:GetText() == "Units Produced" and sf.head[5]:GetText() == "Largest Army", "wc page: the Units tab")
+    view.scoreTab = nil
     check(ns.db.warcraft.wins == 1 and ns.db.warcraft.game == nil, "wc page: the win counts")
     check(not ns.Solo.Running("warcraft"), "wc page: the tab can go")
 end

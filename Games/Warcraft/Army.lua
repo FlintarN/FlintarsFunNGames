@@ -315,6 +315,7 @@ function E.ArmyCommand(st, p, cmd)
         if pl.gold < it.cost then return false, "not enough gold" end
         pl.gold = pl.gold - it.cost
         table.insert(hero.items, cmd.item)
+        E.Score(st, p, "items")
         return true
     elseif cmd.type == "useItem" then
         local hero = st.ents[cmd.unit]

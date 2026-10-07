@@ -90,6 +90,8 @@ function E.Hire(st, p, cmd)
     local u = E.Spawn(st, p, cmd.utype, fx + 0.5, fy + 0.5)
     E.Emit("trained", { id = u.id, owner = p, type = u.type })
     E.Score(st, p, "made")
+    E.Score(st, p, "mercs")
+    E.Score(st, p, "madeValue", WC.MERC_COST[cmd.utype] or 0)
     return true
 end
 
@@ -179,6 +181,7 @@ function E.CreepTick(st, dt)
                     break
                 elseif #h.items < 6 then
                     table.insert(h.items, it.key)
+                    E.Score(st, h.owner, "items")
                     table.remove(st.items, i)
                     E.Emit("pickup", { id = h.id, owner = h.owner, item = it.key })
                     break
