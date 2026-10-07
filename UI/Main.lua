@@ -211,6 +211,28 @@ end
 ---------------------------------------------------------------------------
 function UI:ApplyScale()
     if self.frame and not self.full then self.frame:SetScale(ns.db.scale or 1) end
+    self:RefreshModels()
+end
+
+-- 3D models don't follow a new window scale by themselves (they stay sized
+-- for the old one, zoomed in): once the new size is in, every model frame in
+-- the window reloads its look and camera.
+function UI:RefreshModels()
+    local function Walk(f)
+        if f.GetObjectType and f:GetObjectType() == "PlayerModel" then
+            local d = f.GetDisplayInfo and f:GetDisplayInfo()
+            if d and d > 0 and f.SetDisplayInfo then f:SetDisplayInfo(d) end
+            if f.RefreshCamera then f:RefreshCamera() end
+            if f.zoom and f.SetPortraitZoom then f:SetPortraitZoom(f.zoom) end
+        end
+        if f.GetChildren then
+            for _, c in ipairs({ f:GetChildren() }) do Walk(c) end
+        end
+    end
+    if not self.frame then return end
+    for _, wait in ipairs({ 0, 0.3 }) do
+        ns.After(wait, function() Walk(self.frame) end)
+    end
 end
 
 -- Fullscreen (games with G.fullscreen): the window is scaled up to fill the
@@ -234,6 +256,7 @@ function UI:ApplyFull()
         self.backdrop = bd
     end
     self.full = on
+    local scaleBefore = f:GetScale()
     self.backdrop:SetShown(on and f:IsShown())
     if self.fullButton then self.fullButton:SetText(on and "Window" or "Fullscreen") end
     if on then
@@ -250,6 +273,7 @@ function UI:ApplyFull()
         f:ClearAllPoints()
         if pos then f:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4]) else f:SetPoint("CENTER") end
     end
+    if math.abs(f:GetScale() - scaleBefore) > 0.001 then self:RefreshModels() end
 end
 
 function UI:ToggleFull()
