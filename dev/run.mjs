@@ -595,6 +595,14 @@ await Section('Hearthstone: the realm queue', async () => {
   await b.run('HsQueueCheck("thrall")');
 });
 
+await Section('Warcraft III heroes', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wchero.lua'), 'utf8'));
+  await p.run('WcHeroTests()');
+  await p.run('WcHeroAbilities()');
+  await p.run('WcHeroRevive()');
+});
+
 await Section('Warcraft III lockstep', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));

@@ -32,6 +32,7 @@ local function Rand(st, n)
     return math.floor(st.rng / 2147483647 * n) + 1
 end
 E.Rand = Rand
+E.Emit = Emit
 
 ---------------------------------------------------------------------------
 -- The grid
@@ -270,6 +271,7 @@ end
 
 function E.Damage(st, u)
     local d = D().Units[u.type]
+    if d.hero and E.HeroDamage then return E.HeroDamage(st, u) end
     local dmg = d.damage
     if not d.worker then
         dmg = dmg * (1 + Bonus(st, u.owner, d.range > 1.5 and "ranged" or "melee"))
@@ -282,7 +284,9 @@ function E.ArmorOf(st, e)
     local d = Def(e)
     local a = d.armor or 0
     if e.kind == "unit" then
+        if d.hero and E.HeroArmor then a = E.HeroArmor(e) end
         if not d.worker then a = a + Bonus(st, e.owner, "armor") end
+        if E.Aura then a = a + E.Aura(st, e, "devotion") end
     elseif e.kind == "building" then
         a = a + Bonus(st, e.owner, "buildingArmor")
     end
@@ -292,6 +296,11 @@ end
 -- A building's queue holds unit types and research ("r:keep"): what it is,
 -- and how long it takes.
 function E.QueueItem(st, b, q)
+    if q:sub(1, 2) == "v:" then
+        local ut = q:sub(3)
+        local d = D().Units[ut]
+        return { name = "Revive " .. d.name, icon = d.icon }, E.ReviveTime(st, b.owner, ut)
+    end
     if q:sub(1, 2) == "r:" then
         local key = q:sub(3)
         local r = D().Research[key]
@@ -323,10 +332,12 @@ local function Add(st, e)
     return e
 end
 
-local function NewUnit(st, owner, utype, x, y)
+local function NewUnit(st, owner, utype, x, y, saved)
     local hp = E.MaxHp(st, owner, utype)
-    return Add(st, { kind = "unit", type = utype, owner = owner, x = x, y = y, hp = hp, maxHp = hp,
+    local u = Add(st, { kind = "unit", type = utype, owner = owner, x = x, y = y, hp = hp, maxHp = hp,
         cd = 0, facing = 0 })
+    if D().Units[utype].hero and E.InitHero then E.InitHero(st, u, saved) end
+    return u
 end
 
 local function NewBuilding(st, owner, btype, x, y, done)
@@ -366,6 +377,7 @@ local function Remove(st, e)
     st.ents[e.id] = nil
     e.dead = true
 end
+E.Remove = Remove
 
 -- A free tile next to an entity's footprint, nearest to (px, py).
 local function FreeAround(st, e, px, py)
@@ -407,6 +419,8 @@ end
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
 -- opts: factions = { "human", "orc" }, seed, difficulty ("easy", "normal", "hard"; the AI side)
+E.NearestFree = NearestFree
+
 function E.New(opts)
     local map = D().MAP
     local st = { rng = math.floor(opts.seed or 1) % 2147483646 + 1, time = 0, nextId = 0, w = map.w, h = map.h,
@@ -695,11 +709,13 @@ local function PathTo(st, u, tx, ty, ent, adjacentTree)
     end
 end
 
+E.PathTo = PathTo
+
 -- Move along the path. True when there's nowhere left to go.
 local function Follow(st, u, dt)
     local p = u.path
     if not p or not p[u.pathi] then return true end
-    local speed = D().Units[u.type].speed
+    local speed = E.Speed and E.Speed(st, u) or D().Units[u.type].speed
     local left = speed * dt
     while left > 0 and p[u.pathi] do
         local wx, wy = p[u.pathi][1], p[u.pathi][2]
@@ -719,17 +735,24 @@ local function Follow(st, u, dt)
     return not p[u.pathi]
 end
 
+E.Follow = Follow
+
 local function Armor(a) return a * 0.06 / (1 + 0.06 * a) end
 
 local function Strike(st, a, t, damage, ranged, attackType)
     local armorType = Def(t).armorType or (t.kind == "unit" and "medium" or "fortified")
     local mult = (D().DAMAGE[attackType or "normal"] or {})[armorType] or 1
-    local dmg = math.max(1, math.floor(damage * mult * (1 - Armor(E.ArmorOf(st, t))) + 0.5))
+    local reduce = attackType == "spell" and 1 or (1 - Armor(E.ArmorOf(st, t)))
+    local dmg = math.max(1, math.floor(damage * mult * reduce + 0.5))
+    if E.OnTaken then dmg = math.floor(E.OnTaken(st, t, dmg) + 0.5) end
+    if dmg <= 0 then return end
     t.hp = t.hp - dmg
     t.lastHitBy = a.id
     Emit("hit", { id = a.id, target = t.id, amount = dmg, ranged = ranged })
     if t.hp <= 0 and not t.dead then
-        Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type })
+        if E.OnDying and E.OnDying(st, t) then return end
+        Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type, hero = E.IsHero and E.IsHero(t) or nil })
+        if E.OnDeath then E.OnDeath(st, t) end
         if t.kind == "building" then
             -- Units still training there are lost; the food they held frees up.
             for _, q in ipairs(t.queue or {}) do
@@ -740,10 +763,13 @@ local function Strike(st, a, t, damage, ranged, attackType)
         Remove(st, t)
     end
 end
+E.Strike = Strike
 
 local function Hit(st, u, t)
     local d = D().Units[u.type]
-    Strike(st, u, t, E.Damage(st, u), d.range > 1.5, d.attackType)
+    local dmg = E.Damage(st, u)
+    if E.OnHit then dmg = E.OnHit(st, u, t, dmg) end
+    Strike(st, u, t, dmg, d.range > 1.5, d.attackType)
 end
 
 -- Chase and hit a target. False when it's gone.
@@ -755,8 +781,8 @@ local function Fight(st, u, t, dt)
         u.path = nil
         local tx, ty = Center(t)
         u.facing = ATAN2(ty - u.y, tx - u.x)
-        if u.cd <= 0 then
-            u.cd = d.cooldown
+        if u.cd <= 0 and not (E.CantAttack and E.CantAttack(u)) then
+            u.cd = E.Cooldown and E.Cooldown(st, u) or d.cooldown
             Hit(st, u, t)
         end
         return true
@@ -775,7 +801,8 @@ local function Nearest(st, u, range)
     local best, bd, bestB, bdB
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine" then
+        if e and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine"
+            and not (E.Untouchable and (E.Untouchable(e) or E.Hidden(e))) then
             local g = Gap(u, e)
             if g <= range then
                 if e.kind == "unit" then
@@ -1002,6 +1029,7 @@ end
 
 local function UnitStep(st, u, dt)
     u.cd = math.max(0, (u.cd or 0) - dt)
+    if E.UnitTick and E.UnitTick(st, u, dt) then return end
     if u.militia then
         u.militia.t = u.militia.t - dt
         if u.militia.t <= 0 then
@@ -1026,9 +1054,10 @@ local function UnitStep(st, u, dt)
         -- Idle soldiers fight what comes near (and hit back).
         if not d.worker then
             u.scan = (u.scan or 0) - dt
-            if u.scan <= 0 then
+            if u.scan <= 0 and not (E.CantAttack and E.CantAttack(u)) then
                 u.scan = ACQUIRE
-                local t = Nearest(st, u, D().SIGHT)
+                -- (wards can't walk: only what's in range)
+                local t = Nearest(st, u, d.speed > 0 and D().SIGHT or E.Range(st, u))
                 if t then u.order = { type = "attack", target = t.id, auto = true, homeX = u.x, homeY = u.y } end
             end
         end
@@ -1066,10 +1095,10 @@ local function UnitStep(st, u, dt)
         if Follow(st, u, dt) then u.order, u.path = nil, nil end
     elseif o.type == "hold" then
         local t = Nearest(st, u, E.Range(st, u))
-        if t and Gap(u, t) <= E.Range(st, u) and u.cd <= 0 then
+        if t and Gap(u, t) <= E.Range(st, u) and u.cd <= 0 and not (E.CantAttack and E.CantAttack(u)) then
             local tx, ty = Center(t)
             u.facing = ATAN2(ty - u.y, tx - u.x)
-            u.cd = d.cooldown
+            u.cd = E.Cooldown and E.Cooldown(st, u) or d.cooldown
             Hit(st, u, t)
         end
     elseif o.type == "toArms" then
@@ -1105,6 +1134,8 @@ local function UnitStep(st, u, dt)
         if Follow(st, u, dt) and Gap(u, b) > 1.2 then u.path = nil end
     elseif o.type == "gather" then
         Gather(st, u, o, dt)
+    elseif o.type == "cast" then
+        E.CastStep(st, u, o, dt)
     elseif o.type == "build" then
         Build(st, u, o, dt)
     end
@@ -1179,6 +1210,22 @@ local function BuildingStep(st, b, dt)
                 end
             end
             Emit("researched", { id = b.id, owner = b.owner, key = key, level = level, upgrade = r.upgrade })
+        end
+    elseif q and q:sub(1, 2) == "v:" then
+        local ut = q:sub(3)
+        b.trainT = b.trainT + dt
+        if b.trainT >= E.ReviveTime(st, b.owner, ut) then
+            local cx, cy = Center(b)
+            local x, y = FreeAround(st, b, cx, cy + b.size)
+            if x then
+                table.remove(b.queue, 1)
+                b.trainT = 0
+                local pl = st.players[b.owner]
+                local saved = pl.fallen[ut]
+                pl.fallen[ut] = nil
+                local u = NewUnit(st, b.owner, ut, x + 0.5, y + 0.5, saved)
+                Emit("revived", { id = u.id, owner = b.owner, type = ut })
+            end
         end
     elseif q then
         b.trainT = b.trainT + dt
@@ -1368,6 +1415,10 @@ function E.Command(st, p, cmd)
         local ud = D().Units[cmd.utype]
         local miss = E.Missing(st, p, ud.requires)
         if miss then return false, "requires " .. miss end
+        if ud.hero then
+            local okHero, why = E.CanTrainHero(st, p, cmd.utype)
+            if not okHero then return false, why end
+        end
         if not E.CanAfford(st, p, ud.cost) then return false, "not enough gold or lumber" end
         E.Food(st)
         local pl = st.players[p]
@@ -1376,6 +1427,8 @@ function E.Command(st, p, cmd)
         table.insert(b.queue, cmd.utype)
         E.Food(st)
         return true
+    elseif t == "learn" or t == "cast" or t == "revive" then
+        return E.HeroCommand(st, p, cmd, mode)
     elseif t == "research" then
         local b = st.ents[cmd.building]
         if not b or b.owner ~= p or b.kind ~= "building" or b.progress < 1 then return false, "not ready" end
@@ -1401,6 +1454,10 @@ function E.Command(st, p, cmd)
             local key = q:sub(3)
             cost = D().Research[key].cost[E.Level(st, p, key) + 1]
             pl.busy[key] = nil
+        elseif q:sub(1, 2) == "v:" then
+            local ut = q:sub(3)
+            cost = E.ReviveCost(st, p, ut)
+            if pl.fallen and pl.fallen[ut] then pl.fallen[ut].reviving = nil end
         else
             cost = D().Units[q].cost
         end
@@ -1450,6 +1507,7 @@ function E.Step(st, dt)
             elseif e.kind == "building" then BuildingStep(st, e, dt) end
         end
     end
+    if E.WorldTick then E.WorldTick(st, dt) end
     -- Units don't stack: standing units that overlap push apart. Units on
     -- the move pass through (pushing walkers apart can deadlock two units
     -- heading for the same spot), and so do harvesting workers (as in
