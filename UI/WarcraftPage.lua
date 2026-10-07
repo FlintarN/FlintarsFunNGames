@@ -164,9 +164,12 @@ end
 -- exactly where its 2D spot is on screen, at a distance from the camera set
 -- by its row on the map: lower on the map = nearer = in front, like 2D
 -- layering. Its size is corrected for that distance, so it looks the same.
-local DEPTH_NEAR, DEPTH_GROW = 1500, 1.06 -- distance of the bottom rows, growth per quarter row up
+-- Distance of the bottom row and growth per quarter row up: each step must
+-- be more than a model's own depth (about 200 px / the lens's focal length).
+local DEPTH_NEAR, DEPTH_GROW = 1500, 1.035
 
-local function MakeWorld(parent)
+-- w, h: the scene's size in pixels (a new frame reports 0 until it's drawn).
+local function MakeWorld(parent, w, h)
     local ok, sc = pcall(CreateFrame, "ModelScene", nil, parent)
     if not ok or not sc or not sc.CreateActor or not sc.SetCameraPosition then return nil end
     local probe = sc:CreateActor()
@@ -179,8 +182,8 @@ local function MakeWorld(parent)
     function sc:Setup()
         local v = ns.WC.ART.view
         if self.SetCameraFieldOfView then self:SetCameraFieldOfView(v.wfov) end
-        if self.SetCameraNearClip then self:SetCameraNearClip(1000) end
-        if self.SetCameraFarClip then self:SetCameraFarClip(4000000) end
+        if self.SetCameraNearClip then self:SetCameraNearClip(500) end
+        if self.SetCameraFarClip then self:SetCameraFarClip(100000) end
         self:SetCameraPosition(0, 0, 0)
         self:SetCameraOrientationByYawPitchRoll(v.yaw, v.bpitch, 0)
         local cy, sy, cp, sp = math.cos(v.yaw), math.sin(v.yaw), math.cos(v.bpitch), math.sin(v.bpitch)
@@ -207,7 +210,7 @@ local function MakeWorld(parent)
         local rl = math.max(math.sqrt(r[1] * r[1] + r[2] * r[2]), 0.0001)
         self.rh = { r[1] / rl, r[2] / rl }
         self.yaw0 = ATAN2(-self.fh[2], -self.fh[1]) -- a model looking at the viewer
-        self.w, self.h = self:GetWidth(), self:GetHeight()
+        self.w, self.h = w, h
         self.F = (self.h / 2) / math.tan(v.wfov / 2) -- pixels per unit at distance 1
     end
     function sc:Acquire()
@@ -246,14 +249,15 @@ local function MakeWorld(parent)
     -- left), k screen pixels per model unit, at depth row `row` (map tiles
     -- from the top of the view; bigger = nearer).
     function sc:Put(a, px, py, row, k, mx, my, mz, yaw)
-        local q = math.max(-4, math.min(30, row))
-        local t = DEPTH_NEAR * DEPTH_GROW ^ ((30 - q) * 4)
+        local q = math.max(-3, math.min(25, row))
+        local t = DEPTH_NEAR * DEPTH_GROW ^ ((25 - q) * 4)
         local F = self.F
         local sx, sy = (px - self.w / 2) / F, (self.h / 2 - py) / F
         local f, r, u = self.f, self.r, self.u
         local s = k * t / F
         local c, si = math.cos(yaw), math.sin(yaw)
         local rx, ry = mx * c - my * si, mx * si + my * c
+        a.dbg = { px = px, py = py, t = t, s = s }
         a:SetYaw(yaw)
         a:SetScale(s)
         a:SetPosition((f[1] + r[1] * sx + u[1] * sy) * t - s * rx, (f[2] + r[2] * sx + u[2] * sy) * t - s * ry,
@@ -357,7 +361,7 @@ function P.New(parent, kind)
     self.treeLayer = Layer(1)
     self.buildLayer = Layer(2) -- shadows, selection circles, planned buildings
     self.unitLayer = Layer(3)  -- units' circles (and their icons until the model is ready)
-    self.world = MakeWorld(self.view)
+    self.world = MakeWorld(self.view, BW, VIEW_H)
     if self.world then self.world:SetFrameLevel(self.view:GetFrameLevel() + 5) end
     self.unitTop = Layer(400)  -- units' health bars and loads
     self.buildTop = Layer(410) -- building health bars and team flags, above everything on the map
@@ -2066,6 +2070,29 @@ SlashCmdList.FNGWCVIEW = function(msg)
     end
     if page.world then page.world:Setup() end
     page.treeDirty = true
+end
+
+-- What the 3D scene is doing (for bug reports): /wcdebug
+SLASH_FNGWCDEBUG1 = "/wcdebug"
+SlashCmdList.FNGWCDEBUG = function()
+    local page = ns.UI.pages and ns.UI.pages.warcraft and ns.UI.pages.warcraft.view
+    local w = page and page.world
+    if not w then return ns.Print("Warcraft: no 3D scene (the client has no ModelScene actors)") end
+    local function V(t) return t and string.format("%.2f %.2f %.2f", t[1], t[2], t[3]) or "-" end
+    ns.Print(string.format("scene %sx%s (frame %.0fx%.0f) F %.0f shown %s", tostring(w.w), tostring(w.h),
+        w:GetWidth() or 0, w:GetHeight() or 0, w.F or 0, tostring(w:IsVisible())))
+    ns.Print("forward " .. V(w.f) .. " right " .. V(w.r) .. " up " .. V(w.u))
+    if w.GetCameraFarClip then ns.Print("clip " .. tostring(w:GetCameraNearClip()) .. " - " .. tostring(w:GetCameraFarClip())) end
+    for _, t in ipairs(page.buildTex or {}) do
+        local a = t.actor
+        if a and a.dbg then
+            local b = a.box
+            ns.Print(string.format("building file %s at %.0f,%.0f dist %.0f scale %.3f box %s shown %s", tostring(a.file),
+                a.dbg.px, a.dbg.py, a.dbg.t, a.dbg.s, b and string.format("%.1f..%.1f", b[3], b[6]) or "-",
+                tostring(a:IsShown())))
+            break
+        end
+    end
 end
 
 ns.CustomPages = ns.CustomPages or {}
