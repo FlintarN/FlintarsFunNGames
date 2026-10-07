@@ -542,6 +542,7 @@ await Section('Hearthstone engine and AI', async () => {
   await p.run('HsPageTests()');
   await p.run('HsDeckTests()');
   await p.run('HsSoundTests()');
+  await p.run('HsClassicTests()');
   await p.run('HsPreloadTests()');
 });
 

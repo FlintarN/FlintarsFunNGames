@@ -462,6 +462,10 @@ local function MakeHero(parent)
     f.frozen = top:CreateTexture(nil, "OVERLAY", nil, 2)
     f.frozen:SetAllPoints()
     f.frozen:SetTexture(ART .. "HsFrozen")
+    -- Secrets: a "?" each over the portrait (yours show their names on hover).
+    f.secret = W.BigLabel(top, 20, "GameFontNormalHuge")
+    f.secret:SetPoint("BOTTOM", f, "TOP", 0, 2)
+    f.secret:SetTextColor(0.85, 0.5, 1)
     f.hp = Badge(f, "HsHealth", 32, 16)
     f.hp:SetPoint("CENTER", f, "BOTTOMRIGHT", -4, 10)
     f.armor = Badge(f, "HsArmor", 28, 14)
@@ -1815,6 +1819,8 @@ function P:Animate(events, before)
         elseif ev.kind == "fatigue" then
             local h = before[ev.owner]
             if h then self:Number(h[1], h[2] - 30, "Fatigue", 0.9, 0.5, 0.9, d) end
+        elseif ev.kind == "secret" then
+            self:Banner("Secret: " .. Card(ev.key).name, 1.4)
         elseif ev.kind == "burn" and ev.owner == ME then
             self:Say("Hand full: " .. Card(ev.key).name .. " burned")
         elseif ev.kind == "turn" then
@@ -1952,6 +1958,8 @@ function P:Draw(animate, before)
         hf.atk:SetShown(atk > 0)
         hf.atk.text:SetText(tostring(atk))
         hf.frozen:SetShown(p.hero.frozen == true)
+        local n = #(p.secrets or {})
+        hf.secret:SetText(n > 0 and string.rep("?", n) or "")
         local wp = p.hero.weapon
         hf.weapon:SetShown(wp ~= nil)
         if wp then
@@ -2016,6 +2024,7 @@ function P:Draw(animate, before)
             f.doom:SetShown(m.doomedBy ~= nil)
             f.divine:SetShown(m.divineShield == true)
             f.frozen:SetShown(m.frozen == true)
+            f:SetAlpha(m.stealth and 0.55 or 1) -- Stealth: see-through
             f.zzz:SetShown(i == ME and myTurn and m.sleeping and not (m.charge or m.auraCharge) and true or false)
             local atk = E().Attack(m)
             f.atk.text:SetText(tostring(atk))

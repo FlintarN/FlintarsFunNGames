@@ -32,7 +32,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 - [ ] Host tools: remove a player, last call, remind players who have not rolled, skip a player who left mid-game.
 - [ ] Optional chat announcements of results.
 
-- [ ] Hearthstone next steps: secrets, deathrattle cards, Classic-set class cards (combo, stealth, enrage), a card choice for Tracking.
+- [x] Hearthstone: secrets, deathrattles, combo, stealth, enrage. [ ] A card choice for Tracking; more Classic cards.
 
 - [ ] Warcraft III: see the roadmap below.
 

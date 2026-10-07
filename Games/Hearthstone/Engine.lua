@@ -79,9 +79,17 @@ local function BoardIndex(p, m)
     for i, x in ipairs(p.board) do if x == m then return i end end
 end
 
+-- Enrage: while damaged, a minion has more attack (and maybe Windfury).
+local function Enraged(ent)
+    local en = ent.key and Card(ent.key).enrage
+    return en and ent.health < ent.maxHealth and en or nil
+end
+E.Enraged = Enraged
+
 function E.Attack(ent)
     local weapon = ent.weapon and ent.weapon.attack or 0
-    return math.max(0, (ent.attack or 0) + (ent.tempAttack or 0) + (ent.auraAttack or 0) + weapon)
+    local en = Enraged(ent)
+    return math.max(0, (ent.attack or 0) + (ent.tempAttack or 0) + (ent.auraAttack or 0) + weapon + (en and en.attack or 0))
 end
 
 local function SpellDamage(p)
@@ -137,7 +145,7 @@ local function NewMinion(st, owner, key)
         attack = c.attack or 0, tempAttack = 0, auraAttack = 0,
         health = c.health or 1, maxHealth = c.health or 1, auraHealth = 0,
         taunt = c.taunt or nil, charge = c.charge or nil, divineShield = c.divineShield or nil,
-        windfury = c.windfury or nil, sleeping = true, attacks = 0,
+        windfury = c.windfury or nil, stealth = c.stealth or nil, sleeping = true, attacks = 0,
     }
 end
 
@@ -245,6 +253,7 @@ local function Deaths(st)
         end
         if #dead == 0 then break end
         for _, d in ipairs(dead) do Emit("death", { id = d.m.id, owner = d.owner, key = d.m.key, pos = d.pos }) end
+        E.SecretDied(st, dead)
         Refresh(st)
         for _, d in ipairs(dead) do
             local dr = Card(d.m.key).deathrattle
@@ -338,7 +347,8 @@ function E.Targets(st, owner, spec, except, filter)
     local out = {}
     local function Add(list)
         for _, x in ipairs(list) do
-            if x.health > 0 and x.id ~= except and Passes(x, filter) then table.insert(out, x.id) end
+            local hidden = x.stealth and x.owner ~= owner
+            if x.health > 0 and x.id ~= except and Passes(x, filter) and not hidden then table.insert(out, x.id) end
         end
     end
     if spec == "any" then Add(Chars(me)) Add(Chars(them))
@@ -633,6 +643,7 @@ function E.StartTurn(st)
     p.locked, p.overload = p.overload, 0
     p.mana = math.max(0, p.maxMana - p.locked)
     p.powerUsed = false
+    p.played = 0 -- cards played this turn (Combo)
     p.hero.attacks = 0
     for _, m in ipairs(p.board) do
         m.sleeping = nil
@@ -679,7 +690,8 @@ local function CanAttack(st, ent)
     if ent.frozen or E.Attack(ent) <= 0 then return false end
     if ent.key then
         if ent.sleeping and not (ent.charge or ent.auraCharge) then return false end
-        return ent.attacks < (ent.windfury and 2 or 1)
+        local en = Enraged(ent)
+        return ent.attacks < ((ent.windfury or (en and en.windfury)) and 2 or 1)
     end
     return ent.attacks < 1
 end
@@ -689,7 +701,7 @@ E.CanAttack = CanAttack
 function E.AttackTargets(st, owner)
     local them = st.players[3 - owner]
     local taunts = {}
-    for _, m in ipairs(them.board) do if m.taunt and m.health > 0 then table.insert(taunts, m.id) end end
+    for _, m in ipairs(them.board) do if m.taunt and not m.stealth and m.health > 0 then table.insert(taunts, m.id) end end
     if #taunts > 0 then return taunts end
     return E.Targets(st, owner, "enemyChar")
 end
@@ -720,13 +732,21 @@ local function Useful(st, owner, effects, requires)
 end
 
 -- Target ids for playing hand card `c`; nil when it needs none; false when it can't be played.
+-- Combo (Rogue): another card played before this one this turn.
+local function ComboOn(p) return (p.played or 0) > 0 end
+E.ComboOn = ComboOn
+
 function E.PlayTargets(st, owner, c)
     local p = st.players[owner]
     local card = Card(c.key)
     if card.cost > p.mana then return false end
+    if card.secret then
+        for _, k in ipairs(p.secrets or {}) do if k == c.key then return false end end
+        return nil
+    end
     if card.type == "minion" then
         if #p.board >= MAX_BOARD then return false end
-        local bc = card.battlecry
+        local bc = (ComboOn(p) and card.combo) or card.battlecry
         if bc and bc.target then
             local t = E.Targets(st, owner, bc.target, nil, bc.filter)
             return #t > 0 and t or nil -- no one to hit: the battlecry just does nothing
@@ -734,7 +754,7 @@ function E.PlayTargets(st, owner, c)
         return nil
     end
     if card.type == "weapon" then return nil end
-    local sp = card.spell or {}
+    local sp = (ComboOn(p) and card.comboSpell) or card.spell or {}
     if not Useful(st, owner, sp.effects, sp.requires) then return false end
     if sp.target then
         local t = E.Targets(st, owner, sp.target, nil, sp.filter)
@@ -788,6 +808,74 @@ local function Contains(list, id)
 end
 
 ---------------------------------------------------------------------------
+-- Secrets: hidden until the other player sets them off on their turn.
+---------------------------------------------------------------------------
+local function TakeSecret(st, owner, key)
+    local p = st.players[owner]
+    for i, k in ipairs(p.secrets or {}) do
+        if k == key and st.active ~= owner then
+            table.remove(p.secrets, i)
+            Emit("secret", { owner = owner, key = key })
+            return true
+        end
+    end
+    return false
+end
+E.TakeSecret = TakeSecret
+
+-- Something attacks `def`: returns who's really hit, and true to stop it.
+function E.SecretAttacked(st, att, def)
+    local owner = def.owner or def.id
+    local me = st.players[owner]
+    if not me or not me.secrets or #me.secrets == 0 then return def end
+    if att.key and TakeSecret(st, owner, "freezing_trap") then
+        Bounce(st, att)
+        return def, true
+    end
+    if TakeSecret(st, owner, "noble_sacrifice") then
+        local d = Summon(st, owner, "defender")
+        if d then def = d end
+    end
+    if not def.key then
+        if TakeSecret(st, owner, "explosive_trap") then
+            for _, t in ipairs(Alive(Chars(st.players[3 - owner]))) do Damage(st, me.hero, t, 2) end
+        end
+        if TakeSecret(st, owner, "ice_barrier") then
+            me.hero.armor = (me.hero.armor or 0) + 8
+            Emit("armor", { id = me.hero.id, amount = 8 })
+        end
+    elseif TakeSecret(st, owner, "snake_trap") then
+        for _ = 1, 3 do Summon(st, owner, "snake") end
+    end
+    return def
+end
+
+-- A spell is cast: Counterspell stops it (true).
+function E.SecretSpellCast(st, caster, key)
+    return TakeSecret(st, 3 - caster, "counterspell")
+end
+
+-- A minion is played: Mirror Entity copies it; Repentance cuts it to 1 Health.
+function E.SecretMinionPlayed(st, owner, m)
+    local other = 3 - owner
+    if TakeSecret(st, other, "mirror_entity") then Summon(st, other, m.key) end
+    if TakeSecret(st, other, "repentance") then
+        m.maxHealth, m.health = 1, math.min(m.health, 1)
+    end
+end
+
+-- Minions died: Redemption brings the first friendly one back with 1 Health.
+function E.SecretDied(st, dead)
+    for _, d in ipairs(dead) do
+        if TakeSecret(st, d.owner, "redemption") then
+            local m = Summon(st, d.owner, d.m.key)
+            if m then m.health = 1 end
+            break
+        end
+    end
+end
+
+---------------------------------------------------------------------------
 -- Doing it
 ---------------------------------------------------------------------------
 local function Play(st, a)
@@ -804,15 +892,23 @@ local function Play(st, a)
     if card.overload then p.overload = p.overload + card.overload end
     Emit("play", { owner = i, id = c.id, key = c.key, target = a.target })
     local target = a.target and E.Find(st, a.target)
-    if card.type == "minion" then
+    local combo = ComboOn(p)
+    p.played = (p.played or 0) + 1
+    if card.secret then
+        p.secrets = p.secrets or {}
+        table.insert(p.secrets, c.key)
+        Emit("secretSet", { owner = i })
+    elseif card.type == "minion" then
         local m = Summon(st, i, c.key, a.pos, c.id)
-        if m and card.battlecry then
-            Run(st, { owner = i, source = m, target = target }, card.battlecry.effects)
+        local bc = (combo and card.combo) or card.battlecry
+        if m and bc then
+            Run(st, { owner = i, source = m, target = target }, bc.effects)
         end
+        if m then E.SecretMinionPlayed(st, i, m) end
     elseif card.type == "weapon" then
         Equip(st, i, c.key)
-    else
-        Run(st, { owner = i, target = target, spell = true }, card.spell.effects)
+    elseif not E.SecretSpellCast(st, i, c.key) then
+        Run(st, { owner = i, target = target, spell = true }, ((combo and card.comboSpell) or card.spell).effects)
     end
     Deaths(st)
     return true
@@ -825,6 +921,15 @@ local function Fight(st, a)
     if not att or ao ~= i or not CanAttack(st, att) then return false, "can't attack" end
     if not Contains(E.AttackTargets(st, i), a.target) then return false, "must attack a Taunt minion" end
     att.attacks = att.attacks + 1
+    att.stealth = nil -- attacking shows you
+    -- The defender's secrets (Noble Sacrifice can change who's hit; Freezing
+    -- Trap can stop the attack).
+    local stop
+    def, stop = E.SecretAttacked(st, att, def)
+    if stop then
+        Deaths(st)
+        return true
+    end
     Emit("attack", { attacker = att.id, target = def.id })
     local weapon = not att.key and att.weapon
     if weapon then
@@ -909,7 +1014,11 @@ end
 function E.View(st, i)
     local v = Copy(st)
     for j, p in ipairs(v.players) do
-        if j ~= i then for _, c in ipairs(p.hand) do c.key = nil end end
+        if j ~= i then
+            for _, c in ipairs(p.hand) do c.key = nil end
+            -- Their secrets: how many, not which.
+            for k in ipairs(p.secrets or {}) do p.secrets[k] = "?" end
+        end
         p.deckCount = #p.deck
         p.deck = {}
     end

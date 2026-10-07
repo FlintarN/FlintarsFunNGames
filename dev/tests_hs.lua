@@ -510,7 +510,10 @@ function HsPreloadTests()
     local inGame = {}
     for _, npc in ipairs(P.CreaturesFor((function()
         local keys = {}
-        for i = 1, 2 do for _, k in ipairs(view.st.players[i].deck) do table.insert(keys, k) end end
+        for i = 1, 2 do
+            for _, k in ipairs(view.st.players[i].deck) do table.insert(keys, k) end
+            for _, c in ipairs(view.st.players[i].hand) do table.insert(keys, c.key) end
+        end
         return keys
     end)(), { "jaina", view.st.players[2].heroKey })) do inGame[npc] = true end
     check(first == nil or inGame[first], "preload: this game's creatures go first")
@@ -765,4 +768,78 @@ function HsSoundTests()
     view:EventSounds({ { kind = "play", owner = 1, key = "fireball" } }, {}, 0, 0)
     check(#SOUND_FILES == 0, "hs sound: Game sounds off: quiet")
     ns.db.sound = true
+end
+
+-- Classic: Stealth, Enrage, Combo, Secrets, more Deathrattles.
+function HsClassicTests()
+    -- Stealth: can't be targeted or attacked until it attacks.
+    local st = Fresh()
+    local wolf = Put(st, 2, "worgen_infiltrator", true)
+    local yeti = Put(st, 1, "chillwind_yeti", true)
+    check(not Has(E.AttackTargets(st, 1), function(id) return id == wolf.id end), "hs classic: a stealthed minion can't be attacked")
+    check(not Has(E.Targets(st, 1, "any"), function(id) return id == wolf.id end), "hs classic: or targeted by the enemy")
+    st.active = 2
+    E.Apply(st, { type = "attack", attacker = wolf.id, target = 1 })
+    check(not wolf.stealth, "hs classic: attacking shows it")
+    -- Enrage: Amani Berserker hits harder when hurt.
+    st = Fresh()
+    local amani = Put(st, 1, "amani_berserker", true)
+    local atk = E.Attack(amani)
+    E.Damage(st, nil, amani, 1)
+    check(E.Attack(amani) == atk + 3, "hs classic: Enrage: +3 Attack when damaged")
+    -- Combo: Eviscerate deals 4 after another card.
+    st = E.New({ heroes = { "valeera", "jaina" }, seed = 5, first = 1 })
+    for _, p in ipairs(st.players) do p.hand, p.board, p.mana, p.maxMana = {}, {}, 10, 10 end
+    local ev1 = Give(st, 1, "eviscerate")
+    E.Apply(st, { type = "play", card = ev1.id, target = 2 })
+    local hp1 = st.players[2].hero.health
+    check(hp1 == 28, "hs classic: Eviscerate alone: 2 damage")
+    local coin = Give(st, 1, "coin")
+    local ev2 = Give(st, 1, "eviscerate")
+    E.Apply(st, { type = "play", card = coin.id })
+    E.Apply(st, { type = "play", card = ev2.id, target = 2 })
+    check(st.players[2].hero.health == hp1 - 4, "hs classic: Combo: 4 damage after The Coin")
+    -- Secrets.
+    st = Fresh()
+    local trap = Give(st, 1, "explosive_trap")
+    E.Apply(st, { type = "play", card = trap.id })
+    check(#st.players[1].secrets == 1, "hs classic: a secret is set")
+    local again = Give(st, 1, "explosive_trap")
+    check(E.PlayTargets(st, 1, again) == false, "hs classic: not the same secret twice")
+    E.Apply(st, { type = "end" })
+    local raider = Put(st, 2, "bloodfen_raptor", true)
+    local hpRaptor = raider.health
+    E.Apply(st, { type = "attack", attacker = raider.id, target = 1 })
+    check(#st.players[1].secrets == 0 and raider.health == hpRaptor - 2 and st.players[2].hero.health == 28,
+        "hs classic: Explosive Trap: 2 damage to all enemies when the hero is attacked")
+    st = Fresh()
+    local cs = Give(st, 2, "counterspell")
+    st.active = 2
+    E.Apply(st, { type = "play", card = cs.id })
+    st.active = 1
+    local fb = Give(st, 1, "fireball")
+    E.Apply(st, { type = "play", card = fb.id, target = 2 })
+    check(st.players[2].hero.health == 30 and #st.players[2].secrets == 0, "hs classic: Counterspell stops the Fireball")
+    st = Fresh()
+    local me = Give(st, 2, "mirror_entity")
+    st.active = 2
+    E.Apply(st, { type = "play", card = me.id })
+    st.active = 1
+    local y2 = Give(st, 1, "chillwind_yeti")
+    E.Apply(st, { type = "play", card = y2.id })
+    check(#st.players[2].board == 1 and st.players[2].board[1].key == "chillwind_yeti", "hs classic: Mirror Entity copies the Yeti")
+    st = Fresh()
+    local ns2 = Give(st, 2, "noble_sacrifice")
+    st.active = 2
+    E.Apply(st, { type = "play", card = ns2.id })
+    st.active = 1
+    local att = Put(st, 1, "chillwind_yeti", true)
+    E.Apply(st, { type = "attack", attacker = att.id, target = 2 })
+    check(st.players[2].hero.health == 30 and att.health < att.maxHealth, "hs classic: Noble Sacrifice: the Defender takes the hit")
+    -- Deathrattles: Harvest Golem leaves a Damaged Golem.
+    st = Fresh()
+    local hg = Put(st, 1, "harvest_golem")
+    E.Damage(st, nil, hg, 5)
+    E.Deaths(st)
+    check(#st.players[1].board == 1 and st.players[1].board[1].key == "damaged_golem", "hs classic: Harvest Golem: a Damaged Golem")
 end

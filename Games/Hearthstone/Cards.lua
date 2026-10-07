@@ -509,3 +509,84 @@ Add({ key = "korkron_elite", npc = 14304, name = "Kor'kron Elite", cost = 4, typ
     attack = 4, health = 3, charge = true, art = I .. "INV_Helmet_09", text = "Charge" })
 Add({ key = "arcanite_reaper", name = "Arcanite Reaper", cost = 5, type = "weapon", class = "warrior", attack = 5,
     durability = 2, art = I .. "INV_Axe_09" })
+
+---------------------------------------------------------------------------
+-- Classic: Secrets, Stealth, Enrage, Combo, more Deathrattles
+---------------------------------------------------------------------------
+-- Tokens.
+Add({ key = "defender", name = "Defender", cost = 1, type = "minion", attack = 2, health = 1, class = "paladin", token = true,
+    npc = 1423, art = I .. "INV_Shield_06" })
+Add({ key = "snake", name = "Snake", cost = 0, type = "minion", attack = 1, health = 1, race = "beast", class = "hunter",
+    token = true, npc = 2914, art = I .. "Spell_Nature_GuardianWard" })
+Add({ key = "damaged_golem", name = "Damaged Golem", cost = 1, type = "minion", attack = 2, health = 1, race = "mech",
+    token = true, npc = 480, art = I .. "INV_Gizmo_02" })
+Add({ key = "defias_bandit", name = "Defias Bandit", cost = 1, type = "minion", attack = 2, health = 1, token = true, npc = 38,
+    art = I .. "INV_Misc_Bandana_03" })
+
+-- Secrets (Hunter, Mage, Paladin): shown only as a "?" to the other player.
+local function Secret(key, name, class, cost, art, text, school)
+    Add({ key = key, name = name, cost = cost, type = "spell", class = class, secret = true, school = school or "arcane",
+        art = art, text = "Secret: " .. text, spell = { effects = {} } })
+end
+Secret("explosive_trap", "Explosive Trap", "hunter", 2, I .. "Spell_Fire_SelfDestruct",
+    "When your hero is attacked, deal 2 damage to all enemies.", "fire")
+Secret("freezing_trap", "Freezing Trap", "hunter", 2, I .. "Spell_Frost_ChainsOfIce",
+    "When an enemy minion attacks, return it to its owner's hand.", "frost")
+Secret("snake_trap", "Snake Trap", "hunter", 2, I .. "Ability_Hunter_SnakeTrap",
+    "When one of your minions is attacked, summon three 1/1 Snakes.", "nature")
+Secret("counterspell", "Counterspell", "mage", 3, I .. "Spell_Frost_IceShock",
+    "When your opponent casts a spell, Counter it.")
+Secret("mirror_entity", "Mirror Entity", "mage", 3, I .. "Spell_Magic_LesserInvisibilty",
+    "After your opponent plays a minion, summon a copy of it.")
+Secret("ice_barrier", "Ice Barrier", "mage", 3, I .. "Spell_Ice_Lament",
+    "When your hero is attacked, gain 8 Armor.", "frost")
+Secret("noble_sacrifice", "Noble Sacrifice", "paladin", 1, I .. "Spell_Holy_SealOfSacrifice",
+    "When an enemy attacks, summon a 2/1 Defender as the new target.", "holy")
+Secret("redemption", "Redemption", "paladin", 1, I .. "Spell_Holy_Resurrection",
+    "When a friendly minion dies, return it to life with 1 Health.", "holy")
+Secret("repentance", "Repentance", "paladin", 1, I .. "Spell_Holy_PrayerOfHealing",
+    "After your opponent plays a minion, reduce its Health to 1.", "holy")
+
+-- Rogue: Combo (an extra if you played another card this turn).
+Add({ key = "si7_agent", name = "SI:7 Agent", cost = 3, type = "minion", class = "rogue", attack = 3, health = 3, npc = 332,
+    art = I .. "Ability_Rogue_Ambush", text = "Combo: Deal 2 damage.",
+    combo = { target = "any", effects = { { op = "damage", to = "target", amount = 2 } } } })
+Add({ key = "defias_ringleader", name = "Defias Ringleader", cost = 2, type = "minion", class = "rogue", attack = 2, health = 2,
+    npc = 38, art = I .. "INV_Misc_Bandana_01", text = "Combo: Summon a 2/1 Defias Bandit.",
+    combo = { effects = { { op = "summon", card = "defias_bandit", n = 1 } } } })
+Add({ key = "eviscerate", school = "physical", name = "Eviscerate", cost = 2, type = "spell", class = "rogue",
+    art = I .. "Ability_Rogue_Eviscerate", text = "Deal 2 damage. Combo: Deal 4 damage instead.",
+    spell = { target = "any", effects = { { op = "damage", to = "target", amount = 2, spell = true } } },
+    comboSpell = { target = "any", effects = { { op = "damage", to = "target", amount = 4, spell = true } } } })
+Add({ key = "cold_blood", school = "physical", name = "Cold Blood", cost = 1, type = "spell", class = "rogue",
+    art = I .. "Spell_Ice_Lament", text = "Give a minion +2 Attack. Combo: +4 Attack instead.",
+    spell = { target = "minion", effects = { { op = "buff", to = "target", attack = 2 } } },
+    comboSpell = { target = "minion", effects = { { op = "buff", to = "target", attack = 4 } } } })
+
+-- Stealth: can't be attacked or targeted by the enemy until it attacks.
+Add({ key = "worgen_infiltrator", name = "Worgen Infiltrator", cost = 1, type = "minion", attack = 2, health = 1, stealth = true,
+    npc = 1765, art = I .. "Ability_Stealth", text = "Stealth" })
+Add({ key = "jungle_panther", name = "Jungle Panther", cost = 3, type = "minion", attack = 4, health = 2, stealth = true,
+    race = "beast", npc = 683, art = I .. "Ability_Hunter_Pet_Cat", text = "Stealth" })
+Add({ key = "stranglethorn_tiger", name = "Stranglethorn Tiger", cost = 5, type = "minion", attack = 5, health = 5,
+    stealth = true, race = "beast", npc = 682, art = I .. "Ability_Druid_Prowl", text = "Stealth" })
+
+-- Enrage: stronger while damaged.
+Add({ key = "amani_berserker", name = "Amani Berserker", cost = 2, type = "minion", attack = 2, health = 3,
+    enrage = { attack = 3 }, npc = 2552, art = I .. "Ability_Racial_BerserkerRage", text = "Enrage: +3 Attack." })
+Add({ key = "raging_worgen", name = "Raging Worgen", cost = 3, type = "minion", attack = 3, health = 3,
+    enrage = { attack = 1, windfury = true }, npc = 1765, art = I .. "Ability_Racial_Cannibalize",
+    text = "Enrage: Windfury and +1 Attack." })
+
+-- More Deathrattles.
+Add({ key = "harvest_golem", name = "Harvest Golem", cost = 3, type = "minion", attack = 2, health = 3, race = "mech", npc = 480,
+    art = I .. "INV_Gizmo_02", text = "Deathrattle: Summon a 2/1 Damaged Golem.",
+    deathrattle = { effects = { { op = "summon", card = "damaged_golem", n = 1 } } } })
+Add({ key = "loot_hoarder", name = "Loot Hoarder", cost = 2, type = "minion", attack = 2, health = 1, npc = 6,
+    art = I .. "INV_Misc_Bag_10", text = "Deathrattle: Draw a card.", deathrattle = { effects = { { op = "draw", n = 1 } } } })
+Add({ key = "leper_gnome", name = "Leper Gnome", cost = 1, type = "minion", attack = 1, health = 1, npc = 6213,
+    art = I .. "Spell_Shadow_AbominationExplosion", text = "Deathrattle: Deal 2 damage to the enemy hero.",
+    deathrattle = { effects = { { op = "damage", to = "enemyHero", amount = 2 } } } })
+Add({ key = "abomination", name = "Abomination", cost = 5, type = "minion", attack = 4, health = 4, taunt = true, npc = 1806,
+    art = I .. "Spell_Shadow_AbominationExplosion", text = "Taunt. Deathrattle: Deal 2 damage to ALL characters.",
+    deathrattle = { effects = { { op = "damage", to = "allChars", amount = 2 } } } })
