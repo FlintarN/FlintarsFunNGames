@@ -48,7 +48,7 @@ function WcMapTests()
     MapButton("echo_ford")._scripts.OnClick()
     check(ns.db.warcraft.lobby.map == "echo_ford" and f.mapLong:GetText() == WC.Maps.echo_ford.text, "wc lobby: pick a map")
     f.start._scripts.OnClick()
-    check(view.st.map == "echo_ford" and #view.st.players == 2 and math.abs(view.mm:GetWidth() - view.st.w * view.mmScale) < 0.01,
+    check(view.st.map == "echo_ford" and E.PlayerCount(view.st) == 2 and math.abs(view.mm:GetWidth() - view.st.w * view.mmScale) < 0.01,
         "wc lobby: the game is on that map, the minimap fits it")
     -- Four players, two teams.
     view:ShowLobby()
@@ -66,7 +66,7 @@ function WcMapTests()
         "wc lobby: a Hard computer in seat 4")
     f.start._scripts.OnClick()
     local st = view.st
-    check(#st.players == 4 and E.Ally(st, 1, 3) and E.Foe(st, 1, 2) and st.players[4].difficulty == "hard",
+    check(E.PlayerCount(st) == 4 and E.Ally(st, 1, 3) and E.Foe(st, 1, 2) and st.players[4].difficulty == "hard",
         "wc lobby: a 2v2 game: you and seat 3 against 2 and 4")
     check(not st.over, "wc lobby: under way")
     -- Everyone on one team can't start.

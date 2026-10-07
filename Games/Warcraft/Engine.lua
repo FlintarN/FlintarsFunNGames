@@ -444,7 +444,15 @@ end
 -- ("easy", "normal", "hard"; the AI side), map (a key in WC.Maps; Maps.lua),
 -- teams = { 1, 2, 1, 2 } (a team per player; default: everyone alone),
 -- difficulties = { [2] = "hard" } (per computer player), starts = { 1, 3 }
--- (which of the map's starts each player gets; default: in order).
+-- (which of the map's starts each player gets; default: in order),
+-- creeps = true (the map's creep camps; Creeps.lua).
+
+-- How many real players (not the creeps' neutral seat).
+function E.PlayerCount(st)
+    local n = 0
+    for _, pl in ipairs(st.players) do if not pl.neutral then n = n + 1 end end
+    return n
+end
 E.NearestFree = NearestFree
 
 function E.New(opts)
@@ -476,8 +484,11 @@ function E.New(opts)
         mine.gold = D().MINE_GOLD
     end
     for _, t in ipairs(map.trees) do st.trees[Idx(st, t[1], t[2])] = D().TREE_LUMBER end
+    -- Creep camps (Creeps.lua), when the game has them (the lobby's choice).
+    if E.SetupCreeps and opts.creeps then E.SetupCreeps(st, map) end
     -- Workers, sent to the mine.
     for p = 1, #st.players do
+        if st.players[p].neutral then break end
         local f = D().Factions[st.players[p].faction]
         local hall = E.Hall(st, p)
         local mine = E.NearestMine(st, Center(hall))
@@ -1621,7 +1632,9 @@ function E.Step(st, dt)
     end
     local alive = 0
     for p = 1, #st.players do
-        if has[p] then
+        if st.players[p].neutral then
+            -- (the creeps: never in the race)
+        elseif has[p] then
             local t = E.Team(st, p)
             if not teams[t] then teams[t], alive = true, alive + 1 end
             last = last or p

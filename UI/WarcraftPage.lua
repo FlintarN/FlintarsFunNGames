@@ -24,6 +24,8 @@ local ME = 1                   -- your chair
 local CPUS = { 2 }             -- the chairs the computer plays here (none in PvP)
 local MM_SCALE = 2              -- minimap pixels per tile
 local EDGE, SCROLL = 28, 650    -- edge scrolling: pixels from the map's edge, speed
+-- Creeps (the neutral side): a sandy brown.
+local CREEP_COLOR = { 0.85, 0.65, 0.35 }
 -- Player colours (Warcraft III's, blue and red first as before).
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 }, { 0.1, 0.9, 0.75 }, { 0.6, 0.3, 0.9 }, { 1, 0.95, 0.2 },
     { 1, 0.55, 0.1 }, { 0.2, 0.8, 0.2 }, { 1, 0.5, 0.8 }, { 0.6, 0.6, 0.6 }, { 0.6, 0.85, 1 } }
@@ -911,7 +913,7 @@ function P:StartSkirmish(o, seed)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
-        map = o.map, mode = o.mode, seed = seed or math.random(1, 2000000000), difficulty = "normal" })
+        map = o.map, mode = o.mode, creeps = o.creeps, seed = seed or math.random(1, 2000000000), difficulty = "normal" })
     self.st.me, self.st.cpus = ME, CPUS
     Save().game = self.st
     self.sel, self.place, self.targeting = {}, nil, nil
@@ -1135,6 +1137,11 @@ function P:Events(events)
             local s = ns.Session.Get(self.kind)
             local name = s and s.game and s.game.names and s.game.names[ev.owner] or ("Player " .. ev.owner)
             self:Say(name .. (ev.kind == "surrendered" and " surrendered." or " is out."))
+        elseif ev.kind == "pickup" and ev.owner == ME then
+            local h = self.st.ents[ev.id]
+            self:Say((h and WC().Units[h.type].name or "Your hero") .. " takes " .. WC().Items[ev.item].name)
+        elseif ev.kind == "drop" then
+            if self.vis and self.vis[math.floor(ev.y) * self.st.w + math.floor(ev.x)] then self:Say(WC().Items[ev.item].name .. " dropped") end
         elseif ev.kind == "cantBuild" and ev.owner == ME then
             self:Say("Can't build there")
         elseif ev.kind == "treeDown" then
@@ -2180,7 +2187,7 @@ function P:Draw()
             Place(t.sel, self.view, px + size / 2, py + size / 2)
             -- A team flag, a health bar when hurt or selected, progress while building.
             if e.owner > 0 then
-                local col = TEAM[e.owner]
+                local col = (st.players[e.owner] and st.players[e.owner].neutral) and CREEP_COLOR or TEAM[e.owner] or TEAM[1]
                 t.team:SetColorTexture(col[1], col[2], col[3], 1)
                 t.team:SetSize(8, 8)
                 Place(t.team, self.view, px + 5, py + 5)
@@ -2203,7 +2210,7 @@ function P:Draw()
             -- Minimap.
             local dot = self.mmDots:Get()
             if e.owner > 0 then
-                local col = TEAM[e.owner]
+                local col = (st.players[e.owner] and st.players[e.owner].neutral) and CREEP_COLOR or TEAM[e.owner] or TEAM[1]
                 dot:SetColorTexture(col[1], col[2], col[3], 1)
             else
                 dot:SetColorTexture(1, 0.85, 0.2, 1)
@@ -2226,7 +2233,7 @@ function P:Draw()
         local e = st.ents[id]
         if e and e.kind == "unit" and self:Sees(e) then
             local dot = self.mmDots:Get()
-            local col = TEAM[e.owner]
+            local col = (st.players[e.owner] and st.players[e.owner].neutral) and CREEP_COLOR or TEAM[e.owner] or TEAM[1]
             dot:SetColorTexture(col[1], col[2], col[3], 1)
             dot:SetSize(self.mmScale + 1, self.mmScale + 1)
             dot:ClearAllPoints()
@@ -3130,7 +3137,7 @@ function P:StartPvp(s)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = g.factions, teams = g.teams, starts = g.starts, difficulties = g.difficulties,
-        map = g.map, mode = g.mode, seed = s.seed, difficulty = "normal" })
+        map = g.map, mode = g.mode, creeps = g.creeps, seed = s.seed, difficulty = "normal" })
     local factions = g.factions
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted, self.reported, self.pvpGame = false, false, s.recordId
@@ -3700,6 +3707,32 @@ end
 
 -- Every frame: buffs and auras on the units in sight, effects follow their
 -- units, finished ones go.
+-- Items lying on the ground (dropped by creeps): their icons; a hero walks over one to take it.
+function P:DrawItems()
+    local st = self.st
+    self.itemTex = self.itemTex or {}
+    local n = 0
+    for _, it in ipairs(st and st.items or {}) do
+        local px, py = it.x * TILE - self.camX, it.y * TILE - self.camY
+        local seen = self.vis and self.vis[math.floor(it.y) * st.w + math.floor(it.x)]
+        if px > -20 and px < BW + 20 and py > -20 and py < VIEW_H + 20 and seen then
+            n = n + 1
+            local t = self.itemTex[n]
+            if not t then
+                t = self.fxLayer:CreateTexture(nil, "ARTWORK")
+                t:SetSize(16, 16)
+                t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                self.itemTex[n] = t
+            end
+            t:SetTexture(WC().Items[it.key].icon)
+            t:ClearAllPoints()
+            t:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
+            t:Show()
+        end
+    end
+    for i = n + 1, #self.itemTex do self.itemTex[i]:Hide() end
+end
+
 function P:DrawFx()
     local st = self.st
     if not st then return end
@@ -3760,6 +3793,7 @@ do
     function P:Draw()
         Draw(self)
         self:DrawFx()
+        self:DrawItems()
         self:WorkSounds()
     end
 end

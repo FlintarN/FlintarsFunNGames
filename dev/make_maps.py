@@ -25,6 +25,7 @@ class Map:
     def start(s, n, x, y): s.anchors.append((str(n), x, y, 4))
     def mine(s, x, y): s.anchors.append(('G', x, y, 3))
     def shop(s, x, y): s.anchors.append(('S', x, y, 2))
+    def camp(s, kind, x, y): s.anchors.append((kind, x, y, 1))  # e / m / h
     def mirror4(s):
         # Four corners alike: trees and anchors mirrored left-right and top-bottom
         # (start 1 top left, 3 top right, 4 bottom left, 2 bottom right).
@@ -59,8 +60,9 @@ class Map:
     def rows(s):
         g = [row[:] for row in s.g]
         for ch, x, y, size in s.anchors:  # footprints stay clear (with a ring around)
-            for yy in range(y - 1, y + size + 1):
-                for xx in range(x - 1, x + size + 1):
+            ring = 2 if size == 1 else 1
+            for yy in range(y - ring, y + size + ring):
+                for xx in range(x - ring, x + size + ring):
                     if 2 <= xx < s.w - 2 and 2 <= yy < s.h - 2: g[yy][xx] = '.'
         for ch, x, y, size in s.anchors: g[y][x] = ch
         return [''.join(r) for r in g]
@@ -68,6 +70,15 @@ class Map:
 maps = []
 
 # Riverford: the original map (64 x 40), unchanged.
+def with_camps(rows, camps):
+    g = [list(r) for r in rows]
+    w, h = len(g[0]), len(g)
+    for kind, x, y in camps:
+        for (xx, yy) in ((x, y), (w - 1 - x, h - 1 - y)):
+            g[yy][xx] = kind
+    return [''.join(r) for r in g]
+
+RIVERFORD = with_camps(RIVERFORD, [('m', 16, 33), ('e', 32, 4), ('h', 31, 22)])
 maps.append(dict(key='riverford', name='Riverford', players=2, symmetry='rot180', rows=RIVERFORD,
     text='The first map: two bases in opposite corners, a gold mine each and one to expand to.'))
 
@@ -79,6 +90,7 @@ m.trees(2, 26, 30, 3); m.trees(36, 24, 10, 3)            # the band (turned: the
 m.clear(14, 26, 5, 3)                                     # a ford on the west
 m.trees(22, 8, 4, 10); m.trees(10, 14, 6, 3)              # base edge
 m.mine(36, 16)                                            # middle mine, north of the band
+m.camp('m', 8, 23); m.camp('h', 39, 20); m.camp('e', 30, 6)
 m.trees(50, 4, 6, 6); m.trees(28, 36, 4, 4)
 m.rot180()
 maps.append(dict(key='echo_ford', name='Echo Ford', players=2, symmetry='rot180', rows=m.rows(),
@@ -92,6 +104,7 @@ m.trees(2, 22, 18, 4); m.trees(44, 22, 18, 4)
 m.trees(24, 26, 16, 3); m.clear(30, 26, 4, 3)            # the grove's north wall with a gap
 m.trees(22, 29, 2, 6)                                     # the grove's sides
 m.mine(26, 30)                                            # inside the grove
+m.camp('h', 30, 31); m.camp('m', 6, 18); m.camp('e', 46, 6)
 m.trees(40, 10, 6, 6); m.trees(12, 8, 4, 4)
 m.rot180()
 maps.append(dict(key='lost_grove', name='Lost Grove', players=2, symmetry='rot180', rows=m.rows(),
@@ -102,6 +115,7 @@ maps.append(dict(key='lost_grove', name='Lost Grove', players=2, symmetry='rot18
 m = Map(48, 32); m.border()
 m.start(1, 4, 4); m.mine(11, 3)
 m.trees(16, 2, 4, 12); m.trees(2, 16, 22, 3); m.clear(20, 16, 4, 3)
+m.camp('e', 26, 6)
 m.rot180()
 maps.append(dict(key='duel_pass', name='Duel Pass', players=2, symmetry='rot180', rows=m.rows(),
     text='Small and quick (48 x 32): one mine each, a pass in the middle and a long way round. Rush or be rushed.'))
@@ -115,6 +129,7 @@ m.mine(30, 18); m.mine(62, 18)
 m.trees(40, 26, 16, 3); m.clear(46, 26, 4, 3)
 m.trees(2, 24, 14, 3); m.trees(80, 24, 14, 3)
 m.trees(24, 10, 4, 8); m.trees(68, 10, 4, 8)
+m.camp('m', 31, 15); m.camp('m', 63, 15); m.camp('h', 47, 31); m.camp('e', 8, 20); m.camp('e', 86, 20)
 m.rot180()
 maps.append(dict(key='four_crowns', name='Four Crowns', players=4, symmetry='rot180', rows=m.rows(),
     text='2v2 or four players (96 x 64): a base in each corner, expansions round a central clearing.'))
@@ -139,6 +154,7 @@ out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   1..9  a start (the top-left tile of its 4 x 4 hall)
 --   G  a gold mine (the top-left tile of its 3 x 3 footprint)
 --   S  a shop for everyone (the top-left tile of its 2 x 2 footprint)
+--   e m h  a creep camp: easy, medium, hard (its middle; Creeps.lua)
 -- mode: the game mode the map is for ("melee", "footmen").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
@@ -162,7 +178,7 @@ function WC.ParseMap(key)
     local m = WC.Maps[key]
     if not m then return nil end
     if m.parsed then return m.parsed end
-    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {} }
+    local p = { h = #m.grid, w = #m.grid[1], trees = {}, starts = {}, mines = {}, shops = {}, camps = {} }
     for y, row in ipairs(m.grid) do
         for x = 1, #row do
             local c = row:sub(x, x)
@@ -172,6 +188,8 @@ function WC.ParseMap(key)
                 table.insert(p.mines, { x - 1, y - 1 })
             elseif c == "S" then
                 table.insert(p.shops, { x - 1, y - 1 })
+            elseif c == "e" or c == "m" or c == "h" then
+                table.insert(p.camps, { x - 1, y - 1, c })
             elseif c:match("%d") then
                 p.starts[tonumber(c)] = { x - 1, y - 1 }
             end
@@ -267,7 +285,7 @@ function WC.CheckMap(key)
     end
     if m.symmetry == "rot180" then
         local pair = { ["1"] = "2", ["2"] = "1", ["3"] = "4", ["4"] = "3", ["5"] = "6", ["6"] = "5", ["7"] = "8", ["8"] = "7" }
-        local function Same(a, b) return (a == "T") == (b == "T") end
+        local function Same(a, b) return (a == "T") == (b == "T") and (a:match("[emh]") or ".") == (b:match("[emh]") or ".") end
         for y = 0, p.h - 1 do
             for x = 0, p.w - 1 do
                 if not Same(Tile(x, y), Tile(p.w - 1 - x, p.h - 1 - y)) then

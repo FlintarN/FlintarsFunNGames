@@ -130,7 +130,7 @@ function G:Begin(s)
     end
     local view = G.LobbyView(s)
     local o = ns.WarcraftLobby.GameOptions(view, math.random)
-    s.game = { map = o.map, mode = o.mode, factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
+    s.game = { map = o.map, mode = o.mode, creeps = o.creeps, factions = o.factions, teams = o.teams, starts = o.starts, difficulties = o.difficulties,
         cpus = o.cpus, names = o.names }
     s.seed = math.random(1, 2000000000)
     s.stage = "play"

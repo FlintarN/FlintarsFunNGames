@@ -396,7 +396,7 @@ function WcDemo()
     -- Every unit has a voice, every hero ability a sound.
     local mute = {}
     for k, u in pairs(WC.Units) do
-        if not u.summon and not rawget(u, "base") and k ~= "catapult" and k ~= "target_dummy" and k ~= "sheep" and not k:find("%d$")
+        if not u.summon and not u.creep and not rawget(u, "base") and k ~= "catapult" and k ~= "target_dummy" and k ~= "sheep" and not k:find("%d$")
             and not (S.Voices[k] and S.Voices[k].what) then table.insert(mute, k) end
     end
     for k, a in pairs(WC.Abilities) do

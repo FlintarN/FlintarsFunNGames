@@ -178,6 +178,14 @@ function AI.Think(st, p)
     local E_ = E()
     local pl = st.players[p]
     local f = D().Factions[pl.faction]
+    -- Heroes first (the rest below can stop early): skills and spells.
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and E_.IsHero(e) and not e.illusion then
+            AI.Learn(st, p, e)
+            AI.HeroCast(st, p, e)
+        end
+    end
     local hall = E_.Hall(st, p)
     local count = E_.Count(st, p)
     local workers, army, onGold, onWood, idle = {}, {}, 0, 0, {}
@@ -287,11 +295,7 @@ function AI.Think(st, p)
         local heroes = 0
         for _, id in ipairs(st.list) do
             local e = st.ents[id]
-            if e and e.owner == p and E_.IsHero(e) and not e.illusion then
-                heroes = heroes + 1
-                AI.Learn(st, p, e)
-                AI.HeroCast(st, p, e)
-            end
+            if e and e.owner == p and E_.IsHero(e) and not e.illusion then heroes = heroes + 1 end
         end
         if altar and #altar.queue == 0 then
             local revived = false
@@ -367,7 +371,7 @@ function AI.Think(st, p)
     local threat
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and E().Foe(st, e.owner, p) and e.kind == "unit" then
+        if e and E().Foe(st, e.owner, p) and e.kind == "unit" and not st.players[e.owner].neutral then -- (not creeps)
             if (e.x - hx) ^ 2 + (e.y - hy) ^ 2 < 14 * 14 then threat = e break end
         end
     end
@@ -408,10 +412,21 @@ function AI.Think(st, p)
                 end
             end
         end
-        if tx then
-            E_.Command(st, p, { type = "attackMove", units = ids, x = tx, y = ty })
-            mem.waves = mem.waves + 1
-            mem.wave = math.min(diff.waveMax, mem.wave + diff.waveGrow)
+        -- Only those not already in a fight (a new order would pull them out of it).
+        -- (Every 30 s the marching ones too, in case they're stuck on the way.)
+        local go = {}
+        local fresh = st.time - (mem.sentAt or -999) >= 30
+        for _, u in ipairs(army) do
+            local o = u.order
+            if not o or not (o.type == "attack" or (o.type == "attackMove" and not fresh)) then table.insert(go, u.id) end
+        end
+        if fresh and #go > 0 then mem.sentAt = st.time end
+        if tx and #go > 0 then
+            E_.Command(st, p, { type = "attackMove", units = go, x = tx, y = ty })
+            if #go >= #army / 2 then
+                mem.waves = mem.waves + 1
+                mem.wave = math.min(diff.waveMax, mem.wave + diff.waveGrow)
+            end
         end
     elseif mem.defending then
         mem.defending = false

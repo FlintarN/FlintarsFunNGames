@@ -219,6 +219,9 @@ H.RULES = {
         { "Shift", "Hold Shift to queue orders instead of replacing them: move here, then there; build a farm, "
             .. "then another (Shift keeps placing). Buildings in the queue are paid up front and show as ghosts; "
             .. "a new order without Shift cancels the queue and gives their gold and lumber back." },
+        { "Creeps", "Neutral camps guard the expansions and the middle (easy, medium, hard). They fight whoever comes "
+            .. "near and go home if led away. Kills give your heroes experience and you gold; the last creep of a camp "
+            .. "drops an item: walk a hero over it to take it." },
         { "Groups", "With several units selected, the command card is for one kind at a time (heroes first): click an icon "
             .. "at the bottom for that kind's commands and spells, or press Tab for the next kind. Move and Attack go to the "
             .. "whole group. Double-click an icon to select just that unit." },

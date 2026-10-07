@@ -78,7 +78,7 @@ end
 -- difficulties; which players the computer plays. Random races are rolled.
 function L.GameOptions(lobby, roll)
     roll = roll or math.random
-    local o = { map = lobby.map, mode = lobby.mode or "melee", factions = {}, teams = {}, starts = {}, difficulties = {}, cpus = {}, me = nil, names = {} }
+    local o = { map = lobby.map, mode = lobby.mode or "melee", creeps = lobby.creeps ~= false, factions = {}, teams = {}, starts = {}, difficulties = {}, cpus = {}, me = nil, names = {} }
     for _, p in ipairs(L.Players(lobby)) do
         local i = #o.factions + 1
         local race = p.s.race
