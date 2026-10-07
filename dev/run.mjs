@@ -609,6 +609,7 @@ await Section('Warcraft III engine and AI', async () => {
   await p.run('WcPageTests()');
   await p.run('WcGalleryTests()');
   await p.run('WcQueueTests()');
+  await p.run('WcFogTests()');
 });
 
 // The TOC files (base: Forever and Retail; _Forever) list the same files and version.

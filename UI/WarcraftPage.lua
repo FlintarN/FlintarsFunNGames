@@ -270,7 +270,8 @@ end
 ---------------------------------------------------------------------------
 function P.New(parent, kind)
     local self = setmetatable({ kind = kind, sel = {}, camX = 0, camY = 0, acc = 0, think = 0,
-        treeTex = {}, unitFrames = {}, framePool = {}, corpses = {}, buildTex = {}, fxFree = {}, mmTrees = {} }, P)
+        treeTex = {}, unitFrames = {}, framePool = {}, corpses = {}, buildTex = {}, fxFree = {}, mmTrees = {},
+        explored = {}, vis = {}, known = {} }, P)
     self.setup = CreateFrame("Frame", nil, parent)
     self.setup:Hide()
     local v = CreateFrame("Frame", nil, parent)
@@ -349,6 +350,8 @@ function P.New(parent, kind)
     self.buildLayer = Layer(2)
     self.unitLayer = Layer(2)
     self.buildTop = Layer(410) -- building health bars and team flags, above everything on the map
+    self.fogLayer = Layer(415) -- fog of war over everything on the map
+    self.fogTex = {}
     self.fxLayer = Layer(420)
     self.box = self.fxLayer:CreateTexture(nil, "OVERLAY")
     self.box:SetColorTexture(0.3, 1, 0.3, 0.18)
@@ -578,6 +581,7 @@ end
 function P:NewGame(faction, seed)
     local other = faction == "human" and "orc" or "human"
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
+    self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000),
         difficulty = Save().difficulty or "normal" })
     Save().game = self.st
@@ -851,7 +855,7 @@ end
 
 -- Click at a map point: select what's there (Shift adds units).
 function P:SelectAt(x, y, add)
-    local e = E().At(self.st, x, y) or E().At(self.st, x, y + 0.7) or E().At(self.st, x, y + 1.3)
+    local e = self:SeenAt(x, y) or self:SeenAt(x, y + 0.7) or self:SeenAt(x, y + 1.3)
     if not e then
         if not add then self.sel = {} end
         return
@@ -945,7 +949,7 @@ end
 -- Right-click: move, attack, gather, or set a rally point.
 function P:Smart(x, y)
     local st = self.st
-    local target = E().At(st, x, y) or E().At(st, x, y + 0.7)
+    local target = self:SeenAt(x, y) or self:SeenAt(x, y + 0.7)
     local tree = st.trees[math.floor(y) * st.w + math.floor(x)] and (math.floor(y) * st.w + math.floor(x)) or nil
     local units = self:MyUnits()
     self:Mark(x, y)
@@ -1058,7 +1062,7 @@ function P:AttackAt(x, y)
     self.targeting = nil
     local units = self:MyUnits()
     if #units == 0 then return end
-    local target = E().At(self.st, x, y)
+    local target = self:SeenAt(x, y)
     self:Mark(x, y)
     if target and target.owner ~= ME and target.owner > 0 then
         E().Command(self.st, ME, { type = "attack", units = units, target = target.id, queue = Shift() })
@@ -1183,6 +1187,130 @@ end
 local function Place(region, parent, x, y)
     region:ClearAllPoints()
     region:SetPoint("CENTER", parent, "TOPLEFT", x, -y)
+end
+
+---------------------------------------------------------------------------
+-- Fog of war: black where you've never been, dim where you've been but
+-- see nothing now. Enemy units show only in sight; enemy buildings stay
+-- once found (like Warcraft III).
+---------------------------------------------------------------------------
+-- How far an entity of yours sees.
+local function ViewOf(e)
+    local V = WC().VIEW
+    if e.kind == "unit" then return WC().Units[e.type].worker and V.worker or V.unit end
+    local d = WC().Buildings[e.type]
+    if d.attack then return V.tower end
+    return d.hall and V.hall or V.building
+end
+
+function P:UpdateFog()
+    local st = self.st
+    local vis, explored = {}, self.explored
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == ME and not e.inside then
+            local cx, cy = e.x, e.y
+            if e.kind ~= "unit" then cx, cy = e.x + e.size / 2, e.y + e.size / 2 end
+            local r = ViewOf(e)
+            for ty = math.max(0, math.floor(cy - r)), math.min(st.h - 1, math.floor(cy + r)) do
+                for tx = math.max(0, math.floor(cx - r)), math.min(st.w - 1, math.floor(cx + r)) do
+                    if (tx + 0.5 - cx) ^ 2 + (ty + 0.5 - cy) ^ 2 <= r * r then
+                        local i = ty * st.w + tx
+                        vis[i], explored[i] = true, true
+                    end
+                end
+            end
+        end
+    end
+    self.vis = vis
+    -- Enemy buildings seen once stay known.
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind ~= "unit" and not self.known[id] and self:TileSeen(e, vis) then self.known[id] = true end
+    end
+end
+
+-- Any tile of e's footprint in sight?
+function P:TileSeen(e, vis)
+    local st = self.st
+    vis = vis or self.vis
+    local size = e.size or 1
+    for ty = math.floor(e.y), math.floor(e.y + size - 0.01) do
+        for tx = math.floor(e.x), math.floor(e.x + size - 0.01) do
+            if vis[ty * st.w + tx] then return true end
+        end
+    end
+    return false
+end
+
+-- Can you see this entity now?
+function P:Sees(e)
+    if e.owner == ME then return true end
+    if e.kind ~= "unit" then return self.known[e.id] == true or self:TileSeen(e) end
+    return self.vis[math.floor(e.y) * self.st.w + math.floor(e.x)] == true
+end
+
+-- What's at that spot, if you can see it.
+function P:SeenAt(x, y)
+    local e = E().At(self.st, x, y)
+    if e and self:Sees(e) then return e end
+end
+
+function P:DrawFog()
+    local st = self.st
+    local cx, cy = self.camX, self.camY
+    local x0, y0 = math.max(0, math.floor(cx / TILE)), math.max(0, math.floor(cy / TILE))
+    local x1 = math.min(st.w - 1, math.floor((cx + BW) / TILE))
+    local y1 = math.min(st.h - 1, math.floor((cy + VIEW_H) / TILE))
+    local used = 0
+    for ty = y0, y1 do
+        for tx = x0, x1 do
+            local i = ty * st.w + tx
+            if not self.vis[i] then
+                used = used + 1
+                local t = self.fogTex[used]
+                if not t then
+                    t = self.fogLayer:CreateTexture(nil, "ARTWORK")
+                    t:SetSize(TILE + 1, TILE + 1)
+                    self.fogTex[used] = t
+                end
+                t:SetColorTexture(0, 0, 0, self.explored[i] and 0.5 or 1)
+                t:ClearAllPoints()
+                t:SetPoint("TOPLEFT", self.view, "TOPLEFT", tx * TILE - cx, -(ty * TILE - cy))
+                t:Show()
+            end
+        end
+    end
+    for j = used + 1, #self.fogTex do self.fogTex[j]:Hide() end
+    -- The minimap, in blocks of 4 tiles.
+    self.mmFog = self.mmFog or {}
+    local n = 0
+    for by = 0, st.h - 1, 4 do
+        for bx = 0, st.w - 1, 4 do
+            local seen, now = false, false
+            for ty = by, math.min(st.h - 1, by + 3) do
+                for tx = bx, math.min(st.w - 1, bx + 3) do
+                    local i = ty * st.w + tx
+                    if self.vis[i] then now = true end
+                    if self.explored[i] then seen = true end
+                end
+            end
+            if not now then
+                n = n + 1
+                local t = self.mmFog[n]
+                if not t then
+                    t = self.mm:CreateTexture(nil, "OVERLAY")
+                    t:SetSize(4 * MM_SCALE, 4 * MM_SCALE)
+                    self.mmFog[n] = t
+                end
+                t:SetColorTexture(0, 0, 0, seen and 0.45 or 0.95)
+                t:ClearAllPoints()
+                t:SetPoint("TOPLEFT", self.mm, "TOPLEFT", bx * MM_SCALE, -by * MM_SCALE)
+                t:Show()
+            end
+        end
+    end
+    for j = n + 1, #self.mmFog do self.mmFog[j]:Hide() end
 end
 
 function P:BuildMinimapTrees()
@@ -1452,6 +1580,16 @@ function P:Draw()
         self.treeDirty = false
         self.lastCamX, self.lastCamY = cx, cy
     end
+    -- Fog of war.
+    if Now() >= (self.fogAt or 0) then
+        self.fogAt = Now() + 0.2
+        self:UpdateFog()
+        self.fogDirty = true
+    end
+    if self.fogDirty or self.fogCamX ~= cx or self.fogCamY ~= cy then
+        self.fogDirty, self.fogCamX, self.fogCamY = false, cx, cy
+        self:DrawFog()
+    end
     -- Buildings ordered but not started yet: faint ghosts.
     self.planTex = self.planTex or {}
     local plans = E().PlannedSites(st, ME)
@@ -1482,7 +1620,7 @@ function P:Draw()
     self.mmDots:Begin()
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind ~= "unit" then
+        if e and e.kind ~= "unit" and self:Sees(e) then
             bi = bi + 1
             local t = self.buildTex[bi]
             if not t then
@@ -1578,7 +1716,7 @@ function P:Draw()
     local now = Now()
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
-        if e and e.kind == "unit" then
+        if e and e.kind == "unit" and self:Sees(e) then
             local dot = self.mmDots:Get()
             local col = TEAM[e.owner]
             dot:SetColorTexture(col[1], col[2], col[3], 1)

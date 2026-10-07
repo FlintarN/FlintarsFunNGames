@@ -599,3 +599,38 @@ function WcQueueTests()
     E.Command(st, 1, { type = "stop", units = { w.id } })
     check(st.players[1].gold == gold, "wc queue: stop gives the money back")
 end
+
+-- Fog of war: your base in sight, the enemy's hidden until you get there.
+function WcFogTests()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    Advance(0)
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 77)
+    view.fogAt = 0
+    view:Draw()
+    local st = view.st
+    local mine, theirs = E.Hall(st, 1), E.Hall(st, 2)
+    check(view:Sees(mine) and view:TileSeen(mine), "wc fog: your hall is in sight")
+    check(not view:Sees(theirs), "wc fog: the enemy hall is hidden")
+    local tx, ty = E.Center(theirs)
+    check(view:SeenAt(tx, ty) == nil, "wc fog: you can't click what you can't see")
+    local enemyUnit
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 2 and e.kind == "unit" then enemyUnit = e break end
+    end
+    check(enemyUnit and not view:Sees(enemyUnit) and view.unitFrames[enemyUnit.id] == nil, "wc fog: enemy units aren't drawn")
+    -- A footman walks over: their hall shows, and stays known after he leaves.
+    local fm = E.Spawn(st, 1, "footman", tx, ty + theirs.size)
+    view.fogAt = 0
+    view:Draw()
+    check(view:Sees(theirs) and view.known[theirs.id], "wc fog: a unit nearby reveals their hall")
+    fm.x, fm.y = 10, 10
+    view.fogAt = 0
+    view:Draw()
+    check(view:Sees(theirs), "wc fog: a building once seen stays on the map")
+    local i = math.floor(ty) * st.w + math.floor(tx)
+    check(view.explored[i] and not view.vis[i], "wc fog: explored but out of sight (dimmed)")
+end

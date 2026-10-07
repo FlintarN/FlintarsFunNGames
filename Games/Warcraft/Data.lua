@@ -113,6 +113,8 @@ ns.WC.MINE_TIME = 1.0     -- seconds inside the mine
 ns.WC.CHOP_TIME = 4.0     -- seconds to chop a load of lumber
 ns.WC.FOOD_MAX = 100
 ns.WC.SIGHT = 7           -- how far units notice enemies
+-- Fog of war: how far you see around your things (tiles).
+ns.WC.VIEW = { unit = 8, worker = 7, building = 7, hall = 9, tower = 10 }
 -- Computer difficulty. think: seconds between decisions; workers: how many
 -- it trains; secondRax: when it builds a second barracks (nil: never);
 -- firstAttack: earliest attack (seconds); wave/waveGrow/waveMax: army size
