@@ -122,3 +122,23 @@ function WcNightTests()
     end
     check(awake and not E.IsNight(st), "night: morning: they wake and fight")
 end
+
+-- Under attack off-screen: a ping on the minimap; Space jumps there.
+function WcPingTests()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 9)
+    local st = view.st
+    local hall = E.Hall(st, 1)
+    view.camX, view.camY = 0, 0
+    local far = E.Spawn(st, 1, "footman", 55, 34)
+    local foe = E.Spawn(st, 2, "grunt", 56, 34)
+    view.alarmT = nil
+    view:Sounds({ { kind = "hit", id = foe.id, target = far.id } })
+    check(view.ping and math.abs(view.ping.x - 55) < 1, "ping: an attack off-screen pings the minimap")
+    view:Key("SPACE")
+    check(math.abs(view.camX + 738 / 2 - 55 * 20) < 300, "ping: Space jumps the camera there")
+    view:Quit()
+end

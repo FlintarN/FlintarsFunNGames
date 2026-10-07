@@ -485,7 +485,7 @@ function P.New(parent, kind)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
         D = true, E = true, U = true, N = true, V = true, X = true, K = true, Z = true,
-        L = true, TAB = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
+        L = true, TAB = true, SPACE = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
 
@@ -861,6 +861,39 @@ function P:ShowMenu()
 end
 
 -- Everything the overlay can show, off.
+-- A ping on the minimap where something happened (an attack); Space jumps there.
+function P:Ping(x, y)
+    if not self.pingTex then
+        local t = self.mm:CreateTexture(nil, "OVERLAY", nil, 5)
+        t:SetTexture(ART .. "WcSelect")
+        t:SetVertexColor(1, 0.2, 0.2)
+        self.pingTex = t
+    end
+    self.ping = { x = x, y = y, t = Now() }
+end
+
+function P:DrawPing()
+    local p, t = self.ping, self.pingTex
+    if not (p and t) then return end
+    local age = Now() - p.t
+    if age > 3 then t:Hide() return end
+    local size = (8 + (age % 1) * 22) -- a ring that keeps opening
+    t:SetSize(size, size)
+    t:SetAlpha(1 - (age % 1))
+    t:ClearAllPoints()
+    t:SetPoint("CENTER", self.mm, "TOPLEFT", p.x * self.mmScale, -p.y * self.mmScale)
+    t:Show()
+end
+
+-- Space: the camera to the last alert.
+function P:JumpToPing()
+    if not self.ping then return end
+    local x, y = self.ping.x, self.ping.y
+    self.camX, self.camY = x * TILE - BW / 2, y * TILE - VIEW_H / 2
+    self:ClampCam()
+    self.treeDirty = true
+end
+
 -- Night: a dark blue veil over the map, fading in at dusk and out at dawn.
 function P:DrawNight(st)
     if not self.nightTex then
@@ -1720,6 +1753,7 @@ end
 function P:Key(key)
     if not self.st or self.paused then return end
     if key == "TAB" then return self:NextFocus() end
+    if key == "SPACE" then return self:JumpToPing() end
     local n = key:match("^(%d)$")
     if n then return self:Group(tonumber(n)) end
     local cmd
@@ -2480,6 +2514,7 @@ function P:DrawPanel()
     self.clock:SetText(string.format("%s %d:%02d   %d:%02d", E().IsNight(st) and "|cff8899ffNight|r" or "|cffffd100Day|r",
         math.floor(hour), math.floor((hour % 1) * 60), math.floor(st.time / 60), math.floor(st.time % 60)))
     self:DrawNight(st)
+    self:DrawPing()
     local rec = Save()
     self.statsText:SetText(string.format("Wins %d, losses %d", rec.wins, rec.losses))
 
@@ -3096,6 +3131,7 @@ function P:Sounds(events)
             local a, t = st.ents[ev.id], st.ents[ev.target]
             if t and t.owner == ME and (not self.alarmT or Now() - self.alarmT > 20) and not self:OnScreen(t.x, t.y) then
                 self.alarmT = Now()
+                self:Ping(t.x, t.y)
                 W.PlayFile(S.UnderAttack, "game")
                 self:Say(t.kind == "unit" and "Our forces are under attack!" or "Our base is under attack!")
             end

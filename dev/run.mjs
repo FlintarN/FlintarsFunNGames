@@ -623,6 +623,7 @@ await Section('Warcraft III armies', async () => {
   await p.run('WcCreepTests()');
   await p.run('WcNeutralTests()');
   await p.run('WcNightTests()');
+  await p.run('WcPingTests()');
 });
 
 await Section('Warcraft III lockstep', async () => {
