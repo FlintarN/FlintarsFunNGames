@@ -59,7 +59,7 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [x] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
 - [x] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
 - [x] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; claim victory after 45 s.
-- [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies. Use the realm queue (Core/Queue.lua) too.
+- [x] Lobby: races, map, colours, teams, computers (up to 8). Left: ready buttons; the realm queue still uses the old two-player race pick.
 - [x] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
 - [x] Wins and losses in the stats and on a leaderboard (warcraftpvp; no board on the page yet).
 
@@ -83,17 +83,17 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Pick models for the new buildings in /wcgallery.
 
 ### 6. The map and the match
-- [ ] Shared sight for allies (fog of war itself is done).
+- [x] Shared sight for allies.
 - [ ] Day and night cycle (shorter sight at night, Night Elf bonuses).
 - [ ] Creep camps around the map (WoW creatures) that guard expansions and give heroes experience and item drops; a neutral shop and mercenary camp.
-- [ ] Bigger maps, more than one map, map picker; 4 players (2 vs 2 against the AI).
-- [ ] Choose your race and the computer's (Human, Orc, Night Elf, Undead, Random).
+- [x] Bigger maps, five maps, map picker; up to 4 players on Four Crowns.
+- [x] Choose your race and the computer's (Human, Orc, Random). Night Elf and Undead later.
 - [ ] PvP: see "PvP for Hearthstone and Warcraft III" below.
 
 ### 7. Feel
-- [ ] Unit sounds (WoW voice lines and weapon sounds), building sounds, "Our town is under attack" warnings, a minimap ping.
+- [x] Unit sounds, building sounds, under-attack warnings. [ ] A minimap ping where the attack is.
 - [ ] Attack and spell projectiles from the game files (arrows, spears, cannon balls, fireballs).
-- [ ] Select and command buildings in groups; rally points for several buildings; Tab between unit types in a selection; a multi-unit selection panel with portraits.
+- [x] Tab between unit types, group icons with health, click/double-click. [ ] Select and command buildings in groups; rally points for several buildings.
 - [ ] Score screen at the end (units, buildings, resources, heroes).
 
 ### 8. Night Elf (at the very end)
@@ -167,7 +167,7 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
 ## Warcraft III custom games and maps (research in dev/research/, build later)
 - Player counts: 10 is the cap, not the target. Each mode at its natural size: co-op defense 4–5 players, Footmen 4, versus 4v4 or 5v5, melee 1v1/2v2. Tower Defense: free-for-all (2 up to 8 players, each sending to the next) or team-based.
 - [x] Up to 8 players (lobby, teams, lockstep for many seats, computers in seats). Left: a player who drops mid-game ends a 3+ player game with no winner (could hand their seat to the computer).
-- [ ] (was) Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
+- [x] (was) Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
 - [x] Map selection in the lobby (five maps; more to make): standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
 - Suggested order (from the research, not decided):
   1. Maps as data (ASCII grid + legend, symmetry, a validator); our map as "Riverford"; a map picker in the lobby.
@@ -175,4 +175,4 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
   3. Shared building blocks: buildings that spawn units on a timer, income on a timer, sending creeps.
   4. [x] Footmen Frenzy v1 (4 corners, 2 races x 4 tiers, weapons/armor, one hero, bounty, send to, AI). Later: 2v2 give-gold, counter wheel, tier 5, creep shop, more races. Then Hero Defense (co-op 4–5, reuses heroes/items/shops), Tower Defense (free-for-all up to 8, or teams; Line Tower Wars style), then DotA (5v5 on 96x96).
   5. Later picks from other_customs.md: Castle Fight, Hero Line Wars, Legion TD, Wintermaul Wars, a Risk-style game, Island Defense, Troll and Elves.
-- [ ] Custom games, in order to be decided after the research: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.
+- [x] Custom games researched; order below: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.
