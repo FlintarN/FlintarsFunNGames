@@ -88,7 +88,18 @@ local MODEL_PAD = 1.8
 local UNIT_SIZE = 0.7
 -- A unit's height on screen in pixels, and where its feet are (below the frame's centre).
 local UNIT_PX, UNIT_FEET = MODEL_H / 1.1 * UNIT_SIZE, -6
-local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6, fly = 135 }
+local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6, fly = 135, spell = 2, bow = 46, rifle = 49 }
+-- How a ranged unit attacks: guns aim and fire, bows and spears throw,
+-- casters and ranged heroes cast (the melee swing is for melee).
+local GUNS = { rifleman = true, mortar_team = true, flying_machine = true, siege_engine = true }
+local function AttackAnim(utype)
+    local d = ns.WC.Units[utype]
+    if not d or (d.range or 1) <= 1.5 then return ANIM.attack end
+    local base = ns.WC.BaseOf and ns.WC.BaseOf(utype) or utype
+    if GUNS[base] then return ANIM.rifle end
+    if d.mana or d.hero or d.attackType == "magic" then return ANIM.spell end
+    return ANIM.bow
+end
 
 -- How units look next to each other: bigger heroes, beasts and machines
 -- (their models are all fitted to one height first).
@@ -135,16 +146,21 @@ local NEAR, FAR = 20, 200000
 local RADIUS = {} -- model file or display id -> its size (radius around where the camera looks)
 
 -- The camera's forward and right directions (right: from the client, or worked out).
+-- (Two tables used over and over: this runs for every model every frame,
+-- and new tables each time would be a lot of garbage. Callers only read them.)
+local DIR_F, DIR_R = { 0, 0, 0 }, { 0, 0, 0 }
+local EMPTY = {} -- (for "or {}" in loops that run every frame)
 local function CameraDirs(sc, yaw, pitch)
-    local f = { math.cos(pitch) * math.cos(yaw), math.cos(pitch) * math.sin(yaw), -math.sin(pitch) }
-    local r = { -math.sin(yaw), math.cos(yaw), 0 }
+    local f, r = DIR_F, DIR_R
+    f[1], f[2], f[3] = math.cos(pitch) * math.cos(yaw), math.cos(pitch) * math.sin(yaw), -math.sin(pitch)
+    r[1], r[2], r[3] = -math.sin(yaw), math.cos(yaw), 0
     if sc.GetCameraForward then
         local x, y, z = sc:GetCameraForward()
-        if x then f = { x, y, z } end
+        if x then f[1], f[2], f[3] = x, y, z end
     end
     if sc.GetCameraRight then
         local x, y, z = sc:GetCameraRight()
-        if x then r = { x, y, z } end
+        if x then r[1], r[2], r[3] = x, y, z end
     end
     return f, r
 end
@@ -356,7 +372,7 @@ local function AnimFor(u, moved)
     local o = u.order
     if moved then return ANIM.walk end
     local d = ns.WC.Units[u.type]
-    if (u.cd or 0) > d.cooldown - 0.45 and o and o.type == "attack" then return ANIM.attack end
+    if (u.cd or 0) > d.cooldown - 0.45 and o and o.type == "attack" then return AttackAnim(u.type) end
     if u.phase == "work" and o and o.type == "gather" and o.res == "lumber" then return ANIM.attack end
     if o and o.type == "build" and o.site then return ANIM.attack end
     return ANIM.stand
@@ -1120,6 +1136,13 @@ end
 ---------------------------------------------------------------------------
 -- Time
 ---------------------------------------------------------------------------
+-- A frame's drawing (the bottom panel only every 0.1 s: see Draw).
+function P:FrameDraw()
+    self.throttle = true
+    self:Draw()
+    self.throttle = false
+end
+
 function P:Tick(elapsed)
     elapsed = math.min(elapsed or 0, 0.25)
     local st = self.st
@@ -1131,7 +1154,7 @@ function P:Tick(elapsed)
     self:FadeFlash()
     if self.ls then
         if not self.paused then self:Scroll(elapsed) end
-        self:Draw()
+        self:FrameDraw()
         return
     end
     if not self.paused and not st.over then
@@ -1150,12 +1173,12 @@ function P:Tick(elapsed)
             if st.over then break end
         end
         if st.over then
-            self:Draw()
+            self:FrameDraw()
             if self.pvp then return self:PvpGameEnded() end
             return self:GameOver()
         end
     end
-    self:Draw()
+    self:FrameDraw()
 end
 
 function P:FadeFlash()
@@ -1181,6 +1204,10 @@ function P:Events(events)
     self:SpellEvents(events)
     self:Sounds(events)
     for _, ev in ipairs(events) do
+        -- A building came or went: the depth layering changes (see Draw).
+        if ev.kind == "built" or ev.kind == "placed" or (ev.kind == "death" and ev.what == "building") then
+            self.depthDirty = true
+        end
         if ev.kind == "hit" then
             local a, t = self.st.ents[ev.id], self.st.ents[ev.target]
             if a and ev.ranged then
@@ -1840,7 +1867,7 @@ function P:UpdateFog()
         end
     end
     -- Far Sight.
-    for _, r in ipairs(st.reveals or {}) do
+    for _, r in ipairs(st.reveals or EMPTY) do
         if r.owner == ME then
             for ty = math.max(0, math.floor(r.y - r.r)), math.min(st.h - 1, math.floor(r.y + r.r)) do
                 for tx = math.max(0, math.floor(r.x - r.r)), math.min(st.w - 1, math.floor(r.x + r.r)) do
@@ -2267,11 +2294,17 @@ function P:Draw()
     end
     for i = #plans + 1, #self.planTex do self.planTex[i]:Hide() end
     -- Depth: lower on the map = nearer the camera = in front (see PlanDepth).
-    self:PlanDepth()
-    for _, t in ipairs(self.treeModels or {}) do
+    -- (Only when something changed, or once a second: it walks every tree.)
+    if self.depthDirty or self.treeDirty or not self.depthPlan or Now() >= (self.depthAt or 0) then
+        self:PlanDepth()
+        self.depthDirty, self.depthAt = false, Now() + 1
+    end
+    for _, t in ipairs(self.treeModels or EMPTY) do
         if t.SetDepth and t.row and t:IsShown() then t:SetDepth(self:DepthAt(t.row, RADIUS[t.file] or 25)) end
     end
-    local selected = {}
+    local selected = self.selBuf or {}
+    self.selBuf = selected
+    for k in pairs(selected) do selected[k] = nil end
     for _, id in ipairs(self.sel) do selected[id] = true end
     -- Buildings and the mine.
     local bi, ui = 0, 0
@@ -2370,7 +2403,9 @@ function P:Draw()
         if t.shadow then t.shadow:Hide() end
     end
     -- Units.
-    local seen = {}
+    local seen = self.seenBuf or {}
+    self.seenBuf = seen
+    for k in pairs(seen) do seen[k] = nil end
     local now = Now()
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
@@ -2433,7 +2468,7 @@ function P:Draw()
                     local ud = WC().Units[e.type]
                     local k = UNIT_LOOK[look] or UNIT_LOOK[Base(look)] or (ud and ud.hero and HERO_LOOK) or 1
                     local desat, speed, spin, alpha = 0, 1, false, nil
-                    for buff in pairs(e.buffs or {}) do
+                    for buff in pairs(e.buffs or EMPTY) do
                         local L = BUFF_LOOK[buff]
                         if L then
                             k = k * (L.scale or 1)
@@ -2480,6 +2515,11 @@ function P:Draw()
             self:FreeFrame(f)
         else
             f:SetAlpha(math.min(1, left / 1.2))
+            -- Where it fell on the map (it moves with the camera).
+            if f.lastX then
+                f:ClearAllPoints()
+                f:SetPoint("CENTER", self.view, "TOPLEFT", f.lastX * TILE - cx, -(f.lastY * TILE - cy))
+            end
             if f.model and f.model.anim == ANIM.death and left < 1.6 and f.model.SetAnimation then
                 f.model:SetAnimation(ANIM.dead)
                 f.model.anim = ANIM.dead
@@ -2552,6 +2592,14 @@ function P:Draw()
     else
         self.rallyFlag:Hide()
     end
+    -- The bottom panel and the command card: at most 10 times a second while
+    -- the game runs (rebuilding them every frame makes a lot of garbage).
+    if self.throttle and Now() < (self.hudAt or 0) then return end
+    self.hudAt = Now() + 0.1
+    self:DrawHud(st, cx, cy)
+end
+
+function P:DrawHud(st, cx, cy)
     local idle = self:IdleWorkers()
     self.idleButton:SetShown(#idle > 0)
     if #idle > 0 then
@@ -3995,7 +4043,7 @@ function P:DrawItems()
     local st = self.st
     self.itemTex = self.itemTex or {}
     local n = 0
-    for _, it in ipairs(st and st.items or {}) do
+    for _, it in ipairs(st and st.items or EMPTY) do
         local px, py = it.x * TILE - self.camX, it.y * TILE - self.camY
         local seen = self.vis and self.vis[math.floor(it.y) * st.w + math.floor(it.x)]
         if px > -20 and px < BW + 20 and py > -20 and py < VIEW_H + 20 and seen then
@@ -4027,7 +4075,7 @@ function P:DrawFx()
         if e and e.kind == "unit" and not e.inside and not e.insideBuild then
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             if px > -40 and px < BW + 40 and py > -20 and py < VIEW_H + 60 and self:Sees(e) then
-                for buff in pairs(e.buffs or {}) do
+                for buff in pairs(e.buffs or EMPTY) do
                     local b = BUFF_FX[buff]
                     if b then self:FxStart("b" .. id .. buff, b[1], { id = id, scale = b[2], z = b[3] }) end
                 end
@@ -4202,7 +4250,7 @@ function P:DrawDemoLabels()
     local st = self.st
     local on = st and st.demo and self.demoLabels
     local casts = {}
-    for i, l in ipairs(on or {}) do
+    for i, l in ipairs(on or EMPTY) do
         local fs = self.demoText[i]
         if not fs then
             fs = W.Label(self.fxLayer, "", "GameFontHighlightSmall")
@@ -4222,7 +4270,7 @@ function P:DrawDemoLabels()
             fs:Hide()
         end
     end
-    for i = #(on or {}) + 1, #self.demoText do self.demoText[i]:Hide() end
+    for i = #(on or EMPTY) + 1, #self.demoText do self.demoText[i]:Hide() end
 end
 
 do
