@@ -197,4 +197,71 @@ function WcArmyPage()
         view.place = nil
     end
     check(#bad == 0, "wc army page: every building can be placed (" .. table.concat(bad, ", ") .. ")")
+
+    -- Cancel: a building going up (75% back), the last unit in training.
+    st.players[1].gold, st.players[1].lumber = 1000, 1000
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local fx, fy = WC.AI.FindSpot(st, hx - 8, hy + 4, 2)
+    E.Command(st, 1, { type = "build", unit = peasant.id, btype = "farm", x = fx, y = fy })
+    local farm
+    for _ = 1, 400 do
+        E.Step(st, 0.05)
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e.type == "farm" and e.owner == 1 and e.progress < 1 then farm = e end
+        end
+        if farm then break end
+    end
+    check(farm ~= nil, "wc cancel: a farm going up")
+    view.sel = { farm.id }
+    view:Draw()
+    check(view.cmds[12]:IsShown() and view.cmds[12].title == "Cancel", "wc cancel: a Cancel button on a building going up")
+    local gold = st.players[1].gold
+    view.cmds[12].action()
+    check(not st.ents[farm.id] and st.players[1].gold == gold + math.floor(WC.Buildings.farm.cost[1] * 0.75)
+        and not peasant.order, "wc cancel: gone, 75% back, the worker is free")
+    local barracks = Done(st, 1, "barracks", 8, -6)
+    E.Command(st, 1, { type = "train", building = barracks.id, utype = "footman" })
+    view.sel = { barracks.id }
+    view:Draw()
+    check(view.cmds[11]:IsShown() and view.cmds[11].title == "Cancel", "wc cancel: Cancel while training")
+    gold = st.players[1].gold
+    view.cmds[11].action()
+    check(#barracks.queue == 0 and st.players[1].gold == gold + WC.Units.footman.cost[1], "wc cancel: the footman is cancelled, gold back")
+
+    -- Each creature its own look, even when the model frame is slow to switch.
+    local fake = { cur = nil }
+    function fake:SetCreature(n) self.pending = n end
+    function fake:GetDisplayInfo() return self.cur or 0 end
+    view.prober = fake
+    ns.db.warcraft.looks = {}
+    view:Probe(12126)
+    fake.cur = 501 -- the paladin loaded
+    view:Probe(2543)
+    view:Probe(2543) -- still showing the paladin
+    check(ns.db.warcraft.looks[12126] == 501 and ns.db.warcraft.looks[2543] == nil, "wc looks: a stale look isn't taken for the next creature")
+    fake.cur = 777
+    view:Probe(2543)
+    check(ns.db.warcraft.looks[2543] == 777, "wc looks: the archmage gets its own look")
+    view.prober = nil
+
+    -- Spell effects: area spells, buffs on units, auras under heroes.
+    local am = E.Spawn(st, 1, "archmage", hx + 3, hy + 3)
+    am.skills.brilliance = 1
+    view:Events({ { kind = "cast", id = am.id, owner = 1, ability = "blizzard", x = hx + 4, y = hy + 3, lv = 1 } })
+    view:Draw()
+    local area, aura = false, false
+    for key, f in pairs(view.fx) do
+        if f.file == ns.UI.pages.warcraft.view.SPELL_FX.blizzard[1] then area = true end
+        if key == "a" .. am.id .. "brilliance" then aura = true end
+    end
+    check(area and aura, "wc fx: Blizzard on the ground, Brilliance Aura under the Archmage")
+    local foot = E.Spawn(st, 1, "footman", hx + 2, hy + 4)
+    E.AddBuff(foot, "stun", 2)
+    view:Draw()
+    check(view.fx["b" .. foot.id .. "stun"] ~= nil, "wc fx: a stunned unit shows the swirl")
+    foot.buffs = nil
+    view:Draw()
+    check(view.fx["b" .. foot.id .. "stun"] == nil, "wc fx: gone when the stun ends")
 end

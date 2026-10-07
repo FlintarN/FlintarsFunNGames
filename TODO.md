@@ -75,7 +75,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Pick models for the new buildings (Keep, Castle, Stronghold, Fortress, Blacksmith, War Mill, Scout Tower) in /wcgallery.
 
 ### 2. Heroes
-- [ ] Spell visuals from the game files (WoW spell models) instead of rings and messages.
+- [x] Spell visuals from the game files (WoW spell models). Tune sizes per spell after seeing them in game.
 - [ ] Items and a 6-slot inventory come with shops (step 3) and creeps (step 6).
 
 ### 3. The rest of the Human and Orc armies

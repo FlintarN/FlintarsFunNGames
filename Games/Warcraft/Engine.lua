@@ -1501,6 +1501,22 @@ function E.Command(st, p, cmd)
         pl.gold, pl.lumber = pl.gold + cost[1], pl.lumber + cost[2]
         E.Food(st)
         return true
+    elseif t == "cancelBuild" then
+        -- Cancel a building still going up: 75% back, like Warcraft III.
+        local b = st.ents[cmd.building]
+        if not b or b.owner ~= p or b.kind ~= "building" or b.progress >= 1 then return false end
+        local cost = Def(b).cost
+        local pl = st.players[p]
+        pl.gold = pl.gold + math.floor(cost[1] * 0.75)
+        pl.lumber = pl.lumber + math.floor(cost[2] * 0.75)
+        for _, id in ipairs(st.list) do
+            local u = st.ents[id]
+            if u and u.kind == "unit" and u.order and u.order.site == b.id then E.Order(st, u, nil) end
+        end
+        Remove(st, b)
+        E.Food(st)
+        Emit("cancelled", { id = b.id, owner = p, type = b.type })
+        return true
     elseif t == "rally" then
         local b = st.ents[cmd.building]
         if not b or b.owner ~= p then return false end

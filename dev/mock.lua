@@ -73,7 +73,9 @@ function methods:CreateActor()
     function a:GetActiveBoundingBox() return -1, -1, 0, 1, 1, 2 end
     return a
 end
-function methods:GetDisplayInfo() return 4321 end
+-- Each creature has its own look (100000 + its npc id).
+function methods:SetCreature(npc) self._npc = npc end
+function methods:GetDisplayInfo() return self._npc and (100000 + self._npc) or 4321 end
 function methods:SetCameraPosition(x, y, z) self._cam = { x, y, z } end
 function methods:GetScale() return self._scale or 1 end
 function methods:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end

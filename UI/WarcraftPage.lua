@@ -69,6 +69,9 @@ local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
 
 local function Looks()
     local rec = Save()
+    -- Version 2: older saves could give one creature's look to the next
+    -- creature asked about (heroes and priests all looked the same).
+    if rec.looksV ~= 2 then rec.looks, rec.looksV = {}, 2 end
     rec.looks = rec.looks or {}
     return rec.looks
 end
@@ -870,6 +873,7 @@ end
 
 -- Sounds and little effects for what just happened.
 function P:Events(events)
+    self:SpellEvents(events)
     for _, ev in ipairs(events) do
         if ev.kind == "hit" then
             local a, t = self.st.ents[ev.id], self.st.ents[ev.target]
@@ -1749,17 +1753,21 @@ function P:Probe(npc)
         m:SetAlpha(0.01)
         pcall(m.SetScript, m, "OnModelLoaded", function(s)
             local d = s:GetDisplayInfo()
-            if s.npc and d and d > 0 then Looks()[s.npc] = d end
+            if s.npc and d and d > 0 and d ~= s.oldDisp then Looks()[s.npc] = d end
         end)
         self.prober = m
     end
+    -- Right after switching creatures the frame still reports the last
+    -- one's look: only a new look counts.
     if m.npc and not Looks()[m.npc] then
         local d = m:GetDisplayInfo()
-        if d and d > 0 then Looks()[m.npc] = d end
+        if d and d > 0 and d ~= m.oldDisp then Looks()[m.npc] = d end
     end
     -- One creature at a time; give each a couple of seconds to load.
     if m.npc and not Looks()[m.npc] and Now() - (m.t or 0) < 2 then return end
     if m.npc == npc and Looks()[npc] then return end
+    m.oldDisp = m.GetDisplayInfo and m:GetDisplayInfo() or nil
+    if m.oldDisp == 0 then m.oldDisp = nil end
     m.npc, m.t = npc, Now()
     m:SetCreature(npc)
 end
@@ -2443,6 +2451,18 @@ function P:DrawCommands(sel)
                 action = function() self:Target("rally", "Click where new units should go") end }
         end
     end
+    -- Cancel: a building going up, an upgrade, or the last unit in training.
+    local sb = #mine == 1 and mine[1].kind == "building" and mine[1]
+    if sb and sb.progress < 1 then
+        list = {}
+        list[12] = { icon = IC .. "Spell_ChargeNegative", title = "Cancel", tip = "Stop building it. You get 75% of the cost back.",
+            action = function() self:Cmd({ type = "cancelBuild", building = sb.id }) end }
+    elseif sb and #sb.queue > 0 then
+        local last = E().QueueItem(st, sb, sb.queue[#sb.queue])
+        list[11] = { icon = IC .. "Spell_ChargeNegative", title = "Cancel",
+            tip = "Cancel the last one in the queue" .. (last and last.name and (" (" .. last.name .. ")") or "")
+                .. ". You get the cost back.", action = function() self:CancelTrain() end }
+    end
     for i, c in ipairs(self.cmds) do
         local item = list[i] or nil
         c:SetShown(item ~= nil)
@@ -2928,6 +2948,225 @@ SlashCmdList.FNGWCVIEW = function(msg)
         end
     end
     for _, m in ipairs(page.treeModels or {}) do Refit(m) end
+end
+
+---------------------------------------------------------------------------
+-- Spell effects: WoW's own spell models (M2 files from the game, ids from
+-- the community listfile) shown where a spell lands, on the units it
+-- affects while it lasts, and under heroes with an aura.
+---------------------------------------------------------------------------
+local YARD_PX = UNIT_PX / 2.2 -- a unit is about 2.2 yards tall
+local FX_SIZE = 150
+local FX_MAX = 40
+
+-- One-shot effects when a spell is cast: file, where (target, caster or
+-- point), scale, how long it shows (area spells: as long as they last).
+local SPELL_FX = {
+    resurrection = { 166704, "caster", 2, 2.5 },
+    blizzard = { 165716, "point", 1.6, "duration" },
+    flame_strike = { 166190, "point", 1.4, "duration" },
+    earthquake = { 166285, "point", 2, "duration" },
+    water_elemental = { 167178, "caster", 1, 1.5 },
+    mass_teleport = { 167094, "caster", 1.5, 2 },
+    storm_bolt = { 166841, "target", 1, 1 },
+    thunder_clap = { 167120, "caster", 1.6, 1.5 },
+    siphon_mana = { 166538, "target", 1, 1.5 },
+    phoenix = { 166112, "caster", 1.2, 1.5 },
+    wind_walk = { 166951, "caster", 1, 1 },
+    mirror_image = { 165715, "caster", 1.2, 1 },
+    far_sight = { 166064, "point", 1.5, 2 },
+    feral_spirit = { 166994, "caster", 1.2, 1.5 },
+    shockwave = { 166306, "point", 1.4, 1.5 },
+    war_stomp = { 166306, "caster", 1.6, 1.5 },
+    hex = { 166649, "target", 1, 1.2 },
+    serpent_ward = { 166994, "point", 1, 1.2 },
+    big_bad_voodoo = { 166826, "caster", 2, 2 },
+    healing_ward_spell = { 166293, "caster", 1, 1.5 },
+}
+-- While a unit has the buff: file, scale, height (yards above the ground).
+local BUFF_FX = {
+    stun = { 166988, 1, 2.2 },
+    invuln = { 166342, 1, 0 },
+    avatar = { 166420, 1.4, 1.2 },
+    bladestorm = { 167199, 1.2, 0.6 },
+    noAttack = { 165651, 1, 1 },
+    innerFire = { 166417, 1, 0 },
+    slow = { 166898, 1, 0 },
+    bloodlust = { 165727, 1, 2 },
+    reinc = { 166927, 1.2, 0 },
+}
+-- Under a hero who has learned the aura.
+local AURA_FX = { devotion = 165948, brilliance = 165759, endurance = 166557 }
+-- Other moments.
+local EVENT_FX = {
+    heal = { 166273, 1, 1 },
+    bolt = { 165780, 1, 0.8 },
+    levelUp = { 166464, 1, 2 },
+    reincarnated = { 166927, 1.4, 2 },
+    crit = { 166893, 1, 0.8 },
+    bash = { 166841, 1, 0.8 },
+}
+local ITEM_FX = { healing_potion = 166204, mana_potion = 166539, town_portal = 167094 }
+P.SPELL_FX, P.BUFF_FX, P.AURA_FX = SPELL_FX, BUFF_FX, AURA_FX
+
+local function MakeFx(parent)
+    local ok, sc = pcall(CreateFrame, "ModelScene", nil, parent)
+    if not ok or not sc or not sc.CreateActor then return nil end
+    local actor = sc:CreateActor()
+    if not actor or not actor.SetModelByFileID then return nil end
+    sc.actor = actor
+    sc:SetSize(FX_SIZE, FX_SIZE)
+    function sc:Aim()
+        local view = ns.WC.ART.view
+        local yards = FX_SIZE / (YARD_PX * (self.scale or 1))
+        Camera(self, 0, 0, self.z or 1, (yards / 2) / math.tan(view.fov / 2), view.bpitch)
+    end
+    function sc:SetDepth(d)
+        if self.depth ~= d then
+            self.depth = d
+            self:Aim()
+        end
+    end
+    function sc:Play(file, scale, z, restart)
+        self.scale, self.z = scale or 1, z or 1
+        if self.file ~= file or restart then
+            if actor.ClearModel then actor:ClearModel() end
+            actor:SetModelByFileID(file)
+            self.file = file
+        end
+        if actor.SetAnimation then actor:SetAnimation(0) end
+        self:Aim()
+    end
+    return sc
+end
+
+-- Start an effect: on a unit (follows it) or on a spot.
+function P:FxStart(key, file, opts)
+    self.fx = self.fx or {}
+    self.fxPool = self.fxPool or {}
+    local fx = self.fx[key]
+    if not fx then
+        local n = 0
+        for _ in pairs(self.fx) do n = n + 1 end
+        if n >= FX_MAX then return end
+        local sc = table.remove(self.fxPool) or MakeFx(self.unitLayer)
+        if not sc then return end
+        fx = { sc = sc }
+        self.fx[key] = fx
+        opts.restart = true
+    end
+    fx.id, fx.x, fx.y, fx.untilT, fx.seen = opts.id, opts.x, opts.y, opts.untilT, true
+    fx.sc:Show()
+    if fx.file ~= file or opts.restart then
+        fx.file = file
+        fx.sc:Play(file, opts.scale, opts.z, opts.restart)
+    end
+    return fx
+end
+
+function P:FxStop(key)
+    local fx = self.fx and self.fx[key]
+    if not fx then return end
+    fx.sc:Hide()
+    table.insert(self.fxPool, fx.sc)
+    self.fx[key] = nil
+end
+
+-- Effects for what just happened (called with the engine's events).
+function P:SpellEvents(events)
+    local st = self.st
+    self.fxN = self.fxN or 0
+    local function OnSpot(file, x, y, scale, dur, z)
+        if not (self.vis and self.vis[math.floor(y) * st.w + math.floor(x)]) then return end
+        self.fxN = self.fxN + 1
+        self:FxStart("s" .. self.fxN, file, { x = x, y = y, scale = scale, z = z or 0.3, untilT = Now() + dur })
+    end
+    local function OnUnit(file, id, scale, dur, z)
+        local e = st.ents[id]
+        if not e or not self:Sees(e) then return end
+        self.fxN = self.fxN + 1
+        self:FxStart("s" .. self.fxN, file, { id = id, scale = scale, z = z or 1, untilT = Now() + dur })
+    end
+    for _, ev in ipairs(events) do
+        local s = ev.kind == "cast" and SPELL_FX[ev.ability]
+        if s then
+            local a = WC().Abilities[ev.ability]
+            local dur = s[4]
+            if dur == "duration" then
+                local d = a.duration
+                dur = type(d) == "table" and (d[ev.lv or 1] or d[#d]) or d or 2
+            end
+            if s[2] == "point" and ev.x then
+                OnSpot(s[1], ev.x, ev.y, s[3], dur)
+            elseif s[2] == "target" and ev.target then
+                OnUnit(s[1], ev.target, s[3], dur)
+            else
+                OnUnit(s[1], ev.id, s[3], dur, 0.3)
+            end
+        end
+        local x = EVENT_FX[ev.kind]
+        if x then OnUnit(x[1], ev.target or ev.id, x[2], 1.5, x[3]) end
+        if ev.kind == "useItem" and ITEM_FX[ev.item] then OnUnit(ITEM_FX[ev.item], ev.id, 1, 1.5, 0.3) end
+    end
+end
+
+-- Every frame: buffs and auras on the units in sight, effects follow their
+-- units, finished ones go.
+function P:DrawFx()
+    local st = self.st
+    if not st then return end
+    self.fx = self.fx or {}
+    for _, fx in pairs(self.fx) do if not fx.untilT then fx.seen = false end end
+    local cx, cy = self.camX, self.camY
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind == "unit" and not e.inside and not e.insideBuild then
+            local px, py = e.x * TILE - cx, e.y * TILE - cy
+            if px > -40 and px < BW + 40 and py > -20 and py < VIEW_H + 60 and self:Sees(e) then
+                for buff in pairs(e.buffs or {}) do
+                    local b = BUFF_FX[buff]
+                    if b then self:FxStart("b" .. id .. buff, b[1], { id = id, scale = b[2], z = b[3] }) end
+                end
+                if e.skills then
+                    for key, file in pairs(AURA_FX) do
+                        if (e.skills[key] or 0) > 0 then self:FxStart("a" .. id .. key, file, { id = id, scale = 1.6, z = 0 }) end
+                    end
+                end
+            end
+        end
+    end
+    local now = Now()
+    local gone = {}
+    for key, fx in pairs(self.fx) do
+        local e = fx.id and st.ents[fx.id]
+        local x, y
+        if fx.id then
+            if e then x, y = e.x, e.y end
+        else
+            x, y = fx.x, fx.y
+        end
+        if not x or (fx.untilT and now > fx.untilT) or (not fx.untilT and not fx.seen) then
+            table.insert(gone, key)
+        else
+            local sc = fx.sc
+            local lift = e and WC().Units[e.type] and WC().Units[e.type].air and 18 or 0
+            local up = (sc.z or 1) * YARD_PX * (sc.scale or 1) * 0.85
+            sc:ClearAllPoints()
+            sc:SetPoint("CENTER", self.view, "TOPLEFT", x * TILE - cx, -(y * TILE - cy - lift) + up)
+            sc:SetFrameLevel(self:Depth(y) + 2)
+            sc:SetDepth(self:DepthAt(y, 6))
+            if fx.untilT then sc:SetAlpha(math.min(1, (fx.untilT - now) / 0.4)) else sc:SetAlpha(1) end
+        end
+    end
+    for _, key in ipairs(gone) do self:FxStop(key) end
+end
+
+do
+    local Draw = P.Draw
+    function P:Draw()
+        Draw(self)
+        self:DrawFx()
+    end
 end
 
 ns.CustomPages = ns.CustomPages or {}

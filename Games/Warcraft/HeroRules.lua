@@ -594,7 +594,7 @@ function E.CastStep(st, u, o, dt)
     u.cds[o.ability] = At(a.cd, lv)
     u.order, u.path = nil, nil
     if x and (x ~= u.x or y ~= u.y) then u.facing = ATAN2(y - u.y, x - u.x) end
-    E.Emit("cast", { id = u.id, owner = u.owner, ability = o.ability, target = t and t.id, x = x, y = y })
+    E.Emit("cast", { id = u.id, owner = u.owner, ability = o.ability, target = t and t.id, x = x, y = y, lv = lv })
     CAST[o.ability](st, u, lv, a, t, x, y)
 end
 
