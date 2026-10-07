@@ -219,6 +219,9 @@ H.RULES = {
         { "Shift", "Hold Shift to queue orders instead of replacing them: move here, then there; build a farm, "
             .. "then another (Shift keeps placing). Buildings in the queue are paid up front and show as ghosts; "
             .. "a new order without Shift cancels the queue and gives their gold and lumber back." },
+        { "Groups", "With several units selected, the command card is for one kind at a time (heroes first): click an icon "
+            .. "at the bottom for that kind's commands and spells, or press Tab for the next kind. Move and Attack go to the "
+            .. "whole group. Double-click an icon to select just that unit." },
         { "Command card", "As in Warcraft III. Units: Move (M), Stop (S), Hold Position (H), Attack (A: click an "
             .. "enemy, or the ground to attack-move). Workers also: Gather (G), Return Resources (R) and Build "
             .. "(B), which opens the build menu (Farm F / Burrow O, Barracks B, Lumber Mill L, Tower T, Altar A, Hall H). Towers shoot enemies in range. Halls and barracks "

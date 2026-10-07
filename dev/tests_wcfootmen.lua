@@ -143,3 +143,40 @@ function WcFootmenTests()
     ns.db.warcraft.lobby = nil
     view:Quit()
 end
+
+-- Subgroups: a hero and footmen selected; click the footman icon for its
+-- commands, Tab back to the hero, double-click for just one unit.
+function WcSubgroupTests()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 31)
+    local st = view.st
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local ids = {}
+    for i = 1, 4 do table.insert(ids, E.Spawn(st, 1, "footman", hx + 4 + i * 0.6, hy + 4).id) end
+    local pal = E.Spawn(st, 1, "paladin", hx + 4, hy + 5)
+    table.insert(ids, pal.id)
+    view.sel = ids
+    view.camX, view.camY = hx * 20 - 300, hy * 20 - 150
+    view:Draw()
+    local function Has(title)
+        for _, c in ipairs(view.cmds) do if c:IsShown() and c.title and c.title:find(title, 1, true) then return true end end
+    end
+    check(Has("Holy Light"), "wc subgroup: a group with a hero shows the hero's spells first")
+    local footIcon
+    for i, t in ipairs(view.groupIcons) do if t:IsShown() and st.ents[t.id].type == "footman" then footIcon = i break end end
+    view.groupIcons[footIcon]._scripts.OnClick()
+    check(not Has("Holy Light") and Has("Move") and #view.sel == 5, "wc subgroup: click a footman: its commands, the group stays")
+    view:Key("TAB")
+    view:Draw()
+    check(Has("Holy Light"), "wc subgroup: Tab: back to the hero")
+    local heroIcon
+    for i, t in ipairs(view.groupIcons) do if t:IsShown() and t.id == pal.id then heroIcon = i end end
+    view.groupIcons[heroIcon]._scripts.OnClick()
+    view.groupIcons[heroIcon]._scripts.OnClick()
+    check(#view.sel == 1 and view.sel[1] == pal.id, "wc subgroup: double-click: just the hero")
+    view:Quit()
+end

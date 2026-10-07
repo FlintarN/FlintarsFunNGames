@@ -469,7 +469,7 @@ function P.New(parent, kind)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
         D = true, E = true, U = true, N = true, V = true, X = true, K = true, Z = true,
-        L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
+        L = true, TAB = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
 
@@ -524,12 +524,34 @@ function P.New(parent, kind)
     self.selStatus:SetPoint("TOPLEFT", self.selHp, "BOTTOMLEFT", 0, -3)
     self.selStatus:SetWidth(260)
     self.selStatus:SetJustifyH("LEFT")
+    -- The group: an icon per unit. Click one: its kind gets the command card
+    -- (a subgroup, like Warcraft III; Tab moves on); double-click: just that unit.
     self.groupIcons = {}
     for i = 1, 12 do
-        local t = hud:CreateTexture(nil, "ARTWORK")
+        local t = CreateFrame("Button", nil, hud)
         t:SetSize(24, 24)
         t:SetPoint("TOPLEFT", 150 + ((i - 1) % 8) * 27, -10 - math.floor((i - 1) / 8) * 27)
-        t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        t.icon = t:CreateTexture(nil, "ARTWORK")
+        t.icon:SetAllPoints()
+        t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        t.ring = t:CreateTexture(nil, "BACKGROUND") -- a gold frame round the focused kind
+        t.ring:SetPoint("TOPLEFT", -2, 2)
+        t.ring:SetPoint("BOTTOMRIGHT", 2, -2)
+        t.ring:SetColorTexture(1, 0.82, 0, 0.55)
+        local hl = t:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.15)
+        t:SetScript("OnClick", function() self:ClickGroupIcon(i) end)
+        t:SetScript("OnEnter", function()
+            local e = t.id and self.st and self.st.ents[t.id]
+            if not e then return end
+            GameTooltip:SetOwner(t, "ANCHOR_TOP")
+            GameTooltip:SetText(E().Def(e).name, 1, 0.82, 0)
+            GameTooltip:AddLine(math.floor(e.hp) .. " / " .. e.maxHp .. " health. Click: its commands; double-click: just this one.",
+                1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        t:SetScript("OnLeave", function() GameTooltip:Hide() end)
         t:Hide()
         -- A small health bar under each icon.
         t.hpBg = hud:CreateTexture(nil, "ARTWORK", nil, 1)
@@ -1590,6 +1612,7 @@ end
 
 function P:Key(key)
     if not self.st or self.paused then return end
+    if key == "TAB" then return self:NextFocus() end
     local n = key:match("^(%d)$")
     if n then return self:Group(tonumber(n)) end
     local cmd
@@ -2359,7 +2382,11 @@ function P:DrawPanel()
         for i = 1, math.min(12, #sel) do
             local d = E().Def(sel[i])
             local t = self.groupIcons[i]
-            t:SetTexture(d.icon)
+            t.icon:SetTexture(d.icon)
+            t.id = sel[i].id
+            local focused = sel[i].type == self:FocusType(sel)
+            t.ring:SetShown(focused)
+            t.icon:SetAlpha(focused and 1 or 0.7)
             t:Show()
             local frac = math.max(0, math.min(1, sel[i].hp / sel[i].maxHp))
             t.hp:SetWidth(math.max(1, 24 * frac))
@@ -2440,14 +2467,70 @@ function P:DrawPanel()
         elseif first.owner ~= ME and first.owner > 0 then status = "Ally" end
         self.selStatus:SetText(status)
     end
-    local bagHero = sel[1] and sel[1].owner == ME and E().IsHero(sel[1]) and not sel[1].illusion and sel[1]
+    -- The command card is for the focused kind in a group (all of them otherwise).
+    local cmdSel = self:FocusSet(sel)
+    local bagHero = cmdSel[1] and cmdSel[1].owner == ME and E().IsHero(cmdSel[1]) and not cmdSel[1].illusion and cmdSel[1]
     for i, b in ipairs(self.itemButtons) do
         local key = bagHero and bagHero.items and bagHero.items[i]
         b:SetShown(bagHero ~= nil and bagHero ~= false)
         b.hero, b.item = bagHero and bagHero.id, key
         b.icon:SetTexture(key and WC().Items[key].icon or nil)
     end
-    self:DrawCommands(sel)
+    self:DrawCommands(cmdSel)
+end
+
+-- Subgroups: the kind of unit the command card is for, in a group of mixed
+-- kinds (heroes first, like Warcraft III). Tab moves on to the next kind.
+function P:FocusType(sel)
+    sel = sel or self:Selected()
+    local kinds, has = {}, {}
+    for _, e in ipairs(sel) do
+        if e.owner == ME and not has[e.type] then has[e.type] = true table.insert(kinds, e) end
+    end
+    if #kinds == 0 then return nil end
+    if self.focus and has[self.focus] then return self.focus end
+    for _, e in ipairs(kinds) do if E().IsHero(e) then return e.type end end
+    return kinds[1].type
+end
+
+function P:FocusSet(sel)
+    local ft = self:FocusType(sel)
+    if not ft then return sel end
+    local out = {}
+    for _, e in ipairs(sel) do if e.type == ft then table.insert(out, e) end end
+    return #out > 0 and out or sel
+end
+
+function P:NextFocus()
+    local sel = self:Selected()
+    local kinds, seen = {}, {}
+    for _, e in ipairs(sel) do
+        if e.owner == ME and not seen[e.type] then seen[e.type] = true table.insert(kinds, e.type) end
+    end
+    if #kinds < 2 then return end
+    local cur = self:FocusType(sel)
+    for i, k in ipairs(kinds) do
+        if k == cur then self.focus = kinds[i % #kinds + 1] break end
+    end
+    self.menu = nil
+    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+end
+
+function P:ClickGroupIcon(i)
+    local t = self.groupIcons[i]
+    local e = t.id and self.st and self.st.ents[t.id]
+    if not e then return end
+    local last = self.lastIcon
+    if last and last.id == e.id and Now() - last.t < 0.4 then
+        -- Double-click: just this unit.
+        self.sel, self.focus, self.lastIcon = { e.id }, nil, nil
+    else
+        self.lastIcon = { id = e.id, t = Now() }
+        self.focus = e.type
+    end
+    self.menu = nil
+    if e.owner == ME and e.kind == "unit" then self:Voice(e, "what") end
+    self:Draw()
 end
 
 local IC = "Interface\\Icons\\"
