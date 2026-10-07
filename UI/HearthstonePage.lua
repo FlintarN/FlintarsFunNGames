@@ -699,7 +699,7 @@ function P.New(parent, kind)
     self.concede = W.Button(b, "Concede", 76, function()
         W.Confirm("Concede this game?", function() ns.Session.Act(self.kind, "concede") end)
     end, 20)
-    self.concede:SetPoint("TOPLEFT", 8, -8)
+    self.concede:SetPoint("TOPLEFT", 4, -40) -- where Menu is (Menu hides in PvP)
     self.concede:Hide()
 
     -- Where a dragged minion will land.
@@ -1847,7 +1847,12 @@ function P:Draw(animate, before)
     before = before or {}
     local centre = CX
     local rec = Save()
-    self.statsText:SetText(string.format("Wins %d, losses %d\nStreak %d (best %d)", rec.wins, rec.losses, rec.streak, rec.best))
+    if self.pvp then
+        self.statsText:SetText(string.format("PvP: wins %d, losses %d", rec.pvpWins or 0, rec.pvpLosses or 0))
+    else
+        self.statsText:SetText(string.format("Wins %d, losses %d\nStreak %d (best %d)", rec.wins, rec.losses, rec.streak, rec.best))
+    end
+    self.newButton:SetShown(not self.pvp)
     if self.previewUntil and Now() > self.previewUntil then
         self.preview:Hide()
         self.previewUntil = nil
