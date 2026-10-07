@@ -1255,6 +1255,22 @@ end
 ---------------------------------------------------------------------------
 -- Time passes
 ---------------------------------------------------------------------------
+-- A fingerprint of the game (lockstep: both sides must get the same one).
+function E.Hash(st)
+    local a, b, c = 0, 0, 0
+    for k, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e then
+            a = a + id * (e.x * 3.1 + e.y * 7.3)
+            b = b + k * (e.hp + (e.progress or 0) * 11)
+            c = c + #(e.order and e.order.type or "") * id
+        end
+    end
+    for i, p in ipairs(st.players) do a = a + i * (p.gold * 2 + p.lumber * 5) end
+    for i, n in pairs(st.trees) do c = c + i % 97 * n end
+    return string.format("%.6f:%.6f:%d:%d", a, b, c, #st.list)
+end
+
 function E.Step(st, dt)
     if st.over then return {} end
     local events = {}

@@ -18,6 +18,13 @@ ns.Net = Net
 
 Net.PREFIX = "FunNGames"
 Net.REALM_CHANNEL = "FunNGamesRealm"
+-- Real-time games (Warcraft III lockstep) send several messages a second.
+-- WoW lets each prefix send about one a second after a short burst, so
+-- those messages take turns over a few prefixes of their own.
+Net.FAST = { "FunNGamesL1", "FunNGamesL2", "FunNGamesL3", "FunNGamesL4" }
+local FAST = {}
+for _, p in ipairs(Net.FAST) do FAST[p] = true end
+local fastNext = 0
 local CHUNK = 220
 
 local SendAddon = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
@@ -28,7 +35,10 @@ local partial = {} -- sender .. msgId -> { parts, got, n }
 local nextId = 0
 
 function Net:Init()
-    if RegisterPrefix then RegisterPrefix(Net.PREFIX) end
+    if RegisterPrefix then
+        RegisterPrefix(Net.PREFIX)
+        for _, p in ipairs(Net.FAST) do RegisterPrefix(p) end
+    end
 end
 
 function Net.On(cmd, fn)
@@ -98,13 +108,13 @@ end
 ---------------------------------------------------------------------------
 -- Sending and receiving
 ---------------------------------------------------------------------------
-local function SendParts(cmd, data, chatType, target)
+local function SendParts(cmd, data, chatType, target, prefix)
     data = data or ""
     nextId = (nextId % 999) + 1
     local n = math.max(1, math.ceil(#data / CHUNK))
     for i = 1, n do
         local part = data:sub((i - 1) * CHUNK + 1, i * CHUNK)
-        SendAddon(Net.PREFIX, cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. ":" .. part, chatType, target)
+        SendAddon(prefix or Net.PREFIX, cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. ":" .. part, chatType, target)
     end
     return true
 end
@@ -113,6 +123,13 @@ function Net.Send(cmd, data, scope)
     local chatType, target = Net.Route(scope)
     if not (chatType and SendAddon) then return false end
     return SendParts(cmd, data, chatType, target)
+end
+
+-- To one player, on the fast prefixes (real-time games).
+function Net.WhisperFast(cmd, data, target)
+    if not SendAddon then return false end
+    fastNext = fastNext % #Net.FAST + 1
+    return SendParts(cmd, data, "WHISPER", target, Net.FAST[fastNext])
 end
 
 -- To one player only (private cards; a player talking to a host).
@@ -158,5 +175,5 @@ function Net.Receive(sender, message)
 end
 
 ns.On("CHAT_MSG_ADDON", function(prefix, message, _, sender)
-    if prefix == Net.PREFIX then Net.Receive(sender, message) end
+    if prefix == Net.PREFIX or FAST[prefix] then Net.Receive(sender, message) end
 end)

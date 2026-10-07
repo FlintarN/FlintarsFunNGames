@@ -15,7 +15,7 @@ ns.Scores = Sc
 local KEEP_DAYS = 30
 local SCOPES = { "guild", "realm" }
 -- Boards that aren't a game of their own (letters and digits only).
-Sc.EXTRA = { hearthstonepvp = true } -- Hearthstone: PvP wins
+Sc.EXTRA = { hearthstonepvp = true, warcraftpvp = true } -- PvP wins
 
 local function DB()
     ns.db.scores = ns.db.scores or {}

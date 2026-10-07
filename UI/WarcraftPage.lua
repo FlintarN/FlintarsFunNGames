@@ -1,10 +1,14 @@
 -- WarcraftPage: the RTS. A scrolling map on top, a Warcraft-style panel at
 -- the bottom (minimap, what's selected, the command card). Everything is
 -- drawn from the engine's state (ns.WC.Engine); the player's clicks become
--- E.Command calls, the AI runs every second for the other side.
+-- E.Command calls, the AI runs every second for the other side. In PvP both
+-- players' pages run the same game in lockstep (Core\Lockstep.lua): your
+-- clicks become commands for a later turn, the other player's arrive by
+-- whisper, and "you" (ME) are whichever chair you sit in.
 local ADDON, ns = ...
 
 local W = ns.Widgets
+local A = ns.Arcade
 local K = ns.Kit
 local P = {}
 P.__index = P
@@ -16,7 +20,7 @@ local BAR = 22                  -- resource bar
 local VIEW_H = 344              -- the map view
 local TILE = 20                 -- pixels per tile
 local STEP = 0.05               -- engine step
-local ME, CPU = 1, 2
+local ME, CPU = 1, 2           -- your chair and the computer's (nil in PvP)
 local MM_SCALE = 2              -- minimap pixels per tile
 local EDGE, SCROLL = 28, 650    -- edge scrolling: pixels from the map's edge, speed
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 } }
@@ -269,11 +273,24 @@ end
 -- Build
 ---------------------------------------------------------------------------
 function P.New(parent, kind)
-    local self = setmetatable({ kind = kind, sel = {}, camX = 0, camY = 0, acc = 0, think = 0,
+    local self = setmetatable({ kind = kind, G = ns.Games[kind], sel = {}, camX = 0, camY = 0, acc = 0, think = 0,
         treeTex = {}, unitFrames = {}, framePool = {}, corpses = {}, buildTex = {}, fxFree = {}, mmTrees = {},
         explored = {}, vis = {}, known = {} }, P)
-    self.setup = CreateFrame("Frame", nil, parent)
+    -- PvP: the Arcade lobby panel (who can join, create, practice, join by code).
+    A.BuildSetup(self, parent)
     self.setup:Hide()
+    local back = W.Button(self.setup, "Back", 90, function()
+        self.setupOpen = false
+        self:ShowStart()
+        self:Refresh()
+    end, 22)
+    back:SetPoint("BOTTOMLEFT", 10, 10)
+    -- A PvP game runs even with the tab or window closed (the other player
+    -- would wait otherwise): this frame drives it.
+    self.driver = CreateFrame("Frame", nil, UIParent)
+    self.driver:SetScript("OnUpdate", function(_, elapsed)
+        if self.ls then self:LockstepTick(elapsed) end
+    end)
     local v = CreateFrame("Frame", nil, parent)
     v:SetAllPoints()
     self.game = v
@@ -514,7 +531,7 @@ function P.New(parent, kind)
         local hl = btn:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetColorTexture(1, 1, 1, 0.08)
-        btn:SetScript("OnClick", function() self:NewGame(f) end)
+        btn:SetScript("OnClick", function() self:PickSide(f) end)
         W.Tooltip(btn, "Play " .. WC().Factions[f].name, "Your opponent plays the other side.")
         btn.faction = f
         self.picks[i] = btn
@@ -537,6 +554,45 @@ function P.New(parent, kind)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self:Resume() end, 22)
     self.resumeButton:SetPoint("BOTTOM", 0, 30)
+    -- PvP: play a friend (lobbies) or find an opponent on the realm (queue).
+    self.queueButton = W.Button(o, "Find an opponent", 150, function()
+        self.mode = "queue"
+        self:ShowStart()
+    end, 24)
+    self.queueButton:SetPoint("BOTTOMRIGHT", o, "BOTTOM", -6, 64)
+    W.Tooltip(self.queueButton, "Find an opponent", "Pick your race, then we look for someone on your realm who wants a game.")
+    self.friendButton = W.Button(o, "Play a friend", 150, function()
+        self.setupOpen = true
+        self:Refresh()
+    end, 24)
+    self.friendButton:SetPoint("BOTTOMLEFT", o, "BOTTOM", 6, 64)
+    W.Tooltip(self.friendButton, "Play a friend", "Open a lobby for your group, guild, realm or a private code.")
+    self.lobbyText = W.Label(o, "", "GameFontHighlight")
+    self.lobbyText:SetPoint("TOP", self.overSub, "BOTTOM", 0, -18)
+    self.lobbyText:SetWidth(BW - 140)
+    self.pvpButtons = {}
+    local S = ns.Session
+    local function PvpButton(key, label, width, fn)
+        local btn = W.Button(o, label, width, fn, 24)
+        btn:Hide()
+        self.pvpButtons[key] = btn
+    end
+    PvpButton("start", "Start", 100, function() S.Start(self.kind) end)
+    PvpButton("bot", "Add bot", 100, function() S.AddBot(self.kind) end)
+    PvpButton("rematch", "Rematch", 100, function() S.Act(self.kind, "rematch") end)
+    PvpButton("leave", "Leave", 100, function() S.Leave(self.kind) S.Dismiss(self.kind) self:Refresh() end)
+    PvpButton("close", "Close lobby", 110, function() A.CloseLobby(self) self:Refresh() end)
+    PvpButton("done", "Back", 100, function() S.Dismiss(self.kind) self:Refresh() end)
+    PvpButton("cancelQueue", "Cancel", 100, function() self:CancelQueue() end)
+    -- In a PvP game: give up, or win when the other player is gone.
+    self.surrender = W.Button(self.fxLayer, "Surrender", 90, function()
+        W.Confirm("Surrender this game?", function() S.Act(self.kind, "surrender") end)
+    end, 20)
+    self.surrender:SetPoint("TOPRIGHT", -8, -6)
+    self.surrender:Hide()
+    self.claim = W.Button(self.fxLayer, "Claim victory", 120, function() self:ClaimVictory() end, 22)
+    self.claim:SetPoint("TOP", self.status, "BOTTOM", 0, -6)
+    self.claim:Hide()
 
     v:SetScript("OnUpdate", function(_, elapsed) self:Tick(elapsed) end)
     v:SetScript("OnHide", function()
@@ -562,23 +618,42 @@ end
 -- Games
 ---------------------------------------------------------------------------
 function P:ShowStart()
-    self:Pause()
+    if not self.ls then self:Pause() end
     self.overlay:Show()
     self.overTitle:SetText("Choose your side")
     self.overTitle:SetTextColor(1, 0.82, 0)
-    self.overSub:SetText("Build up your base, train an army and destroy every enemy building. The computer plays the other side.")
+    local solo = not self.pvp and self.mode ~= "queue"
+    self.overSub:SetText(self.pvp and "Pick your race. Your opponent picks theirs."
+        or self.mode == "queue" and "Pick your race, then we look for an opponent on your realm."
+        or "Build up your base, train an army and destroy every enemy building. The computer plays the other side.")
     for _, p in ipairs(self.picks) do p:Show() end
     local chosen = Save().difficulty or "normal"
-    self.diffLabel:Show()
+    self.diffLabel:SetShown(solo)
     for _, b in ipairs(self.diffButtons) do
-        b:Show()
+        b:SetShown(solo)
         b:SetEnabled(b.key ~= chosen) -- the chosen one is greyed out
     end
     self.againButton:Hide()
-    self.resumeButton:SetShown(self.st ~= nil and not self.st.over)
+    self.lobbyText:SetText("")
+    self:PvpButtons(self.mode == "queue" and not self.pvp and { "done" } or {})
+    self.queueButton:SetShown(solo)
+    self.friendButton:SetShown(solo)
+    self.resumeButton:SetShown(solo and self.st ~= nil and not self.st.over)
+end
+
+function P:PickSide(faction)
+    if self.pvp then
+        ns.Session.Act(self.kind, "race:" .. faction)
+        self:Refresh()
+    elseif self.mode == "queue" then
+        self:StartQueue(faction)
+    else
+        self:NewGame(faction)
+    end
 end
 
 function P:NewGame(faction, seed)
+    ME, CPU = 1, 2
     local other = faction == "human" and "orc" or "human"
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
@@ -613,6 +688,8 @@ function P:Pause()
 end
 
 function P:Quit()
+    if ns.Queue.IsQueued(self.kind) then ns.Queue.Leave(self.kind) end
+    if self.pvp then return self:LeavePvp() end
     self.st = nil
     Save().game = nil
     ns.Solo.SetRunning(self.kind, false)
@@ -662,6 +739,11 @@ function P:Tick(elapsed)
         self.sayUntil = nil
     end
     if not st then return end
+    if self.ls then
+        if not self.paused then self:Scroll(elapsed) end
+        self:Draw()
+        return
+    end
     if not self.paused and not st.over then
         self:Scroll(elapsed)
         self.acc = self.acc + elapsed
@@ -670,7 +752,7 @@ function P:Tick(elapsed)
             local events = E().Step(st, STEP)
             self:Events(events)
             self.think = self.think + STEP
-            if self.think >= 1 then
+            if self.think >= 1 and CPU then
                 self.think = 0
                 WC().AI.Think(st, CPU)
             end
@@ -678,6 +760,7 @@ function P:Tick(elapsed)
         end
         if st.over then
             self:Draw()
+            if self.pvp then return self:PvpGameEnded() end
             return self:GameOver()
         end
     end
@@ -823,7 +906,7 @@ function P:MinimapClick(button)
     local x, y = (mx / scale - (left or 0)) / MM_SCALE, ((top or 0) - my / scale) / MM_SCALE
     if button == "RightButton" then
         local ids = self:MyUnits()
-        if #ids > 0 then E().Command(st, ME, { type = "move", units = ids, x = x, y = y }) end
+        if #ids > 0 then self:Cmd({ type = "move", units = ids, x = x, y = y }) end
         return
     end
     self.camX, self.camY = x * TILE - BW / 2, y * TILE - VIEW_H / 2
@@ -957,7 +1040,7 @@ function P:Smart(x, y)
         -- A building of yours: set its rally point.
         local b = self:Selected()[1]
         if b and b.owner == ME and b.kind == "building" then
-            E().Command(st, ME, { type = "rally", building = b.id, x = x, y = y,
+            self:Cmd({ type = "rally", building = b.id, x = x, y = y,
                 target = target and target.kind == "mine" and target.id or nil, tree = tree })
             self:Say("Rally point set")
         end
@@ -965,7 +1048,7 @@ function P:Smart(x, y)
     end
     local q = Shift()
     if target and target.owner ~= ME and target.owner > 0 then
-        return E().Command(st, ME, { type = "attack", units = units, target = target.id, queue = q })
+        return self:Cmd({ type = "attack", units = units, target = target.id, queue = q })
     end
     local workers, others = {}, {}
     for _, id in ipairs(units) do
@@ -973,20 +1056,20 @@ function P:Smart(x, y)
         if WC().Units[u.type].worker then table.insert(workers, id) else table.insert(others, id) end
     end
     if target and target.owner == ME and target.kind == "building" and target.progress < 1 and #workers > 0 then
-        E().Command(st, ME, { type = "resumeBuild", units = workers, building = target.id })
+        self:Cmd({ type = "resumeBuild", units = workers, building = target.id })
         return
     end
     if target and target.kind == "mine" and #workers > 0 then
-        E().Command(st, ME, { type = "gather", units = workers, target = target.id, queue = q })
-        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y, queue = q }) end
+        self:Cmd({ type = "gather", units = workers, target = target.id, queue = q })
+        if #others > 0 then self:Cmd({ type = "move", units = others, x = x, y = y, queue = q }) end
         return
     end
     if tree and #workers > 0 then
-        E().Command(st, ME, { type = "gather", units = workers, tree = tree, queue = q })
-        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y, queue = q }) end
+        self:Cmd({ type = "gather", units = workers, tree = tree, queue = q })
+        if #others > 0 then self:Cmd({ type = "move", units = others, x = x, y = y, queue = q }) end
         return
     end
-    E().Command(st, ME, { type = "move", units = units, x = x, y = y, queue = q })
+    self:Cmd({ type = "move", units = units, x = x, y = y, queue = q })
 end
 
 function P:Mark(x, y)
@@ -1044,7 +1127,7 @@ function P:TargetAt(x, y)
     self:Mark(x, y)
     if mode == "move" then
         local units = self:MyUnits()
-        if #units > 0 then E().Command(st, ME, { type = "move", units = units, x = x, y = y, queue = Shift() }) end
+        if #units > 0 then self:Cmd({ type = "move", units = units, x = x, y = y, queue = Shift() }) end
     elseif mode == "gather" then
         self:Smart(x, y)
     elseif mode == "rally" then
@@ -1052,7 +1135,7 @@ function P:TargetAt(x, y)
         local target = E().At(st, x, y)
         local i = math.floor(y) * st.w + math.floor(x)
         if b then
-            E().Command(st, ME, { type = "rally", building = b.id, x = x, y = y,
+            self:Cmd({ type = "rally", building = b.id, x = x, y = y,
                 target = target and target.kind == "mine" and target.id or nil, tree = st.trees[i] and i or nil })
         end
     end
@@ -1065,9 +1148,9 @@ function P:AttackAt(x, y)
     local target = self:SeenAt(x, y)
     self:Mark(x, y)
     if target and target.owner ~= ME and target.owner > 0 then
-        E().Command(self.st, ME, { type = "attack", units = units, target = target.id, queue = Shift() })
+        self:Cmd({ type = "attack", units = units, target = target.id, queue = Shift() })
     else
-        E().Command(self.st, ME, { type = "attackMove", units = units, x = x, y = y, queue = Shift() })
+        self:Cmd({ type = "attackMove", units = units, x = x, y = y, queue = Shift() })
     end
 end
 
@@ -1080,7 +1163,7 @@ end
 function P:PlaceAt(x, y)
     local bx, by = self:PlaceSpot(x, y)
     local q = Shift()
-    local ok, why = E().Command(self.st, ME, { type = "build", unit = self.place.unit, btype = self.place.btype, x = bx, y = by,
+    local ok, why = self:Cmd({ type = "build", unit = self.place.unit, btype = self.place.btype, x = bx, y = by,
         queue = q })
     if ok then
         W.PlaySound("U_CHAT_SCROLL_BUTTON")
@@ -1109,13 +1192,13 @@ end
 function P:Train(utype)
     local b = self:Selected()[1]
     if not b then return end
-    local ok, why = E().Command(self.st, ME, { type = "train", building = b.id, utype = utype })
+    local ok, why = self:Cmd({ type = "train", building = b.id, utype = utype })
     if not ok then self:Say(why and (why:sub(1, 1):upper() .. why:sub(2)) or "Can't train that") end
 end
 
 function P:CancelTrain()
     local b = self:Selected()[1]
-    if b then E().Command(self.st, ME, { type = "cancel", building = b.id }) end
+    if b then self:Cmd({ type = "cancel", building = b.id }) end
 end
 
 function P:Target(mode, text)
@@ -1126,13 +1209,13 @@ end
 
 function P:Hold()
     local units = self:MyUnits()
-    if #units > 0 then E().Command(self.st, ME, { type = "hold", units = units }) end
+    if #units > 0 then self:Cmd({ type = "hold", units = units }) end
 end
 
 function P:ReturnRes()
     local units = self:MyUnits()
     if #units > 0 then
-        local ok, why = E().Command(self.st, ME, { type = "returnRes", units = units })
+        local ok, why = self:Cmd({ type = "returnRes", units = units })
         if not ok then self:Say("Nothing to bring back") end
     end
 end
@@ -1161,13 +1244,13 @@ function P:Alarm()
     local b = self:Selected()[1]
     if not b then return end
     local f = WC().Factions[self.st.players[ME].faction]
-    local ok, why = E().Command(self.st, ME, { type = f.alarm, building = b.id })
+    local ok, why = self:Cmd({ type = f.alarm, building = b.id })
     if not ok then self:Say(why and (why:sub(1, 1):upper() .. why:sub(2)) or "Nobody answers") end
 end
 
 function P:Stop()
     local units = self:MyUnits()
-    if #units > 0 then E().Command(self.st, ME, { type = "stop", units = units }) end
+    if #units > 0 then self:Cmd({ type = "stop", units = units }) end
 end
 
 function P:Key(key)
@@ -2010,7 +2093,7 @@ function P:DrawCommands(sel)
             end
             list[7] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
                 tip = "Everyone called to arms goes back to work.", action = function()
-                    E().Command(st, ME, { type = "backToWork" })
+                    self:Cmd({ type = "backToWork" })
                 end }
         end
         if E().Def(b).trains then
@@ -2034,6 +2117,8 @@ function P:DrawCommands(sel)
 end
 
 function P:Refresh()
+    local s = ns.Session.Get(self.kind)
+    if s or self.setupOpen or self.pvp then return self:RefreshPvp(s) end
     if self.st and self.st.over and not self.overlay:IsShown() then self:GameOver() end
     -- Back on the tab after switching away: carry on.
     if self.autoPaused and self.st and not self.st.over and not self.overlay:IsShown() and self.game:IsVisible() then
@@ -2041,6 +2126,286 @@ function P:Refresh()
         self:Resume()
     end
     self:Draw()
+end
+
+---------------------------------------------------------------------------
+-- PvP (a Session lobby for the setup, then lockstep: Core\Lockstep.lua)
+---------------------------------------------------------------------------
+local function Copy(t)
+    if type(t) ~= "table" then return t end
+    local out = {}
+    for k, v in pairs(t) do out[k] = Copy(v) end
+    return out
+end
+
+-- A command from your clicks. In PvP it's checked on a copy of the game (so
+-- you hear "not enough gold" at once) and runs in a later turn on both sides.
+function P:Cmd(cmd)
+    if not self.ls then return E().Command(self.st, ME, cmd) end
+    local ok, why = E().Command(Copy(self.st), ME, cmd)
+    if ok then self.ls:Command(cmd) end
+    return ok, why
+end
+
+function P:PvpButtons(keys)
+    for _, b in pairs(self.pvpButtons) do b:Hide() end
+    local width = 0
+    for _, key in ipairs(keys) do width = width + self.pvpButtons[key]:GetWidth() + 8 end
+    local x = -width / 2
+    for _, key in ipairs(keys) do
+        local b = self.pvpButtons[key]
+        b:ClearAllPoints()
+        b:SetPoint("BOTTOMLEFT", self.overlay, "BOTTOM", x, 30)
+        b:Show()
+        x = x + b:GetWidth() + 8
+    end
+end
+
+function P:PvpScreen(title, sub, lobby, keys)
+    self:Pause()
+    self.overlay:Show()
+    for _, p in ipairs(self.picks) do p:Hide() end
+    self.diffLabel:Hide()
+    for _, b in ipairs(self.diffButtons) do b:Hide() end
+    for _, b in ipairs({ self.againButton, self.resumeButton, self.queueButton, self.friendButton }) do b:Hide() end
+    self.overTitle:SetText(title)
+    self.overTitle:SetTextColor(1, 0.82, 0)
+    self.overSub:SetText(sub or "")
+    self.lobbyText:SetText(lobby or "")
+    self:PvpButtons(keys or {})
+end
+
+-- Find an opponent: into the realm queue with this race.
+function P:StartQueue(faction)
+    local ok, why = ns.Queue.Join(self.kind)
+    if not ok then
+        self.overSub:SetText("|cffff6060" .. tostring(why) .. "|r")
+        return
+    end
+    self.queueRace = faction
+    self:QueueScreen()
+end
+
+function P:QueueScreen()
+    local t = ns.Queue.Since(self.kind)
+    local partner = ns.Queue.Partner(self.kind)
+    local others = ns.Queue.Others(self.kind)
+    self:PvpScreen("Finding Opponent...", WC().Factions[self.queueRace or "human"].name,
+        string.format("Searching %d:%02d", math.floor(t / 60), math.floor(t % 60)) .. "\n"
+            .. (partner and ("Found " .. partner .. ", setting up the game...")
+                or (others > 0 and (others .. (others == 1 and " other player" or " other players") .. " looking on your realm"))
+                or "Nobody else is looking right now. Keep the window open, or ask a friend!"), { "cancelQueue" })
+end
+
+function P:CancelQueue()
+    ns.Queue.Leave(self.kind)
+    self.queueRace, self.mode = nil, nil
+    self:ShowStart()
+end
+
+-- The PvP game starts on this client: same seed and races on both sides.
+function P:StartPvp(s)
+    local me = ns.Me()
+    local seat = self.G.Seat(s, me) or 1
+    ME = seat
+    CPU = s.test and (3 - seat) or nil -- practice: the computer plays the bot
+    local factions = { s.races[s.players[1].name], s.races[s.players[2].name] }
+    self.groups, self.lastClick, self.lastGroup = {}, nil, nil
+    self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
+    self.st = E().New({ factions = factions, seed = s.seed, difficulty = "normal" })
+    self.sel, self.place, self.targeting = {}, nil, nil
+    self.counted, self.reported, self.pvpGame = false, false, s.recordId
+    self.acc, self.think = 0, 0
+    self.treeDirty = true
+    self:BuildMinimapTrees()
+    self:CenterOn(E().Hall(self.st, ME))
+    if not s.test then
+        local other = s.players[3 - seat].name
+        local st = self.st
+        self.ls = ns.Lockstep.New({ id = s.recordId, seat = seat, peer = other,
+            hash = function() return E().Hash(st) end })
+        self.pvpStart = Now()
+    end
+    self.claim:Hide()
+    self:Resume()
+    self:Say("You play " .. WC().Factions[factions[seat]].name .. ". Destroy every enemy building!")
+end
+
+-- Every frame (even with the window closed): run the turns both sides have.
+function P:LockstepTick(elapsed)
+    local st, ls = self.st, self.ls
+    if not st or st.over then return end
+    elapsed = math.min(elapsed or 0, 0.25)
+    ls:Update(Now())
+    local TURN = ns.Lockstep.TURN
+    self.acc = math.min(self.acc + elapsed, TURN * 4)
+    while self.acc >= TURN and ls:CanRun() do
+        self.acc = self.acc - TURN
+        ls:Run(function(bySeat)
+            for seat = 1, 2 do
+                for _, c in ipairs(bySeat[seat] or {}) do E().Command(st, seat, c) end
+            end
+            for _ = 1, math.floor(TURN / STEP + 0.5) do
+                self:Events(E().Step(st, STEP))
+                if st.over then break end
+            end
+        end)
+        if st.over then break end
+    end
+    if ls.desync and not self.reported then
+        self.reported = true
+        ns.Session.Act(self.kind, "desync")
+    end
+    if st.over then return self:PvpGameEnded() end
+    -- Stuck waiting for the other player?
+    local waiting = not ls:CanRun() and self.acc >= TURN
+    local silence = ls:Silence(Now()) or (Now() - (self.pvpStart or Now()))
+    if waiting and silence > 2 then
+        local s = ns.Session.Get(self.kind)
+        local other = s and s.players[3 - ME] and s.players[3 - ME].name or "the other player"
+        self.status:SetText("Waiting for " .. other .. "... (" .. math.floor(silence) .. "s)")
+        self.sayUntil = Now() + 0.5
+        self.claim:SetShown(silence > 45)
+    else
+        self.claim:Hide()
+    end
+end
+
+-- The other player has been gone a long time: the game is yours.
+function P:ClaimVictory()
+    local s = ns.Session.Get(self.kind)
+    if not s then return end
+    local other = s.players[3 - ME]
+    -- Their surrender, on their behalf: the host records it; a guest asks the host.
+    ns.Session.Act(self.kind, "won:" .. ME)
+    self.claim:Hide()
+end
+
+function P:PvpGameEnded()
+    if not self.reported then
+        self.reported = true
+        if self.st.winner and self.st.winner > 0 then ns.Session.Act(self.kind, "won:" .. self.st.winner) end
+    end
+    self:Refresh()
+end
+
+function P:LeavePvp()
+    if self.ls then ns.Lockstep.Stop(self.ls) end
+    self.ls, self.pvp, self.pvpGame, self.setupOpen = nil, nil, nil, false
+    self.surrender:Hide()
+    self.claim:Hide()
+    ME, CPU = 1, 2
+    local saved = Save().game
+    self.st = (saved and saved.players and not saved.over) and saved or nil
+    if self.st then self:CenterOn(E().Hall(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
+    self.mode = nil
+    self:ShowStart()
+end
+
+function P:RefreshPvp(s)
+    local S, me = ns.Session, ns.Me()
+    if not s then
+        if self.pvp then self:LeavePvp() end
+        if ns.Queue.IsQueued(self.kind) then
+            self.setup:Hide()
+            self.game:Show()
+            return self:QueueScreen()
+        end
+        self.setup:SetShown(self.setupOpen)
+        self.game:SetShown(not self.setupOpen)
+        if self.setupOpen then A.RefreshSetup(self) end
+        return
+    end
+    self.setupOpen = false
+    self.setup:Hide()
+    self.game:Show()
+    -- Our own queue lobby, nobody in it yet: still looking.
+    if s.phase == "lobby" and s.queued and #s.players < 2 and ns.Queue.IsQueued(self.kind) then
+        self.pvp = nil
+        return self:QueueScreen()
+    end
+    self.pvp = true
+    local host, seated = S.IsHost(s), S.Find(s, me) ~= nil
+    local names = {}
+    for _, p in ipairs(s.players) do table.insert(names, p.name .. (p.name == s.host and " (host)" or "")) end
+    local who = "Players: " .. table.concat(names, ", ")
+    self.surrender:SetShown(s.phase == "rolling" and s.stage == "play" and seated and not s.test)
+
+    if s.phase == "lobby" then
+        if s.queued and #s.players >= 2 then
+            return self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
+        end
+        local keys = {}
+        if host then
+            if s.test and S.CanAddBot(s) then table.insert(keys, "bot") end
+            table.insert(keys, "start")
+            table.insert(keys, "close")
+        elseif seated then
+            table.insert(keys, "leave")
+        end
+        self:PvpScreen("Warcraft III: lobby", A.ScopeLine(s), who .. "\n\n"
+            .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
+            keys)
+        self.pvpButtons.start:SetEnabled(#s.players >= 2)
+        return
+    elseif s.phase == "cancelled" then
+        return self:PvpScreen("The lobby is closed", s.banner or "", "", { "done" })
+    end
+
+    if s.stage == "races" then
+        if seated and not s.races[me] then
+            if self.queueRace then
+                local f = self.queueRace
+                self.queueRace = nil
+                S.Act(self.kind, "race:" .. f)
+                return
+            end
+            if self.screen ~= "races" then
+                self.screen = "races"
+                self:ShowStart()
+            end
+        else
+            self.screen = nil
+            local waiting = {}
+            for _, p in ipairs(s.players) do
+                if not s.races[p.name] then table.insert(waiting, p.name) end
+            end
+            self:PvpScreen("Ready", "Waiting for " .. table.concat(waiting, ", ") .. " to choose a race...", who,
+                host and { "close" } or { "leave" })
+        end
+        return
+    end
+    self.screen = nil
+
+    if s.stage == "play" and s.recordId ~= self.pvpGame and seated then
+        self:StartPvp(s)
+    end
+    if s.phase == "done" then
+        if self.ls then ns.Lockstep.Stop(self.ls) self.ls = nil end
+        self.surrender:Hide()
+        self.claim:Hide()
+        local won = s.result and s.result.winner == me
+        local draw = s.result and not s.result.winner
+        if not self.counted and not s.test and seated then
+            self.counted = true
+            local rec = Save()
+            rec.pvpWins, rec.pvpLosses = rec.pvpWins or 0, rec.pvpLosses or 0
+            if won then
+                rec.pvpWins = rec.pvpWins + 1
+                ns.Scores.Submit("warcraftpvp", rec.pvpWins)
+            elseif not draw then
+                rec.pvpLosses = rec.pvpLosses + 1
+            end
+            W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+        end
+        local rec = Save()
+        local score = {}
+        for _, p in ipairs(s.players) do table.insert(score, p.name .. " " .. ((s.score and s.score[p.name]) or 0)) end
+        self:PvpScreen(won and "Victory!" or (draw and "No winner" or "Defeat"), s.banner or "",
+            "Score: " .. table.concat(score, "  -  ") .. string.format("\nYour PvP record: %d wins, %d losses.",
+                rec.pvpWins or 0, rec.pvpLosses or 0), host and { "rematch", "close" } or { "leave" })
+        self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
+    end
 end
 
 function P:FlashRoll() end

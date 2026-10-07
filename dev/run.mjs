@@ -595,6 +595,48 @@ await Section('Hearthstone: the realm queue', async () => {
   await b.run('HsQueueCheck("thrall")');
 });
 
+await Section('Warcraft III lockstep', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  await p.run('WcLockstepTests(0)');
+  await p.run('WcLockstepTests()');
+});
+
+await Section('Warcraft III PvP over a code lobby', async () => {
+  const host = await Player('Flintar', []);
+  const bob = await Player('Bob', []);
+  const players = [host, bob];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const code = await Get(host, 'WcPvpHost()');
+  await Pump(players, 1);
+  await bob.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await host.run('WcPvpStart()');
+  await Pump(players, 1);
+  await host.run('WcPvpRace("human")');
+  await Pump(players, 1);
+  await bob.run('WcPvpRace("orc")');
+  await Pump(players, 1);
+  for (let i = 0; i < 160; i++) {
+    if (i % 9 === 0) { await host.run(`WcPvpOrder(${i})`); }
+    if (i % 11 === 0) { await bob.run(`WcPvpOrder(${i + 1})`); }
+    for (const q of players) await q.run('WcPvpRun(5)');
+    await Pump(players, 0.25);
+  }
+  const t1 = await Get(host, 'WcPvpTurn()');
+  const t2 = await Get(bob, 'WcPvpTurn()');
+  const t = Math.floor(Math.min(t1, t2) / 20) * 20;
+  const h1 = await Get(host, `WcPvpHash(${t})`);
+  const h2 = await Get(bob, `WcPvpHash(${t})`);
+  await host.run(`check(${t} >= 100, "wc pvp: the game ran in lockstep (turn ${t1} / ${t2})")`);
+  await host.run(`check("${h1}" ~= "" and "${h1}" == "${h2}", "wc pvp: both clients have the same game at turn ${t} (${h1} / ${h2})")`);
+  await host.run(`check(WcPvpInfo() == "1:nil", "wc pvp: no desync (" .. WcPvpInfo() .. ")")`);
+  await bob.run('WcPvpSurrender()');
+  await Pump(players, 1);
+  await host.run('WcPvpEnd(true)');
+  await bob.run('WcPvpEnd(false)');
+});
+
 await Section('Warcraft III engine and AI', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wc.lua'), 'utf8'));
