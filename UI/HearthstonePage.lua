@@ -879,7 +879,7 @@ function P.New(parent, kind)
     menu:SetFrameLevel(o:GetFrameLevel() + 4)
     menu.logo = W.BigLabel(menu, 38, "GameFontNormalHuge")
     menu.logo:SetPoint("TOP", 0, -26)
-    menu.logo:SetText("HEARTHSTONE")
+    menu.logo:SetText("HEARTHSTONE 2")
     menu.logo:SetTextColor(1, 0.8, 0.25)
     local box = Frame(menu)
     box:SetSize(340, 268)
@@ -2333,7 +2333,7 @@ function P:RefreshPvp(s)
         elseif seated then
             table.insert(keys, "leave")
         end
-        self:PvpScreen("Hearthstone: lobby", A.ScopeLine(s), who .. "\n\n"
+        self:PvpScreen("Hearthstone 2: lobby", A.ScopeLine(s), who .. "\n\n"
             .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
             keys)
         self.pvpButtons.start:SetEnabled(#s.players >= 2)

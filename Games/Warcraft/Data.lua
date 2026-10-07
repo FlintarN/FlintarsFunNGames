@@ -248,17 +248,4 @@ ns.WC.DIFFICULTY = {
 ns.WC.MILITIA_TIME = 45   -- Call to Arms lasts this long
 ns.WC.ALARM_RADIUS = 22   -- workers this close to the hall answer the alarm
 
--- The map: 64 x 40 tiles. Player 1 top left, player 2 bottom right (the
--- map is mirrored so both sides are the same).
-ns.WC.MAP = {
-    w = 64, h = 40,
-    halls = { { 6, 6 }, nil },            -- player 2's is mirrored
-    mines = { { 14, 4 } },                 -- per side, mirrored for the other
-    expansions = { { 12, 30 } },           -- extra mines in the open corners (mirrored too)
-    -- Forest rectangles per side { x, y, w, h }, mirrored for the other side.
-    forests = {
-        { 0, 0, 64, 2 }, { 0, 0, 2, 40 },  -- the map edge (both halves come from mirroring)
-        { 2, 12, 8, 4 }, { 18, 2, 4, 6 }, { 10, 16, 3, 3 },
-        { 26, 10, 3, 5 }, { 30, 18, 4, 2 },
-    },
-}
+-- The maps are in Maps.lua.

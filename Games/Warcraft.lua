@@ -16,7 +16,7 @@ local G = {
     arcade = true,
     section = "blizzard", -- the home page's Blizzard Games section
     solo = true,
-    name = "Warcraft III",
+    name = "Warcraft 4",
     icon = "Interface\\AddOns\\FlintarsFunNGames\\Art\\IconWarcraft",
     short = "Real-time strategy: gather gold and lumber, build a base, crush the enemy.",
     how = "Left-click or drag to select, right-click to move, attack or gather. A attacks, S stops.",
@@ -62,10 +62,10 @@ local function Finish(s, winner, loser, summary)
     s.phase, s.stage = "done", "over"
     if winner then
         s.score[winner] = (s.score[winner] or 0) + 1
-        s.result = { winner = winner, loser = loser, summary = summary or ("Warcraft III, " .. winner .. " won") }
+        s.result = { winner = winner, loser = loser, summary = summary or ("Warcraft 4, " .. winner .. " won") }
         s.banner = winner .. " wins!"
     else
-        s.result = { summary = summary or "Warcraft III, no winner" }
+        s.result = { summary = summary or "Warcraft 4, no winner" }
         s.banner = summary or "No winner."
     end
 end
@@ -102,7 +102,7 @@ function G:Act(s, name, action)
     elseif verb == "surrender" then
         if s.stage ~= "play" then return false end
         local other = s.players[3 - seat]
-        Finish(s, other and other.name, name, "Warcraft III, " .. name .. " surrendered")
+        Finish(s, other and other.name, name, "Warcraft 4, " .. name .. " surrendered")
         return true
     elseif verb == "desync" then
         if s.stage ~= "play" then return false end
@@ -117,7 +117,7 @@ function G:Drop(s, name)
     if s.stage ~= "play" then return end
     local seat = G.Seat(s, name)
     local other = seat and s.players[3 - seat]
-    Finish(s, other and other.name, name, "Warcraft III, " .. name .. " left")
+    Finish(s, other and other.name, name, "Warcraft 4, " .. name .. " left")
 end
 
 -- Practice bot: picks a race at once (the game itself is played by the

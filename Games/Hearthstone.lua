@@ -16,7 +16,7 @@ local G = {
     arcade = true,
     section = "blizzard", -- the home page's Blizzard Games section
     solo = true,
-    name = "Hearthstone",
+    name = "Hearthstone 2",
     icon = "Interface\\AddOns\\FlintarsFunNGames\\Art\\IconHearthstone",
     short = "The card game: pick a hero, play minions and spells, beat the computer or a friend.",
     how = "Click a card to play it, click a minion then a target to attack. Right-click cancels.",
@@ -108,10 +108,10 @@ local function Publish(s, events)
         local loser = st.winner ~= 0 and s.players[3 - st.winner] and s.players[3 - st.winner].name or nil
         if winner then
             s.score[winner] = (s.score[winner] or 0) + 1
-            s.result = { winner = winner, loser = loser, summary = "Hearthstone, " .. winner .. " won" }
+            s.result = { winner = winner, loser = loser, summary = "Hearthstone 2, " .. winner .. " won" }
             s.banner = winner .. " wins!"
         else
-            s.result = { summary = "Hearthstone, a draw" }
+            s.result = { summary = "Hearthstone 2, a draw" }
             s.banner = "A draw."
         end
     end

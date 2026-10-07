@@ -124,7 +124,7 @@ end
 UI.FOOTER = {
     casino = "Every number comes from the game's own /roll, so no one can fake a roll.",
     arcade = "Arcade: just for fun, no betting.",
-    blizzard = "Blizzard Games: Hearthstone and Warcraft III, just for fun.",
+    blizzard = "Blizzard Games: Hearthstone 2 and Warcraft 4, just for fun.",
 }
 
 function UI:LayoutTabs()

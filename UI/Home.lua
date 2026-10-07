@@ -66,7 +66,7 @@ local SECTIONS = {
         hint = "Games for gold." },
     { key = "arcade", label = "Arcade", help = "Just for fun, no betting. Play your group, your guild, the realm, or friends with a code.",
         hint = "Just for fun: no bets." },
-    { key = "blizzard", label = "Blizzard Games", help = "Hearthstone and Warcraft III, rebuilt in WoW: play the computer, a friend, or anyone on your realm.",
+    { key = "blizzard", label = "Blizzard Games", help = "Hearthstone 2 and Warcraft 4, rebuilt in WoW: play the computer, a friend, or anyone on your realm.",
         hint = "Blizzard's games, in WoW. Just for fun." },
 }
 

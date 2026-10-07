@@ -482,6 +482,7 @@ function P.New(parent, kind)
 
     local mm = CreateFrame("Frame", nil, hud)
     mm:SetSize(64 * MM_SCALE, 40 * MM_SCALE)
+    self.mmScale = MM_SCALE
     mm:SetPoint("TOPLEFT", 6, -7)
     mm:EnableMouse(true)
     local mbg = mm:CreateTexture(nil, "BACKGROUND")
@@ -651,6 +652,35 @@ function P.New(parent, kind)
         btn.key = key
         self.diffButtons[i] = btn
     end
+    -- The map: < name > (the maps for two players; Maps.lua).
+    local mapRow = CreateFrame("Frame", nil, o)
+    mapRow:SetSize(420, 26)
+    mapRow:SetPoint("TOP", 0, -352)
+    local mapLabel = W.Label(mapRow, "Map:", "GameFontNormal")
+    mapLabel:SetPoint("LEFT", 0, 0)
+    mapRow.name = W.Label(mapRow, "", "GameFontHighlightLarge")
+    mapRow.name:SetPoint("LEFT", mapLabel, "RIGHT", 52, 0)
+    mapRow.name:SetWidth(150)
+    local function Step(dir)
+        local list = WC().MapsFor(2)
+        local cur = Save().map or "riverford"
+        local i = 1
+        for k, key in ipairs(list) do if key == cur then i = k end end
+        i = (i - 1 + dir) % #list + 1
+        Save().map = list[i]
+        self:DrawMapRow()
+    end
+    mapRow.prev = W.Button(mapRow, "<", 26, function() Step(-1) end, 22)
+    mapRow.prev:SetPoint("LEFT", mapLabel, "RIGHT", 16, 0)
+    mapRow.next = W.Button(mapRow, ">", 26, function() Step(1) end, 22)
+    mapRow.next:SetPoint("LEFT", mapRow.name, "RIGHT", 6, 0)
+    mapRow.text = W.Label(mapRow, "", "GameFontHighlightSmall")
+    mapRow.text:SetPoint("TOPLEFT", mapLabel, "BOTTOMLEFT", 0, -6)
+    mapRow.text:SetWidth(420)
+    mapRow.text:SetJustifyH("LEFT")
+    mapRow:Hide()
+    self.mapRow = mapRow
+
     self.againButton = W.Button(o, "Main menu", 110, function() self:ShowMenu() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self:Resume() end, 22)
@@ -664,9 +694,9 @@ function P.New(parent, kind)
     menu:SetFrameLevel(o:GetFrameLevel() + 4)
     menu.logo = W.BigLabel(menu, 38, "GameFontNormalHuge")
     menu.logo:SetPoint("TOP", 0, -26)
-    menu.logo:SetText("WARCRAFT III")
+    menu.logo:SetText("WARCRAFT 4")
     menu.logo:SetTextColor(1, 0.8, 0.25)
-    menu.sub = W.Label(menu, "Reign of Chaos", "GameFontNormal")
+    menu.sub = W.Label(menu, "Reign of Fun", "GameFontNormal")
     menu.sub:SetPoint("TOP", menu.logo, "BOTTOM", 0, -2)
     menu.sub:SetTextColor(0.85, 0.75, 0.55)
     local box = W.MenuFrame(menu)
@@ -757,8 +787,18 @@ function P:ShowMenu()
 end
 
 -- Everything the overlay can show, off.
+-- The map you'll play: its name and what it's like.
+function P:DrawMapRow()
+    local key = Save().map or "riverford"
+    local m = WC().Maps[key] or WC().Maps.riverford
+    local p = WC().ParseMap(key) or WC().ParseMap("riverford")
+    self.mapRow.name:SetText(m.name)
+    self.mapRow.text:SetText(m.text .. string.format(" |cff888888(%d x %d)|r", p.w, p.h))
+end
+
 function P:HideScreens()
     self.mainMenu:Hide()
+    self.mapRow:Hide()
     for _, p in ipairs(self.picks) do p:Hide() end
     self.diffLabel:Hide()
     for _, b in ipairs(self.diffButtons) do b:Hide() end
@@ -786,6 +826,8 @@ function P:ShowStart()
         b:SetEnabled(b.key ~= chosen) -- the chosen one is greyed out
     end
     self.backButton:SetShown(not self.pvp)
+    self.mapRow:SetShown(solo)
+    if solo then self:DrawMapRow() end
 end
 
 function P:PickSide(faction)
@@ -805,7 +847,7 @@ function P:NewGame(faction, seed)
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
     self.st = E().New({ factions = { faction, other }, seed = seed or math.random(1, 2000000000),
-        difficulty = Save().difficulty or "normal" })
+        difficulty = Save().difficulty or "normal", map = Save().map })
     Save().game = self.st
     self.sel, self.place, self.targeting = {}, nil, nil
     self.counted = false
@@ -1084,7 +1126,7 @@ function P:MinimapClick(button)
     local left, top = self.mm:GetLeft(), self.mm:GetTop()
     local mx, my = GetCursorPosition()
     local scale = self.mm:GetEffectiveScale()
-    local x, y = (mx / scale - (left or 0)) / MM_SCALE, ((top or 0) - my / scale) / MM_SCALE
+    local x, y = (mx / scale - (left or 0)) / self.mmScale, ((top or 0) - my / scale) / self.mmScale
     if button == "RightButton" then
         local ids = self:MyUnits()
         if #ids > 0 then self:Cmd({ type = "move", units = ids, x = x, y = y }) end
@@ -1643,12 +1685,12 @@ function P:DrawFog()
                 local t = self.mmFog[n]
                 if not t then
                     t = self.mm:CreateTexture(nil, "OVERLAY")
-                    t:SetSize(4 * MM_SCALE, 4 * MM_SCALE)
                     self.mmFog[n] = t
                 end
+                t:SetSize(4 * self.mmScale, 4 * self.mmScale)
                 t:SetColorTexture(0, 0, 0, seen and 0.45 or 0.95)
                 t:ClearAllPoints()
-                t:SetPoint("TOPLEFT", self.mm, "TOPLEFT", bx * MM_SCALE, -by * MM_SCALE)
+                t:SetPoint("TOPLEFT", self.mm, "TOPLEFT", bx * self.mmScale, -by * self.mmScale)
                 t:Show()
             end
         end
@@ -1660,6 +1702,9 @@ function P:BuildMinimapTrees()
     local st = self.st
     if not st then return end
     for _, t in pairs(self.mmTrees) do t:Hide() end
+    -- The whole map fits the minimap's box (64 x 40 tiles at 2 pixels each).
+    self.mmScale = math.min(64 * MM_SCALE / st.w, 40 * MM_SCALE / st.h)
+    self.mm:SetSize(st.w * self.mmScale, st.h * self.mmScale)
     self.mmTreePool = self.mmTreePool or {}
     local used = 0
     self.mmTrees = {}
@@ -1669,11 +1714,11 @@ function P:BuildMinimapTrees()
         if not t then
             t = self.mm:CreateTexture(nil, "ARTWORK")
             t:SetColorTexture(0.08, 0.3, 0.1, 1)
-            t:SetSize(MM_SCALE, MM_SCALE)
             self.mmTreePool[used] = t
         end
+        t:SetSize(self.mmScale, self.mmScale)
         t:ClearAllPoints()
-        t:SetPoint("TOPLEFT", (i % st.w) * MM_SCALE, -math.floor(i / st.w) * MM_SCALE)
+        t:SetPoint("TOPLEFT", (i % st.w) * self.mmScale, -math.floor(i / st.w) * self.mmScale)
         t:Show()
         self.mmTrees[i] = t
     end
@@ -2055,9 +2100,9 @@ function P:Draw()
             else
                 dot:SetColorTexture(1, 0.85, 0.2, 1)
             end
-            dot:SetSize(e.size * MM_SCALE, e.size * MM_SCALE)
+            dot:SetSize(e.size * self.mmScale, e.size * self.mmScale)
             dot:ClearAllPoints()
-            dot:SetPoint("TOPLEFT", self.mm, "TOPLEFT", e.x * MM_SCALE, -e.y * MM_SCALE)
+            dot:SetPoint("TOPLEFT", self.mm, "TOPLEFT", e.x * self.mmScale, -e.y * self.mmScale)
         end
     end
     for j = bi + 1, #self.buildTex do
@@ -2075,9 +2120,9 @@ function P:Draw()
             local dot = self.mmDots:Get()
             local col = TEAM[e.owner]
             dot:SetColorTexture(col[1], col[2], col[3], 1)
-            dot:SetSize(MM_SCALE + 1, MM_SCALE + 1)
+            dot:SetSize(self.mmScale + 1, self.mmScale + 1)
             dot:ClearAllPoints()
-            dot:SetPoint("CENTER", self.mm, "TOPLEFT", e.x * MM_SCALE, -e.y * MM_SCALE)
+            dot:SetPoint("CENTER", self.mm, "TOPLEFT", e.x * self.mmScale, -e.y * self.mmScale)
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             if not e.inside and not e.insideBuild and px > -30 and px < BW + 30 and py > -10 and py < VIEW_H + 50 then
                 seen[id] = true
@@ -2185,8 +2230,8 @@ function P:Draw()
     end
     self.mmDots:End()
     -- The camera on the minimap.
-    local mx, my = cx / TILE * MM_SCALE, cy / TILE * MM_SCALE
-    local mw, mh = BW / TILE * MM_SCALE, VIEW_H / TILE * MM_SCALE
+    local mx, my = cx / TILE * self.mmScale, cy / TILE * self.mmScale
+    local mw, mh = BW / TILE * self.mmScale, VIEW_H / TILE * self.mmScale
     local c = self.mmCam
     c[1]:SetSize(mw, 1) c[1]:ClearAllPoints() c[1]:SetPoint("TOPLEFT", self.mm, "TOPLEFT", mx, -my)
     c[2]:SetSize(mw, 1) c[2]:ClearAllPoints() c[2]:SetPoint("TOPLEFT", self.mm, "TOPLEFT", mx, -(my + mh))
@@ -2771,6 +2816,7 @@ function P:PvpScreen(title, sub, lobby, keys)
     for _, b in ipairs(self.diffButtons) do b:Hide() end
     for _, b in ipairs({ self.againButton, self.resumeButton, self.backButton }) do b:Hide() end
     self.mainMenu:Hide()
+    self.mapRow:Hide()
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(sub or "")
@@ -2946,7 +2992,7 @@ function P:RefreshPvp(s)
         elseif seated then
             table.insert(keys, "leave")
         end
-        self:PvpScreen("Warcraft III: lobby", A.ScopeLine(s), who .. "\n\n"
+        self:PvpScreen("Warcraft 4: lobby", A.ScopeLine(s), who .. "\n\n"
             .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
             keys)
         self.pvpButtons.start:SetEnabled(#s.players >= 2)

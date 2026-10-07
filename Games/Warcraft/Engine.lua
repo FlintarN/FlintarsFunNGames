@@ -426,65 +426,31 @@ end
 ---------------------------------------------------------------------------
 local function Mirror(st, x, y, w, h) return st.w - x - w, st.h - y - h end
 
--- opts: factions = { "human", "orc" }, seed, difficulty ("easy", "normal", "hard"; the AI side)
+-- opts: factions = { "human", "orc" } (one per player), seed, difficulty
+-- ("easy", "normal", "hard"; the AI side), map (a key in WC.Maps; Maps.lua).
 E.NearestFree = NearestFree
 
 function E.New(opts)
-    local map = D().MAP
+    local key = opts.map and D().Maps[opts.map] and opts.map or "riverford"
+    local map = D().ParseMap(key)
     local st = { rng = math.floor(opts.seed or 1) % 2147483646 + 1, time = 0, nextId = 0, w = map.w, h = map.h,
-        trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false, difficulty = opts.difficulty or "normal" }
-    for p = 1, 2 do
+        trees = {}, occ = {}, ents = {}, list = {}, players = {}, over = false, difficulty = opts.difficulty or "normal",
+        map = key }
+    -- A hall for each player on its start, then the gold mines.
+    for p = 1, #opts.factions do
         local f = D().Factions[opts.factions[p]]
         st.players[p] = { faction = opts.factions[p], gold = D().START.gold, lumber = D().START.lumber,
             food = 0, foodCap = 0, up = {}, busy = {} }
-        local hx, hy = map.halls[1][1], map.halls[1][2]
-        local size = D().Buildings[f.hall].size
-        if p == 2 then hx, hy = Mirror(st, hx, hy, size, size) end
-        NewBuilding(st, p, f.hall, hx, hy, true)
-        local m = map.mines[1]
-        local mx, my = m[1], m[2]
-        if p == 2 then mx, my = Mirror(st, mx, my, 3, 3) end
-        local mine = NewBuilding(st, 0, "gold_mine", mx, my, true)
+        local s = map.starts[p]
+        NewBuilding(st, p, f.hall, s[1], s[2], true)
+    end
+    for _, m in ipairs(map.mines) do
+        local mine = NewBuilding(st, 0, "gold_mine", m[1], m[2], true)
         mine.gold = D().MINE_GOLD
     end
-    for _, m in ipairs(map.expansions or {}) do
-        for side = 1, 2 do
-            local mx, my = m[1], m[2]
-            if side == 2 then mx, my = Mirror(st, mx, my, 3, 3) end
-            local mine = NewBuilding(st, 0, "gold_mine", mx, my, true)
-            mine.gold = D().MINE_GOLD
-        end
-    end
-    -- Forests (and their mirror), keeping clear of bases and mines.
-    local function Clear(x, y)
-        for _, id in ipairs(st.list) do
-            local e = st.ents[id]
-            if x >= e.x - 2 and x < e.x + e.size + 2 and y >= e.y - 2 and y < e.y + e.size + 2 then return false end
-        end
-        return true
-    end
-    local function Forest(x, y, w, h)
-        for yy = y, y + h - 1 do
-            for xx = x, x + w - 1 do
-                if Inside(st, xx, yy) and Clear(xx, yy) then st.trees[Idx(st, xx, yy)] = D().TREE_LUMBER end
-            end
-        end
-    end
-    for _, r in ipairs(map.forests) do
-        Forest(r[1], r[2], r[3], r[4])
-        local mx, my = Mirror(st, r[1], r[2], r[3], r[4])
-        Forest(mx, my, r[3], r[4])
-    end
-    -- A few random clumps in the middle (mirrored, so it stays fair).
-    for _ = 1, 5 do
-        local w, h = Rand(st, 2) + 1, Rand(st, 3) + 1
-        local x, y = 20 + Rand(st, 10), 4 + Rand(st, 30)
-        Forest(x, y, w, h)
-        local mx, my = Mirror(st, x, y, w, h)
-        Forest(mx, my, w, h)
-    end
+    for _, t in ipairs(map.trees) do st.trees[Idx(st, t[1], t[2])] = D().TREE_LUMBER end
     -- Workers, sent to the mine.
-    for p = 1, 2 do
+    for p = 1, #st.players do
         local f = D().Factions[st.players[p].faction]
         local hall = E.Hall(st, p)
         local mine = E.NearestMine(st, Center(hall))
