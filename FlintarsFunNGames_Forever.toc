@@ -44,6 +44,7 @@ Games\Warcraft\Engine.lua
 Games\Warcraft\Heroes.lua
 Games\Warcraft\HeroRules.lua
 Games\Warcraft\Army.lua
+Games\Warcraft\Casters.lua
 Games\Warcraft\Sounds.lua
 Games\Warcraft\AI.lua
 Games\Warcraft\Modes.lua

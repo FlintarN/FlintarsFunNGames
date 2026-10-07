@@ -56,6 +56,8 @@ S.Spells = {
     far_sight = 568064, feral_spirit = 569157, earthquake = 568874, shockwave = 569193, war_stomp = 569222,
     healing_wave = 568572, hex = 598523, serpent_ward = 568091, big_bad_voodoo = 568426,
     heal = 569570, inner_fire = 568343, slow = 568147, bloodlust = 568812, healing_ward_spell = 568287,
+    dispel = 568440, invisibility = 568054, polymorph = 569526, purge = 568091, lightning_shield = 568555,
+    sentry_ward = 568381, stasis_trap = 568291, ensnare = 568291, defend = 567554,
 }
 -- Combat: hits by kind of attack, on units or buildings.
 S.Hit = {

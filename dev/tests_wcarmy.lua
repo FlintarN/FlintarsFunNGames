@@ -406,3 +406,108 @@ function WcDemo()
     check(#mute == 0, "wc sound: every unit has a voice and every spell a sound (" .. table.concat(mute, ", ") .. ")")
     view:ShowMenu()
 end
+
+-- Casters: every spell by hand, autocast on and off, Defend.
+function WcCasterTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 12 })
+    local function Hold(u) u.order = { type = "hold" } return u end
+    local function Cast(u, key, t, x, y)
+        u.mana, u.cds = u.maxMana, nil
+        local ok, why = E.Command(st, u.owner, { type = "cast", unit = u.id, ability = key, target = t and t.id, x = x, y = y })
+        for _ = 1, 30 do E.Step(st, 0.05) end
+        return ok, why
+    end
+    local sorc = Hold(E.Spawn(st, 1, "sorceress", 30, 20))
+    local grunt = Hold(E.Spawn(st, 2, "grunt", 33, 20))
+    check(Cast(sorc, "polymorph", grunt) and grunt.buffs and grunt.buffs.hex, "casters: Polymorph turns a grunt into a sheep")
+    local bm = Hold(E.Spawn(st, 2, "blademaster", 33, 22))
+    sorc.mana, sorc.cds = sorc.maxMana, nil
+    local ok, why = E.Command(st, 1, { type = "cast", unit = sorc.id, ability = "polymorph", target = bm.id })
+    check(not ok and why == "not on a hero", "casters: Polymorph doesn't work on heroes (" .. tostring(why) .. ")")
+    local foot = Hold(E.Spawn(st, 1, "footman", 30, 24))
+    check(Cast(sorc, "invisibility", foot) and E.Hidden(foot), "casters: Invisibility hides a footman")
+    E.Strike(st, foot, grunt, 5, false, "normal")
+    check(not E.Hidden(foot), "casters: attacking shows it again")
+    -- Shaman: Purge destroys a summon; Lightning Shield burns neighbours.
+    local sham = Hold(E.Spawn(st, 2, "shaman", 40, 30))
+    local wolf = E.Spawn(st, 1, "spirit_wolf1", 42, 30)
+    wolf.summon, wolf.expire = true, st.time + 60
+    Cast(sham, "purge", wolf)
+    check(not st.ents[wolf.id], "casters: Purge destroys a summoned wolf")
+    local g2 = Hold(E.Spawn(st, 2, "grunt", 44, 34))
+    local near = Hold(E.Spawn(st, 1, "footman", 44.8, 34))
+    local hp = near.hp
+    sham.mana = sham.maxMana
+    Cast(sham, "lightning_shield", g2)
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(g2.buffs and g2.buffs.lshield and near.hp < hp, "casters: Lightning Shield burns the footman next to it")
+    -- Raider: Ensnare roots and pulls a flyer down so melee can hit it.
+    local raider = Hold(E.Spawn(st, 2, "raider", 50, 10))
+    local gry = Hold(E.Spawn(st, 1, "gryphon_rider", 53, 10))
+    local fm = E.Spawn(st, 1, "footman", 51, 12)
+    local g3 = E.Spawn(st, 2, "grunt", 52, 12)
+    check(not E.CanHit(st, g3, gry), "casters: a grunt can't hit a gryphon")
+    Cast(raider, "ensnare", gry)
+    check(gry.buffs and gry.buffs.ensnare and E.CanHit(st, g3, gry) and E.Speed(st, gry) == 0,
+        "casters: Ensnare: it can't move, and melee can hit it")
+    -- Footman: Defend halves pierce damage and slows it.
+    local d1 = Hold(E.Spawn(st, 1, "footman", 10, 30))
+    local speed = E.Speed(st, d1)
+    check(E.Command(st, 1, { type = "defend", units = { d1.id }, on = true }) and d1.defend and E.Speed(st, d1) < speed,
+        "casters: Defend on: slower")
+    local rifle = E.Spawn(st, 2, "headhunter", 12, 30)
+    local before = d1.hp
+    E.Strike(st, rifle, d1, 20, true, "pierce")
+    local withDefend = before - d1.hp
+    d1.defend = nil
+    before = d1.hp
+    E.Strike(st, rifle, d1, 20, true, "pierce")
+    check(withDefend < before - d1.hp, "casters: Defend: less damage from spears (" .. withDefend .. " vs " .. (before - d1.hp) .. ")")
+    -- Witch Doctor: a Stasis Trap stuns enemies that come near.
+    local wd = Hold(E.Spawn(st, 2, "witch_doctor", 20, 10))
+    Cast(wd, "stasis_trap", nil, 22, 10)
+    local trap
+    for _, id in ipairs(st.list) do if st.ents[id] and st.ents[id].type == "stasis_trap" then trap = st.ents[id] end end
+    check(trap and E.Hidden(trap), "casters: an invisible Stasis Trap")
+    local walker = E.Spawn(st, 1, "footman", trap.x + 1, trap.y)
+    for _ = 1, 10 do E.Step(st, 0.05) end
+    check(walker.buffs and walker.buffs.stun and not st.ents[trap.id], "casters: it springs: the footman is stunned")
+    -- Priest: Dispel Magic takes spells off units in an area.
+    local pr = Hold(E.Spawn(st, 1, "priest", 30, 34))
+    local lusted = Hold(E.Spawn(st, 2, "grunt", 32, 34))
+    E.AddBuff(lusted, "bloodlust", 60)
+    Cast(pr, "dispel", nil, 32, 34)
+    check(not (lusted.buffs and lusted.buffs.bloodlust), "casters: Dispel Magic takes Bloodlust off")
+    -- Autocast: off by command, then no heal.
+    local pr2 = Hold(E.Spawn(st, 1, "priest", 5, 36))
+    local hurt = Hold(E.Spawn(st, 1, "footman", 6, 36))
+    hurt.hp = 100
+    E.Command(st, 1, { type = "autocast", units = { pr2.id }, ability = "heal", on = false })
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(hurt.hp == 100, "casters: autocast off: no heal")
+    E.Command(st, 1, { type = "autocast", units = { pr2.id }, ability = "heal", on = true })
+    for _ = 1, 40 do E.Step(st, 0.05) end
+    check(hurt.hp > 100, "casters: autocast on: it heals")
+
+    -- The command card: a priest's spells; right-click switches autocast.
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 5)
+    local s2 = view.st
+    local p3 = E.Spawn(s2, 1, "priest", 20, 20)
+    view.sel = { p3.id }
+    view:Draw()
+    local heal
+    for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Heal (E)" then heal = c end end
+    check(heal and heal.auto:GetText() == "auto", "casters card: Heal, autocast on")
+    heal._scripts.OnClick(heal, "RightButton")
+    view:Draw()
+    check(p3.auto and p3.auto.heal == false and heal.auto:GetText() == "", "casters card: right-click: autocast off")
+    local disp
+    for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Dispel Magic (D)" then disp = c end end
+    disp._scripts.OnClick(disp, "LeftButton")
+    check(view.targeting == "cast" and view.castKey == "dispel", "casters card: Dispel Magic asks where")
+    view:Quit()
+end

@@ -761,6 +761,8 @@ local function Armor(a) return a * 0.06 / (1 + 0.06 * a) end
 local function Strike(st, a, t, damage, ranged, attackType)
     local armorType = Def(t).armorType or (t.kind == "unit" and "medium" or "fortified")
     local mult = (D().DAMAGE[attackType or "normal"] or {})[armorType] or 1
+    if t.defend and attackType == "pierce" then mult = mult * 0.5 end -- a Footman's Defend
+    if a.buffs and a.buffs.invis and a ~= t then a.buffs.invis = nil end -- attacking shows you
     local reduce = attackType == "spell" and 1 or (1 - Armor(E.ArmorOf(st, t)))
     local dmg = math.max(1, math.floor(damage * mult * reduce + 0.5))
     if E.OnTaken then dmg = math.floor(E.OnTaken(st, t, dmg) + 0.5) end

@@ -148,7 +148,7 @@ local function D(u) return U[u.type] end
 -- Can attacker a (a unit, or a building's turret) hit target t?
 function E.CanHit(st, a, t)
     local d = a.type and U[a.type]
-    local air = t.kind == "unit" and U[t.type] and U[t.type].air
+    local air = t.kind == "unit" and U[t.type] and U[t.type].air and not (t.buffs and t.buffs.ensnare)
     if not d then return true end -- a tower or burrow: hits ground and air
     if d.buildingsOnly and t.kind ~= "building" then return false end
     if d.airOnly and not air then return false end
@@ -291,20 +291,8 @@ function E.ArmyTick(st, u, dt)
         end
         return false
     end
-    if d.autocast and not st.peace and not E.CantAttack(u) then -- (the Showcase: only what you tell them)
-        u.castT = (u.castT or 0) - dt
-        if u.castT <= 0 then
-            u.castT = 1
-            for _, key in ipairs(d.autocast) do
-                local a = WC.Abilities[SPELL[key]]
-                if (u.mana or 0) >= a.mana[1] and AUTO[key](st, u, a) then
-                    u.mana = u.mana - a.mana[1]
-                    E.Emit("cast", { id = u.id, owner = u.owner, ability = SPELL[key] })
-                    break
-                end
-            end
-        end
-    end
+    -- Casters' spells, wards and traps (Casters.lua).
+    if E.CasterTick then return E.CasterTick(st, u, dt) end
     return false
 end
 

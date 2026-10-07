@@ -27,7 +27,8 @@ local ATAN2 = math.atan2 or math.atan
 
 function E.IsHero(u) return u ~= nil and u.kind == "unit" and U[u.type] ~= nil and U[u.type].hero == true end
 function E.Skill(u, key) return u.skills and u.skills[key] or 0 end
-local Skill = E.Skill
+-- (Looked up each time: Casters.lua adds the casters' spells.)
+local function Skill(u, key) return E.Skill(u, key) end
 
 -- A hero's attribute at its level.
 function E.Stat(u, stat)
@@ -111,10 +112,13 @@ function E.Speed(st, u)
     local b = u.buffs
     if b then
         if b.slow or b.hex then s = s * 0.5 end
+        if b.ensnare then return 0 end -- netted: can't move
+        if b.purged then s = s * 0.3 end
         if b.windwalk then s = s * (1 + b.windwalk.speed) end
         if b.bloodlust then s = s * 1.25 end
     end
     if u.items and E.ItemBonus then s = s * (1 + E.ItemBonus(u, "speed")) end
+    if u.defend then s = s * 0.7 end
     return s * (1 + E.Aura(st, u, "endurance"))
 end
 
@@ -140,8 +144,11 @@ function E.Untouchable(e)
 end
 
 -- Invisible (Wind Walk): enemies don't notice it.
+-- Can't be seen by enemies: Wind Walk, Invisibility, wards.
 function E.Hidden(e)
-    return e.buffs ~= nil and e.buffs.windwalk ~= nil
+    if e.buffs and (e.buffs.windwalk or e.buffs.invis) then return true end
+    local d = e.kind == "unit" and U[e.type]
+    return d and d.invisible == true or false
 end
 
 function E.AddBuff(u, name, t, extra)
@@ -595,7 +602,7 @@ function E.CastStep(st, u, o, dt)
         u.order, u.path = nil, nil
         return
     end
-    u.mana = u.mana - mana
+    u.mana = (u.mana or 0) - mana
     u.cds = u.cds or {}
     u.cds[o.ability] = At(a.cd, lv)
     u.order, u.path = nil, nil
@@ -671,7 +678,8 @@ function E.HeroCommand(st, p, cmd, mode)
         return true
     elseif t == "cast" then
         local u = st.ents[cmd.unit]
-        if not (u and u.owner == p and E.IsHero(u)) or u.illusion then return false, "not a hero" end
+        -- A hero, or a caster (its spells: Casters.lua).
+        if not (u and u.owner == p) or u.illusion then return false, "not yours" end
         local a = WC.Abilities[cmd.ability]
         local lv = a and Skill(u, cmd.ability) or 0
         if lv == 0 then return false, "not learned" end

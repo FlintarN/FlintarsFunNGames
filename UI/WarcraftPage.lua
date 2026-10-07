@@ -97,6 +97,9 @@ local BUFF_LOOK = {
     bladestorm = { spin = true, speed = 1.6 },
     stun = { speed = 0 },
     windwalk = { alpha = 0.45 },
+    invis = { alpha = 0.45 },
+    purged = { speed = 0.5 },
+    ensnare = { speed = 0 },
 }
 P.UNIT_LOOK, P.BUFF_LOOK = UNIT_LOOK, BUFF_LOOK
 
@@ -632,7 +635,18 @@ function P.New(parent, kind)
         local hl = c:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetColorTexture(1, 1, 1, 0.15)
-        c:SetScript("OnClick", function() if c.action then c.action() end end)
+        -- Right-click: a spell's autocast on or off.
+        if c.RegisterForClicks then c:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+        c:SetScript("OnClick", function(_, button)
+            if button == "RightButton" then
+                if c.alt then c.alt() end
+            elseif c.action then
+                c.action()
+            end
+        end)
+        c.auto = W.Label(c, "", "NumberFontNormalSmall")
+        c.auto:SetPoint("BOTTOM", 0, 1)
+        c.auto:SetTextColor(1, 0.82, 0)
         if c.SetMotionScriptsWhileDisabled then c:SetMotionScriptsWhileDisabled(true) end
         c:SetScript("OnEnter", function()
             if not c.title then return end
@@ -1638,7 +1652,10 @@ end
 -- How far an entity of yours sees.
 local function ViewOf(e)
     local V = WC().VIEW
-    if e.kind == "unit" then return WC().Units[e.type].worker and V.worker or V.unit end
+    if e.kind == "unit" then
+        local d = WC().Units[e.type]
+        return d.sight or (d.worker and V.worker or V.unit)
+    end
     local d = WC().Buildings[e.type]
     if d.attack then return V.tower end
     return d.hall and V.hall or V.building
@@ -2645,6 +2662,44 @@ function P:DrawCommands(sel)
                     enabled = ready, action = function() self:CastAbility(hero, key) end }
             end
         end
+        -- A caster's spells (Casters.lua) on the bottom row; right-click for autocast.
+        local caster
+        for _, e in ipairs(mine) do
+            if not hero and e.kind == "unit" and WC().Units[e.type].spells then caster = e break end
+        end
+        if caster then
+            local same = {}
+            for _, e in ipairs(mine) do if e.type == caster.type then table.insert(same, e.id) end end
+            for slot, key in ipairs(WC().Units[caster.type].spells) do
+                local a = A[key]
+                if a.target == "toggle" then
+                    local on = caster.defend
+                    list[8 + slot] = { icon = a.icon, key = a.hotkey, title = (on and "Stop " or "") .. a.name .. " (" .. a.hotkey .. ")",
+                        tip = a.text, action = function() self:Cmd({ type = "defend", units = same, on = not on }) end, lit = on }
+                else
+                    -- The one to cast: enough mana and ready (the most mana first).
+                    local best
+                    for _, id in ipairs(same) do
+                        local u = st.ents[id]
+                        local mana = (a.mana and a.mana[1]) or 0
+                        if u and (u.mana or 0) >= mana and not (u.cds and u.cds[key]) and (not best or (u.mana or 0) > (best.mana or 0)) then
+                            best = u
+                        end
+                    end
+                    local auto = E().AUTO and E().AUTO[key] and E().AutoOn(st, caster, key)
+                    local tip = a.text .. string.format(" %d mana.", (a.mana and a.mana[1]) or 0)
+                    if E().AUTO and E().AUTO[key] and a.autocast then
+                        tip = tip .. (auto and " |cffffd100Autocast is on|r (right-click to switch off)." or " Right-click: autocast.")
+                    end
+                    list[8 + slot] = { icon = a.icon, key = a.hotkey, title = a.name .. " (" .. a.hotkey .. ")", tip = tip,
+                        enabled = best ~= nil, auto = auto and a.autocast,
+                        action = function() if best then self:CastAbility(best, key) end end,
+                        alt = a.autocast and E().AUTO and E().AUTO[key] and function()
+                            self:Cmd({ type = "autocast", units = same, ability = key, on = not auto })
+                        end or nil }
+                end
+            end
+        end
         if hasWorker then
             while #list < 4 do table.insert(list, false) end
             Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
@@ -2803,7 +2858,8 @@ function P:DrawCommands(sel)
         c:SetShown(item ~= nil)
         if item then
             c.icon:SetTexture(item.icon)
-            c.title, c.tip, c.action, c.key = item.title, item.tip, item.action, item.key
+            c.title, c.tip, c.action, c.key, c.alt = item.title, item.tip, item.action, item.key, item.alt
+            c.auto:SetText((item.auto or item.lit) and (item.lit and "on" or "auto") or "")
             c.hotkey:SetText(item.key or "")
             local can = (not item.cost or E().CanAfford(st, ME, item.cost)) and item.enabled ~= false
             c:SetEnabled(can)
@@ -3467,7 +3523,13 @@ local SPELL_FX = {
     hex = { 166649, "target", 1, 1.2 },
     serpent_ward = { 166994, "point", 1, 1.2 },
     big_bad_voodoo = { 166826, "caster", 2, 2 },
-    healing_ward_spell = { 166293, "caster", 1, 1.5 },
+    healing_ward_spell = { 166293, "point", 1, 1.5 },
+    dispel = { 166350, "point", 1.6, 1.2 },
+    invisibility = { 166430, "target", 1, 1.2 },
+    polymorph = { 166649, "target", 1, 1.2 },
+    purge = { 166609, "target", 1, 1 },
+    sentry_ward = { 166994, "point", 0.8, 1 },
+    stasis_trap = { 166306, "point", 1.4, 1.5 },
 }
 -- While a unit has the buff: file, scale, height (yards above the ground).
 local BUFF_FX = {
@@ -3480,6 +3542,9 @@ local BUFF_FX = {
     slow = { 166898, 1, 0 },
     bloodlust = { 165727, 1, 2 },
     reinc = { 166927, 1.2, 0 },
+    lshield = { 166500, 1.2, 0 },
+    purged = { 166898, 1, 0 },
+    ensnare = { 165782, 1, 0 },
 }
 -- Under a hero who has learned the aura.
 local AURA_FX = { devotion = 165948, brilliance = 165759, endurance = 166557 }

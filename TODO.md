@@ -79,7 +79,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Items and a 6-slot inventory come with shops (step 3) and creeps (step 6).
 
 ### 3. The rest of the Human and Orc armies
-- [ ] Caster abilities you click (Dispel, Invisibility, Polymorph, Purge, Lightning Shield, Ensnare, Sentry Ward, Stasis Trap...), Spell Breaker, Spirit Walker, Flak/bombs upgrades.
+- [x] Caster abilities you click, with autocast (Casters.lua). [ ] Spell Breaker, Spirit Walker, Flak/bombs upgrades, caster training upgrades (Adept/Master).
 - [ ] Pick models for the new buildings in /wcgallery.
 
 ### 6. The map and the match
