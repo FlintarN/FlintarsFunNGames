@@ -179,4 +179,22 @@ function WcArmyPage()
     local holy
     for i = 9, 12 do if view.cmds[i]:IsShown() and view.cmds[i].title:find("Holy Light", 1, true) then holy = i end end
     check(holy == 9, "wc army page: the hero's abilities on the bottom row")
+    -- Every building can be placed (its ghost has art): the Arcane Vault once broke this.
+    local peasant
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.type == "peasant" then peasant = e break end
+    end
+    st.players[1].gold, st.players[1].lumber = 99999, 99999
+    local keys = {}
+    for k in pairs(WC.Buildings) do if k ~= "gold_mine" then table.insert(keys, k) end end
+    table.sort(keys)
+    local bad = {}
+    for _, k in ipairs(keys) do
+        view.sel = { peasant.id }
+        local ok = pcall(view.StartPlace, view, k)
+        if not ok then table.insert(bad, k) end
+        view.place = nil
+    end
+    check(#bad == 0, "wc army page: every building can be placed (" .. table.concat(bad, ", ") .. ")")
 end

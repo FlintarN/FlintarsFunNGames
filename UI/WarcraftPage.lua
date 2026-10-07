@@ -30,7 +30,13 @@ local BUILDING_ART = {
     great_hall = "WcGreatHall", orc_burrow = "WcBurrow", orc_barracks = "WcOrcBarracks", gold_mine = "WcMine",
     keep = "WcTownHall", castle = "WcTownHall", stronghold = "WcGreatHall", fortress = "WcGreatHall",
     blacksmith = "WcBarracks", war_mill = "WcOrcBarracks", scout_tower = "WcFarm",
+    arcane_sanctum = "WcTownHall", workshop = "WcBarracks", gryphon_aviary = "WcFarm", arcane_vault = "WcFarm",
+    spirit_lodge = "WcBurrow", beastiary = "WcOrcBarracks", tauren_totem = "WcGreatHall", voodoo_lounge = "WcBurrow",
 }
+-- A building's flat art (ghost, plans, the fallback): one for every building.
+local function ArtOf(btype)
+    return ART .. (BUILDING_ART[btype] or "WcBarracks")
+end
 
 local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
@@ -1307,7 +1313,7 @@ function P:StartPlace(btype)
     if not E().CanAfford(self.st, ME, WC().Buildings[btype].cost) then return self:Say("Not enough gold or lumber") end
     self.place = { btype = btype, unit = worker.id }
     self.targeting = nil
-    self.ghost:SetTexture(ART .. BUILDING_ART[btype])
+    self.ghost:SetTexture(ArtOf(btype))
     self:Say("Click where to build (right-click cancels)")
 end
 
@@ -1865,7 +1871,7 @@ function P:Draw()
             self.planTex[i] = t
         end
         local size = s.size * TILE
-        t:SetTexture(ART .. BUILDING_ART[s.btype])
+        t:SetTexture(ArtOf(s.btype))
         t:SetSize(size, size)
         Place(t, self.view, s.x * TILE - cx + size / 2, s.y * TILE - cy + size / 2)
         t:Show()
@@ -1924,7 +1930,7 @@ function P:Draw()
                 t.model:Show()
                 t.art:Hide()
             else
-                t.art:SetTexture(ART .. BUILDING_ART[e.type])
+                t.art:SetTexture(ArtOf(e.type))
                 t.art:SetSize(size + 4, size + 4)
                 Place(t.art, self.view, px + size / 2, py + size / 2)
                 t.art:SetAlpha(alpha)
