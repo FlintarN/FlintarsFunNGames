@@ -72,7 +72,7 @@ ns.WC.ART = {
     models = {
         gold_mine = { file = 189620, grow = 1.4, y = 4 },      -- elwynn/buildings/goldmine
         town_hall = { file = 189629, grow = 1.6, y = 12 },     -- elwynn/buildings/humanguardtower
-        farm = { file = 190519, grow = 1.8, y = 12 },          -- westfall/buildings/windmill
+        farm = { file = 242696, grow = 1.5, y = 8 },           -- redridge_human_farm_closed (gallery 16)
         barracks = { file = 189445, grow = 1.5, y = 6 },       -- duskwood/duskwoodbarn
         great_hall = { file = 189200, grow = 1.6, y = 8 },     -- burningsteppes/orctents/orctent
         orc_burrow = { file = 199389, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent02
