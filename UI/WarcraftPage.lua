@@ -30,6 +30,9 @@ local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
 local function Now() return GetTime and GetTime() or 0 end
 
+-- Shift held: orders go after the current one (Warcraft III's order queue).
+local function Shift() return IsShiftKeyDown and IsShiftKeyDown() and true or nil end
+
 local function Save()
     local rec = ns.db.warcraft or {}
     ns.db.warcraft = rec
@@ -806,8 +809,9 @@ function P:Smart(x, y)
         end
         return
     end
+    local q = Shift()
     if target and target.owner ~= ME and target.owner > 0 then
-        return E().Command(st, ME, { type = "attack", units = units, target = target.id })
+        return E().Command(st, ME, { type = "attack", units = units, target = target.id, queue = q })
     end
     local workers, others = {}, {}
     for _, id in ipairs(units) do
@@ -819,16 +823,16 @@ function P:Smart(x, y)
         return
     end
     if target and target.kind == "mine" and #workers > 0 then
-        E().Command(st, ME, { type = "gather", units = workers, target = target.id })
-        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y }) end
+        E().Command(st, ME, { type = "gather", units = workers, target = target.id, queue = q })
+        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y, queue = q }) end
         return
     end
     if tree and #workers > 0 then
-        E().Command(st, ME, { type = "gather", units = workers, tree = tree })
-        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y }) end
+        E().Command(st, ME, { type = "gather", units = workers, tree = tree, queue = q })
+        if #others > 0 then E().Command(st, ME, { type = "move", units = others, x = x, y = y, queue = q }) end
         return
     end
-    E().Command(st, ME, { type = "move", units = units, x = x, y = y })
+    E().Command(st, ME, { type = "move", units = units, x = x, y = y, queue = q })
 end
 
 function P:Mark(x, y)
@@ -886,7 +890,7 @@ function P:TargetAt(x, y)
     self:Mark(x, y)
     if mode == "move" then
         local units = self:MyUnits()
-        if #units > 0 then E().Command(st, ME, { type = "move", units = units, x = x, y = y }) end
+        if #units > 0 then E().Command(st, ME, { type = "move", units = units, x = x, y = y, queue = Shift() }) end
     elseif mode == "gather" then
         self:Smart(x, y)
     elseif mode == "rally" then
@@ -907,9 +911,9 @@ function P:AttackAt(x, y)
     local target = E().At(self.st, x, y)
     self:Mark(x, y)
     if target and target.owner ~= ME and target.owner > 0 then
-        E().Command(self.st, ME, { type = "attack", units = units, target = target.id })
+        E().Command(self.st, ME, { type = "attack", units = units, target = target.id, queue = Shift() })
     else
-        E().Command(self.st, ME, { type = "attackMove", units = units, x = x, y = y })
+        E().Command(self.st, ME, { type = "attackMove", units = units, x = x, y = y, queue = Shift() })
     end
 end
 
@@ -921,11 +925,15 @@ end
 
 function P:PlaceAt(x, y)
     local bx, by = self:PlaceSpot(x, y)
-    local ok, why = E().Command(self.st, ME, { type = "build", unit = self.place.unit, btype = self.place.btype, x = bx, y = by })
+    local q = Shift()
+    local ok, why = E().Command(self.st, ME, { type = "build", unit = self.place.unit, btype = self.place.btype, x = bx, y = by,
+        queue = q })
     if ok then
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        -- Shift: keep placing more of them, while there's money.
+        if q and E().CanAfford(self.st, ME, WC().Buildings[self.place.btype].cost) then return end
         self.place = nil
         self.ghost:Hide()
-        W.PlaySound("U_CHAT_SCROLL_BUTTON")
     else
         self:Say(why or "Can't build there")
     end
@@ -1206,6 +1214,24 @@ function P:Draw()
         self.treeDirty = false
         self.lastCamX, self.lastCamY = cx, cy
     end
+    -- Buildings ordered but not started yet: faint ghosts.
+    self.planTex = self.planTex or {}
+    local plans = E().PlannedSites(st, ME)
+    for i, s in ipairs(plans) do
+        local t = self.planTex[i]
+        if not t then
+            t = self.buildLayer:CreateTexture(nil, "BORDER")
+            t:SetVertexColor(0.5, 1, 0.5)
+            t:SetAlpha(0.35)
+            self.planTex[i] = t
+        end
+        local size = s.size * TILE
+        t:SetTexture(ART .. BUILDING_ART[s.btype])
+        t:SetSize(size, size)
+        Place(t, self.view, s.x * TILE - cx + size / 2, s.y * TILE - cy + size / 2)
+        t:Show()
+    end
+    for i = #plans + 1, #self.planTex do self.planTex[i]:Hide() end
     local selected = {}
     for _, id in ipairs(self.sel) do selected[id] = true end
     -- Buildings and the mine.

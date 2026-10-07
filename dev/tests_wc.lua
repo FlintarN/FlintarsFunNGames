@@ -527,3 +527,47 @@ function WcGalleryTests()
     g.next._scripts.OnClick()
     check(g.page == 2 and g.cells[1].num:GetText() == "19", "wc gallery: next page")
 end
+
+-- Shift: orders queue up instead of replacing (Warcraft III).
+function WcQueueTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 41 })
+    local fm = E.Spawn(st, 1, "footman", 30, 20)
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 34, y = 20 })
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 34, y = 24, queue = true })
+    check(fm.order.x == 34 and fm.order.y == 20 and #fm.queue == 1, "wc queue: the second move waits")
+    for _ = 1, 200 do E.Step(st, 0.05) end
+    check(math.abs(fm.x - 34) < 0.6 and math.abs(fm.y - 24) < 0.6, "wc queue: then it goes on")
+    -- A plain order clears the queue.
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 30, y = 20 })
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 30, y = 24, queue = true })
+    E.Command(st, 1, { type = "move", units = { fm.id }, x = 36, y = 20 })
+    check(fm.queue == nil and fm.order.x == 36, "wc queue: no Shift, no queue")
+
+    -- Two buildings in a row: a then b, paid up front, refunded if cancelled.
+    st.players[1].gold, st.players[1].lumber = 1000, 1000
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local w
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e.owner == 1 and e.type == "peasant" then w = e break end
+    end
+    local x1, y1 = WC.AI.FindSpot(st, hx + 6, hy + 6, 2)
+    E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x1, y = y1 })
+    local x2, y2 = WC.AI.FindSpot(st, hx + 10, hy + 6, 2)
+    check(not E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x1, y = y1, queue = true }),
+        "wc queue: not on top of a planned farm")
+    check(E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x2, y = y2, queue = true }), "wc queue: shift-build a second farm")
+    check(st.players[1].gold == 1000 - 160 and #w.queue == 1, "wc queue: both paid, the second waits")
+    for _ = 1, 2400 do E.Step(st, 0.05) end
+    check((E.Count(st, 1).buildings.farm or 0) == 2, "wc queue: both farms built, one after the other")
+    check(w.order and w.order.type == "gather", "wc queue: then back to work")
+    -- Cancelling a queue refunds the farms not started.
+    local x3, y3 = WC.AI.FindSpot(st, hx - 8, hy + 6, 2)
+    local x4, y4 = WC.AI.FindSpot(st, hx - 8, hy + 10, 2)
+    local gold = st.players[1].gold
+    E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x3, y = y3 })
+    E.Command(st, 1, { type = "build", unit = w.id, btype = "farm", x = x4, y = y4, queue = true })
+    E.Command(st, 1, { type = "stop", units = { w.id } })
+    check(st.players[1].gold == gold, "wc queue: stop gives the money back")
+end

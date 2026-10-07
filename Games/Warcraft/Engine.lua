@@ -48,6 +48,33 @@ end
 E.Blocked = Blocked
 
 -- Can a building of `size` go at (x, y)? Units standing there are pushed aside.
+-- Building orders of player p not started yet (the current one and the
+-- Shift queue): { btype, x, y, size } each.
+function E.PlannedSites(st, p)
+    local out = {}
+    for _, id in ipairs(st.list) do
+        local u = st.ents[id]
+        if u and u.owner == p and u.kind == "unit" then
+            local function Add(o)
+                if o and o.type == "build" and not o.site then
+                    table.insert(out, { btype = o.btype, x = o.x, y = o.y, size = D().Buildings[o.btype].size })
+                end
+            end
+            Add(u.order)
+            for _, o in ipairs(u.queue or {}) do Add(o) end
+        end
+    end
+    return out
+end
+
+-- Does a planned building of player p overlap this spot?
+function E.Planned(st, p, x, y, size)
+    for _, s in ipairs(E.PlannedSites(st, p)) do
+        if x < s.x + s.size and s.x < x + size and y < s.y + s.size and s.y < y + size then return true end
+    end
+    return false
+end
+
 function E.CanPlace(st, x, y, size)
     for yy = y, y + size - 1 do
         for xx = x, x + size - 1 do
@@ -484,8 +511,38 @@ local function LeaveMine(st, u)
 end
 E.LeaveMine = LeaveMine
 
--- Give a unit an order (replaces what it was doing).
-function E.Order(st, u, order)
+-- Orders that never end by themselves: a Shift-queued order replaces them.
+local ENDLESS = { gather = true, hold = true }
+
+-- A building order not started yet gives its gold and lumber back.
+local function Refund(st, u, o)
+    if o and o.type == "build" and o.paid and not o.site then
+        local pl = st.players[u.owner]
+        local cost = D().Buildings[o.btype].cost
+        pl.gold, pl.lumber = pl.gold + cost[1], pl.lumber + cost[2]
+        o.paid = nil
+    end
+end
+
+-- Would the unit queue this order (Shift) rather than start it now?
+function E.Queues(u, queued)
+    return queued and u.order ~= nil and not ENDLESS[u.order.type]
+end
+
+-- Give a unit an order. mode nil: replaces what it was doing and its queue
+-- (unstarted buildings are refunded); "queue": after its current order
+-- (Shift, like Warcraft III); "next": the next order from its own queue.
+function E.Order(st, u, order, mode)
+    if mode == "queue" and E.Queues(u, true) then
+        u.queue = u.queue or {}
+        table.insert(u.queue, order)
+        return
+    end
+    if mode ~= "next" then
+        if u.order ~= order then Refund(st, u, u.order) end
+        for _, q in ipairs(u.queue or {}) do Refund(st, u, q) end
+        u.queue = nil
+    end
     if u.inside then LeaveMine(st, u) end
     if u.insideBuild then
         local b = st.ents[u.insideBuild]
@@ -737,12 +794,23 @@ local function Building(st, u, b)
 end
 E.Building = Building
 
+-- A builder is done: back to what it did before (gathering), after its queue.
+local function AfterBuild(st, u)
+    if not u.after then return end
+    if u.queue and #u.queue > 0 then
+        table.insert(u.queue, u.after)
+    else
+        E.Order(st, u, u.after, "next")
+    end
+    u.after = nil
+end
+
 local function Build(st, u, o, dt)
     if o.site then
         local b = st.ents[o.site]
         if not b or b.progress >= 1 then
             u.order, u.building = nil, nil
-            if u.after then E.Order(st, u, u.after) u.after = nil end
+            AfterBuild(st, u)
             return
         end
         b.builder = u.id
@@ -834,6 +902,12 @@ local function UnitStep(st, u, dt)
         end
     end
     if u.inside and not u.order then return end -- sitting in a burrow
+    -- Done: the next Shift-queued order.
+    if not u.order and u.queue then
+        local nxt = table.remove(u.queue, 1)
+        if #u.queue == 0 then u.queue = nil end
+        if nxt then E.Order(st, u, nxt, "next") end
+    end
     local d = D().Units[u.type]
     local o = u.order
     if not o then
@@ -948,10 +1022,7 @@ local function BuildingStep(st, b, dt)
                 end
                 u.order, u.building = nil, nil
                 -- Back to what it was doing before (gathering), if anything.
-                if u.after then
-                    E.Order(st, u, u.after)
-                    u.after = nil
-                end
+                AfterBuild(st, u)
             end
         end
         return
@@ -1019,6 +1090,7 @@ end
 function E.Command(st, p, cmd)
     if st.over then return false, "the game is over" end
     local t = cmd.type
+    local mode = cmd.queue and "queue" or nil -- Shift: after the current order
     if t == "move" or t == "attackMove" then
         local units = Owned(st, p, cmd.units)
         -- Spread a group around the point so they don't all stack.
@@ -1030,22 +1102,22 @@ function E.Command(st, p, cmd)
                 ox, oy = math.cos(a) * 0.8 * ring, math.sin(a) * 0.8 * ring
                 if i == 1 then ox, oy = 0, 0 end
             end
-            E.Order(st, u, { type = t, x = cmd.x + ox, y = cmd.y + oy })
+            E.Order(st, u, { type = t, x = cmd.x + ox, y = cmd.y + oy }, mode)
         end
         return #units > 0
     elseif t == "attack" then
         local target = st.ents[cmd.target]
         if not target or target.owner == p or target.kind == "mine" then return false, "not a target" end
-        for _, u in ipairs(Owned(st, p, cmd.units)) do E.Order(st, u, { type = "attack", target = target.id }) end
+        for _, u in ipairs(Owned(st, p, cmd.units)) do E.Order(st, u, { type = "attack", target = target.id }, mode) end
         return true
     elseif t == "gather" then
         local n = 0
         for _, u in ipairs(Owned(st, p, cmd.units)) do
             if D().Units[u.type].worker then
                 if cmd.tree then
-                    E.Order(st, u, { type = "gather", res = "lumber", target = cmd.tree })
+                    E.Order(st, u, { type = "gather", res = "lumber", target = cmd.tree }, mode)
                 else
-                    E.Order(st, u, { type = "gather", res = "gold", target = cmd.target })
+                    E.Order(st, u, { type = "gather", res = "gold", target = cmd.target }, mode)
                 end
                 n = n + 1
             end
@@ -1135,12 +1207,15 @@ function E.Command(st, p, cmd)
         if not allowed then return false, "your race can't build that" end
         local bd = D().Buildings[cmd.btype]
         if not E.CanAfford(st, p, bd.cost) then return false, "not enough gold or lumber" end
-        if not E.CanPlace(st, cmd.x, cmd.y, bd.size) then return false, "can't build there" end
+        if not E.CanPlace(st, cmd.x, cmd.y, bd.size) or E.Planned(st, p, cmd.x, cmd.y, bd.size) then
+            return false, "can't build there"
+        end
         local pl = st.players[p]
         pl.gold, pl.lumber = pl.gold - bd.cost[1], pl.lumber - bd.cost[2]
+        local queued = E.Queues(u, cmd.queue)
         local after = u.order and u.order.type == "gather" and u.order or nil
-        E.Order(st, u, { type = "build", btype = cmd.btype, x = cmd.x, y = cmd.y })
-        u.after = after
+        E.Order(st, u, { type = "build", btype = cmd.btype, x = cmd.x, y = cmd.y, paid = true }, mode)
+        if not queued then u.after = after end
         return true
     elseif t == "train" then
         local b = st.ents[cmd.building]
