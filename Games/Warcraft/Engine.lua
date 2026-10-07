@@ -214,6 +214,107 @@ E.Def = Def
 
 function E.Get(st, id) return id and st.ents[id] end
 
+---------------------------------------------------------------------------
+-- Tech: requirements, research levels and what they add
+---------------------------------------------------------------------------
+-- Does player p have a finished building of this type (a Keep counts as a
+-- Town Hall, and so on)?
+function E.Has(st, p, need)
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.owner == p and e.kind == "building" and e.progress >= 1 then
+            if e.type == need then return true end
+            for _, c in ipairs(Def(e).counts or {}) do
+                if c == need then return true end
+            end
+        end
+    end
+    return false
+end
+
+-- The first building of `list` player p is missing (its name), or nil.
+function E.Missing(st, p, list)
+    for _, need in ipairs(list or {}) do
+        if not E.Has(st, p, need) then return D().Buildings[need].name end
+    end
+end
+
+function E.Level(st, p, key)
+    local pl = st.players[p]
+    return pl and pl.up and pl.up[key] or 0
+end
+
+-- Everything research adds to one effect for player p.
+local function Bonus(st, p, field)
+    local pl = st.players[p]
+    if not pl or not pl.up then return 0 end
+    local n = 0
+    for key, level in pairs(pl.up) do
+        local r = D().Research[key]
+        local v = r and r.effect and r.effect[field]
+        if v then n = n + v * level end
+    end
+    return n
+end
+E.Bonus = Bonus
+
+-- A unit's attack range, health and damage with its owner's research.
+function E.Range(st, u)
+    local d = D().Units[u.type]
+    return d.range + (u.type == "rifleman" and Bonus(st, u.owner, "rifleRange") or 0)
+end
+
+function E.MaxHp(st, owner, utype)
+    return D().Units[utype].hp + (utype == "grunt" and Bonus(st, owner, "gruntHp") or 0)
+end
+
+function E.Damage(st, u)
+    local d = D().Units[u.type]
+    local dmg = d.damage
+    if not d.worker then
+        dmg = dmg * (1 + Bonus(st, u.owner, d.range > 1.5 and "ranged" or "melee"))
+        if u.type == "grunt" then dmg = dmg + Bonus(st, u.owner, "gruntDamage") end
+    end
+    return dmg
+end
+
+function E.ArmorOf(st, e)
+    local d = Def(e)
+    local a = d.armor or 0
+    if e.kind == "unit" then
+        if not d.worker then a = a + Bonus(st, e.owner, "armor") end
+    elseif e.kind == "building" then
+        a = a + Bonus(st, e.owner, "buildingArmor")
+    end
+    return a
+end
+
+-- A building's queue holds unit types and research ("r:keep"): what it is,
+-- and how long it takes.
+function E.QueueItem(st, b, q)
+    if q:sub(1, 2) == "r:" then
+        local key = q:sub(3)
+        local r = D().Research[key]
+        local level = E.Level(st, b.owner, key) + 1
+        return r, (r.time[level] or r.time[#r.time]), key, level
+    end
+    local d = D().Units[q]
+    return d, d.time
+end
+
+-- Can player p start this research now? (true, or false and why)
+function E.CanResearch(st, p, key, b)
+    local r = D().Research[key]
+    if not r then return false, "unknown research" end
+    if b and b.type ~= r.building then return false, "not here" end
+    local level = E.Level(st, p, key) + 1
+    if level > (r.levels or 1) then return false, "already done" end
+    if st.players[p].busy[key] then return false, "already being researched" end
+    local miss = E.Missing(st, p, r.requires and r.requires[level])
+    if miss then return false, "requires " .. miss end
+    return true
+end
+
 local function Add(st, e)
     st.nextId = st.nextId + 1
     e.id = st.nextId
@@ -223,8 +324,8 @@ local function Add(st, e)
 end
 
 local function NewUnit(st, owner, utype, x, y)
-    local d = D().Units[utype]
-    return Add(st, { kind = "unit", type = utype, owner = owner, x = x, y = y, hp = d.hp, maxHp = d.hp,
+    local hp = E.MaxHp(st, owner, utype)
+    return Add(st, { kind = "unit", type = utype, owner = owner, x = x, y = y, hp = hp, maxHp = hp,
         cd = 0, facing = 0 })
 end
 
@@ -313,7 +414,7 @@ function E.New(opts)
     for p = 1, 2 do
         local f = D().Factions[opts.factions[p]]
         st.players[p] = { faction = opts.factions[p], gold = D().START.gold, lumber = D().START.lumber,
-            food = 0, foodCap = 0 }
+            food = 0, foodCap = 0, up = {}, busy = {} }
         local hx, hy = map.halls[1][1], map.halls[1][2]
         local size = D().Buildings[f.hall].size
         if p == 2 then hx, hy = Mirror(st, hx, hy, size, size) end
@@ -484,7 +585,9 @@ function E.Food(st)
                 pl.food = pl.food + D().Units[e.type].food
             elseif e.kind == "building" then
                 if e.progress >= 1 then pl.foodCap = pl.foodCap + (Def(e).food or 0) end
-                for _, q in ipairs(e.queue) do pl.food = pl.food + D().Units[q].food end
+                for _, q in ipairs(e.queue) do
+                    if D().Units[q] then pl.food = pl.food + D().Units[q].food end
+                end
             end
         end
     end
@@ -618,8 +721,10 @@ end
 
 local function Armor(a) return a * 0.06 / (1 + 0.06 * a) end
 
-local function Strike(st, a, t, damage, ranged)
-    local dmg = math.max(1, math.floor(damage * (1 - Armor(Def(t).armor or 0)) + 0.5))
+local function Strike(st, a, t, damage, ranged, attackType)
+    local armorType = Def(t).armorType or (t.kind == "unit" and "medium" or "fortified")
+    local mult = (D().DAMAGE[attackType or "normal"] or {})[armorType] or 1
+    local dmg = math.max(1, math.floor(damage * mult * (1 - Armor(E.ArmorOf(st, t))) + 0.5))
     t.hp = t.hp - dmg
     t.lastHitBy = a.id
     Emit("hit", { id = a.id, target = t.id, amount = dmg, ranged = ranged })
@@ -627,6 +732,9 @@ local function Strike(st, a, t, damage, ranged)
         Emit("death", { id = t.id, owner = t.owner, what = t.kind, type = t.type })
         if t.kind == "building" then
             -- Units still training there are lost; the food they held frees up.
+            for _, q in ipairs(t.queue or {}) do
+                if q:sub(1, 2) == "r:" and st.players[t.owner] then st.players[t.owner].busy[q:sub(3)] = nil end
+            end
             t.queue = {}
         end
         Remove(st, t)
@@ -635,7 +743,7 @@ end
 
 local function Hit(st, u, t)
     local d = D().Units[u.type]
-    Strike(st, u, t, d.damage, d.range > 1.5)
+    Strike(st, u, t, E.Damage(st, u), d.range > 1.5, d.attackType)
 end
 
 -- Chase and hit a target. False when it's gone.
@@ -643,7 +751,7 @@ local function Fight(st, u, t, dt)
     if not t or t.dead or t.hp <= 0 then return false end
     local d = D().Units[u.type]
     local gap = Gap(u, t)
-    if gap <= d.range then
+    if gap <= E.Range(st, u) then
         u.path = nil
         local tx, ty = Center(t)
         u.facing = ATAN2(ty - u.y, tx - u.x)
@@ -756,7 +864,7 @@ local function Gather(st, u, o, dt)
             u.work = u.work - dt
             u.facing = ATAN2(ty + 0.5 - u.y, tx + 0.5 - u.x)
             if u.work <= 0 then
-                local n = math.min(D().CARRY, st.trees[tree])
+                local n = math.min(D().CARRY + Bonus(st, u.owner, "lumber"), st.trees[tree])
                 st.trees[tree] = st.trees[tree] - n
                 if st.trees[tree] <= 0 then
                     st.trees[tree] = nil
@@ -901,6 +1009,10 @@ local function UnitStep(st, u, dt)
             Emit("backToWork", { id = u.id, owner = u.owner })
         end
     end
+    if u.type == "headhunter" and u.hp < u.maxHp then
+        local regen = Bonus(st, u.owner, "trollRegen")
+        if regen > 0 then u.hp = math.min(u.maxHp, u.hp + regen * dt) end
+    end
     if u.inside and not u.order then return end -- sitting in a burrow
     -- Done: the next Shift-queued order.
     if not u.order and u.queue then
@@ -953,8 +1065,8 @@ local function UnitStep(st, u, dt)
         if not u.path then PathTo(st, u, o.x, o.y) end
         if Follow(st, u, dt) then u.order, u.path = nil, nil end
     elseif o.type == "hold" then
-        local t = Nearest(st, u, d.range)
-        if t and Gap(u, t) <= d.range and u.cd <= 0 then
+        local t = Nearest(st, u, E.Range(st, u))
+        if t and Gap(u, t) <= E.Range(st, u) and u.cd <= 0 then
             local tx, ty = Center(t)
             u.facing = ATAN2(ty - u.y, tx - u.x)
             u.cd = d.cooldown
@@ -1035,13 +1147,40 @@ local function BuildingStep(st, b, dt)
             local cx, cy = Center(b)
             local t = Nearest(st, { x = cx, y = cy, owner = b.owner, kind = "unit" }, d.attack.range + b.size / 2)
             if t then
-                Strike(st, b, t, d.attack.damage, true)
+                Strike(st, b, t, d.attack.damage, true, d.attack.type)
                 b.cd = d.attack.cooldown / (gar and #gar or 1) -- more peons, faster spears
             end
         end
     end
     local q = b.queue[1]
-    if q then
+    if q and q:sub(1, 2) == "r:" then
+        local r, time, key, level = E.QueueItem(st, b, q)
+        b.trainT = b.trainT + dt
+        if b.trainT >= time then
+            table.remove(b.queue, 1)
+            b.trainT = 0
+            local pl = st.players[b.owner]
+            pl.up[key] = level
+            pl.busy[key] = nil
+            if r.upgrade then
+                -- The building becomes the next one (Keep, Castle, Guard Tower...).
+                local old = b.maxHp
+                b.type = r.upgrade
+                b.maxHp = Def(b).hp
+                b.hp = math.min(b.maxHp, b.hp + (b.maxHp - old))
+            end
+            if r.effect and r.effect.gruntHp then
+                for _, id in ipairs(st.list) do
+                    local e = st.ents[id]
+                    if e and e.owner == b.owner and e.type == "grunt" then
+                        e.maxHp = E.MaxHp(st, b.owner, "grunt")
+                        e.hp = e.hp + r.effect.gruntHp
+                    end
+                end
+            end
+            Emit("researched", { id = b.id, owner = b.owner, key = key, level = level, upgrade = r.upgrade })
+        end
+    elseif q then
         b.trainT = b.trainT + dt
         if b.trainT >= D().Units[q].time then
             local cx, cy = Center(b)
@@ -1206,6 +1345,8 @@ function E.Command(st, p, cmd)
         for _, b in ipairs(f.builds) do if b == cmd.btype then allowed = true end end
         if not allowed then return false, "your race can't build that" end
         local bd = D().Buildings[cmd.btype]
+        local miss = E.Missing(st, p, bd.requires)
+        if miss then return false, "requires " .. miss end
         if not E.CanAfford(st, p, bd.cost) then return false, "not enough gold or lumber" end
         if not E.CanPlace(st, cmd.x, cmd.y, bd.size) or E.Planned(st, p, cmd.x, cmd.y, bd.size) then
             return false, "can't build there"
@@ -1225,6 +1366,8 @@ function E.Command(st, p, cmd)
         if not ok then return false, "can't train that here" end
         if #b.queue >= 5 then return false, "the queue is full" end
         local ud = D().Units[cmd.utype]
+        local miss = E.Missing(st, p, ud.requires)
+        if miss then return false, "requires " .. miss end
         if not E.CanAfford(st, p, ud.cost) then return false, "not enough gold or lumber" end
         E.Food(st)
         local pl = st.players[p]
@@ -1233,14 +1376,35 @@ function E.Command(st, p, cmd)
         table.insert(b.queue, cmd.utype)
         E.Food(st)
         return true
+    elseif t == "research" then
+        local b = st.ents[cmd.building]
+        if not b or b.owner ~= p or b.kind ~= "building" or b.progress < 1 then return false, "not ready" end
+        local ok, why = E.CanResearch(st, p, cmd.key, b)
+        if not ok then return false, why end
+        if #b.queue >= 5 then return false, "the queue is full" end
+        local r = D().Research[cmd.key]
+        local cost = r.cost[E.Level(st, p, cmd.key) + 1]
+        if not E.CanAfford(st, p, cost) then return false, "not enough gold or lumber" end
+        local pl = st.players[p]
+        pl.gold, pl.lumber = pl.gold - cost[1], pl.lumber - cost[2]
+        pl.busy[cmd.key] = true
+        table.insert(b.queue, "r:" .. cmd.key)
+        return true
     elseif t == "cancel" then
         local b = st.ents[cmd.building]
         if not b or b.owner ~= p or #b.queue == 0 then return false end
-        local ut = table.remove(b.queue)
+        local q = table.remove(b.queue)
         if #b.queue == 0 then b.trainT = 0 end
-        local ud = D().Units[ut]
         local pl = st.players[p]
-        pl.gold, pl.lumber = pl.gold + ud.cost[1], pl.lumber + ud.cost[2]
+        local cost
+        if q:sub(1, 2) == "r:" then
+            local key = q:sub(3)
+            cost = D().Research[key].cost[E.Level(st, p, key) + 1]
+            pl.busy[key] = nil
+        else
+            cost = D().Units[q].cost
+        end
+        pl.gold, pl.lumber = pl.gold + cost[1], pl.lumber + cost[2]
         E.Food(st)
         return true
     elseif t == "rally" then
@@ -1266,7 +1430,10 @@ function E.Hash(st)
             c = c + #(e.order and e.order.type or "") * id
         end
     end
-    for i, p in ipairs(st.players) do a = a + i * (p.gold * 2 + p.lumber * 5) end
+    for i, p in ipairs(st.players) do
+        a = a + i * (p.gold * 2 + p.lumber * 5)
+        for key, level in pairs(p.up or {}) do c = c + #key * level * i end
+    end
     for i, n in pairs(st.trees) do c = c + i % 97 * n end
     return string.format("%.6f:%.6f:%d:%d", a, b, c, #st.list)
 end

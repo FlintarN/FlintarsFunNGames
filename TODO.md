@@ -70,17 +70,9 @@ then steps 1, 2, 3, 6, 7; Night Elf and Undead at the very end. Every step
 comes with engine tests, the AI using it, the Rules text and docs. Models come from the game files
 (M2 only), picked by the user from /wcgallery.
 
-### 1. Tech and upgrades (the base every later step needs)
-- [ ] Tech tree: buildings and units can require other buildings (e.g. Rifleman needs a Blacksmith); the command card shows greyed-out buttons with "Requires ..." tooltips.
-- [ ] Research queue in buildings (like training: cost, time, cancel and refund), one research at a time per building.
-- [ ] Hall upgrades: Town Hall > Keep > Castle, Great Hall > Stronghold > Fortress (unlock tier 2 and 3).
-- [ ] Human Blacksmith: Iron Forged Swords, Black Gunpowder, Iron Plating (3 levels each).
-- [ ] Human Lumber Mill: Improved Lumber Harvesting (2 levels), Masonry (building armour, 3 levels).
-- [ ] Orc War Mill (lumber and gold drop-off, the Orc Lumber Mill): Steel Melee Weapons, Steel Ranged Weapons, Steel Armor, Reinforced Defenses.
-- [ ] Scout Tower > Guard Tower / Cannon Tower / Arcane Tower; Orc Watch Tower; Spiked Barricades for the Burrow.
-- [ ] Damage and armour types (normal, pierce, siege, magic, hero vs light, medium, heavy, fortified, unarmored, hero) with the Warcraft III table.
-- [ ] Unit upgrades: Defend (Footman), Long Rifles (Rifleman), Berserker Strength (Grunt), Troll Regeneration, Berserker Upgrade (Headhunter).
-- [ ] The AI researches upgrades and upgrades its hall.
+### 1. Tech and upgrades
+- [ ] Cannon Tower and Arcane Tower (need a Workshop / Arcane Sanctum: step 3); Spiked Barricades; Defend for Footmen.
+- [ ] Pick models for the new buildings (Keep, Castle, Stronghold, Fortress, Blacksmith, War Mill, Scout Tower) in /wcgallery.
 
 ### 2. Heroes
 - [ ] Altars train heroes (the first one costs less; at most 3, the next one needs the next hall tier); revive dead heroes at the altar.

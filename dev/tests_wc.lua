@@ -86,7 +86,10 @@ function WcEngineTests()
     local rax
     for _, id in ipairs(st.list) do if st.ents[id].type == "barracks" then rax = st.ents[id] end end
     check(rax and rax.progress >= 1, "wc: barracks built")
-    local ok, why
+    local ok, why = E.Command(st, 1, { type = "train", building = rax.id, utype = "rifleman" })
+    check(not ok and why == "requires Blacksmith", "wc: riflemen need a Blacksmith (" .. tostring(why) .. ")")
+    local sx, sy = WC.AI.FindSpot(st, x1 - 6, y1 + 6, 3)
+    E.SpawnBuilding(st, 1, "blacksmith", sx, sy, true)
     for _ = 1, 6 do ok, why = E.Command(st, 1, { type = "train", building = rax.id, utype = "rifleman" }) end
     check(not ok and why and why:find("farms") ~= nil, "wc: no food, no rifleman (" .. tostring(why) .. ")")
     E.Command(st, 1, { type = "cancel", building = rax.id })
@@ -633,4 +636,105 @@ function WcFogTests()
     check(view:Sees(theirs), "wc fog: a building once seen stays on the map")
     local i = math.floor(ty) * st.w + math.floor(tx)
     check(view.explored[i] and not view.vis[i], "wc fog: explored but out of sight (dimmed)")
+end
+
+-- Step 1: tech. Requirements, research, tiers, tower upgrade, damage types.
+function WcTechTests()
+    local st = E.New({ factions = { "human", "orc" }, seed = 91 })
+    local pl = st.players[1]
+    pl.gold, pl.lumber = 99999, 99999
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local function Spot(dx, dy, size) return WC.AI.FindSpot(st, hx + dx, hy + dy, size) end
+    local function Done(btype, dx, dy)
+        local x, y = Spot(dx, dy, WC.Buildings[btype].size)
+        return E.SpawnBuilding(st, 1, btype, x, y, true)
+    end
+    local function Wait(b, seconds)
+        for _ = 1, math.floor(seconds / 0.05) do
+            E.Step(st, 0.05)
+            if #b.queue == 0 then return end
+        end
+    end
+    -- Requirements.
+    local smith = Done("blacksmith", 8, 0)
+    check(E.Command(st, 1, { type = "research", building = smith.id, key = "swords" }), "wc tech: Iron Forged Swords can be researched")
+    local ok, why = E.Command(st, 1, { type = "research", building = smith.id, key = "swords" })
+    check(not ok and why == "already being researched", "wc tech: not twice at once (" .. tostring(why) .. ")")
+    Wait(smith, 60)
+    check(E.Level(st, 1, "swords") == 1, "wc tech: level 1 done")
+    ok, why = E.Command(st, 1, { type = "research", building = smith.id, key = "swords" })
+    check(not ok and why == "requires Keep", "wc tech: level 2 needs a Keep (" .. tostring(why) .. ")")
+    -- Swords make footmen hit harder.
+    local fm = E.Spawn(st, 1, "footman", 20, 20)
+    check(E.Damage(st, fm) > WC.Units.footman.damage, "wc tech: footmen deal more damage after Swords")
+    -- Town Hall > Keep (more health), Castle needs an altar.
+    E.Command(st, 1, { type = "research", building = hall.id, key = "keep" })
+    Wait(hall, 80)
+    check(hall.type == "keep" and hall.maxHp == WC.Buildings.keep.hp, "wc tech: the Town Hall became a Keep")
+    check(E.Has(st, 1, "town_hall"), "wc tech: a Keep counts as a Town Hall")
+    ok, why = E.Command(st, 1, { type = "research", building = hall.id, key = "castle" })
+    check(not ok and why == "requires Altar of Kings", "wc tech: a Castle needs an Altar (" .. tostring(why) .. ")")
+    Done("altar_kings", -8, 6)
+    check(E.Command(st, 1, { type = "research", building = hall.id, key = "castle" }), "wc tech: with an altar, Castle")
+    -- Cancel gives the money back and frees the research.
+    local gold = pl.gold
+    E.Command(st, 1, { type = "cancel", building = hall.id })
+    check(pl.gold == gold + WC.Research.castle.cost[1][1] and not pl.busy.castle, "wc tech: cancel refunds research")
+    -- Scout Tower: no attack; Guard Tower upgrade needs a Lumber Mill.
+    local scout = Done("scout_tower", -6, -6)
+    ok, why = E.Command(st, 1, { type = "research", building = scout.id, key = "guard_tower" })
+    check(not ok and why == "requires Lumber Mill", "wc tech: Guard Tower needs a Lumber Mill (" .. tostring(why) .. ")")
+    Done("lumber_mill", 6, 8)
+    check(E.Command(st, 1, { type = "research", building = scout.id, key = "guard_tower" }), "wc tech: tower upgrade starts")
+    Wait(scout, 40)
+    check(scout.type == "guard_tower" and WC.Buildings[scout.type].attack, "wc tech: now a Guard Tower that shoots")
+    -- Harvest: more lumber a trip.
+    local mill
+    for _, id in ipairs(st.list) do if st.ents[id].type == "lumber_mill" then mill = st.ents[id] end end
+    E.Command(st, 1, { type = "research", building = mill.id, key = "harvest" })
+    Wait(mill, 50)
+    check(E.Bonus(st, 1, "lumber") == 5, "wc tech: workers carry 5 more lumber")
+    -- Damage types: a rifleman's shot hurts a peon (medium) more than a farm (fortified).
+    local rifle = E.Spawn(st, 1, "rifleman", 30, 20)
+    local farm = Done("farm", -10, -2)
+    local peon = E.Spawn(st, 2, "peon", 31, 20)
+    local d = WC.DAMAGE
+    check(d.pierce.fortified < 0.5 and d.normal.medium > 1, "wc tech: the Warcraft III damage table")
+    check(E.Damage(st, rifle) * d.pierce.medium > E.Damage(st, rifle) * d.pierce.fortified, "wc tech: pierce is poor against buildings")
+    -- Requirements in the build menu data: Watch Towers need a War Mill.
+    local st2 = E.New({ factions = { "orc", "human" }, seed = 5 })
+    st2.players[1].gold, st2.players[1].lumber = 9999, 9999
+    local peon2
+    for _, id in ipairs(st2.list) do if st2.ents[id].owner == 1 and st2.ents[id].kind == "unit" then peon2 = st2.ents[id] break end end
+    local h2 = E.Hall(st2, 1)
+    local cx, cy = E.Center(h2)
+    local x, y = WC.AI.FindSpot(st2, cx + 6, cy + 6, 2)
+    ok, why = E.Command(st2, 1, { type = "build", unit = peon2.id, btype = "watch_tower", x = x, y = y })
+    check(not ok and why == "requires War Mill", "wc tech: Watch Towers need a War Mill (" .. tostring(why) .. ")")
+end
+
+-- The computer researches on Normal.
+function WcTechAI()
+    local st = E.New({ factions = { "human", "orc" }, seed = 12, difficulty = "normal" })
+    for _ = 1, 20 * 60 * 12 do -- 12 minutes
+        E.Step(st, 0.05)
+        if math.floor(st.time * 20 + 0.5) % 20 == 0 then
+            WC.AI.Think(st, 1)
+            WC.AI.Think(st, 2)
+        end
+        if st.over then break end
+    end
+    local any = 0
+    for p = 1, 2 do for _, level in pairs(st.players[p].up) do any = any + level end end
+    local info = {}
+    for p = 1, 2 do
+        local c = E.Count(st, p)
+        local b = {}
+        for k, n in pairs(c.buildings) do table.insert(b, k .. "=" .. n) end
+        table.sort(b)
+        table.insert(info, "p" .. p .. ": " .. table.concat(b, ",") .. " gold " .. math.floor(st.players[p].gold)
+            .. " lumber " .. math.floor(st.players[p].lumber))
+    end
+    check(any > 0, "wc tech: the computer researched something (" .. any .. " levels; " .. table.concat(info, "; ") .. ")")
 end

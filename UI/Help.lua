@@ -229,6 +229,14 @@ H.RULES = {
         { "Call to Arms", "Human Town Hall: Call to Arms (C) rings the alarm. Peasants nearby run to the hall and "
             .. "fight as Militia for 45 seconds. Orc: Battle Stations (B) sends peons into the burrows (4 each), "
             .. "and burrows with peons throw spears. Back to Work (W) ends it early." },
+        { "Tech", "Upgrade your hall (U): Town Hall > Keep > Castle, Great Hall > Stronghold > Fortress. Some "
+            .. "things need other buildings first (a greyed-out button says what): Riflemen a Blacksmith, "
+            .. "Headhunters a War Mill, a Castle an Altar. Research in buildings like training: weapons and armour "
+            .. "(Blacksmith, War Mill, three levels), lumber and masonry (Lumber Mill), Long Rifles, Berserker "
+            .. "Strength, Troll Regeneration. A Scout Tower sees far; upgrade it (G) to a Guard Tower that shoots." },
+        { "Damage types", "As in Warcraft III: normal attacks are good against medium armour (workers, "
+            .. "Riflemen), pierce (Riflemen, Headhunters, towers) against light and poor against buildings. "
+            .. "Buildings are fortified." },
         { "Fog of war", "You only see around your own units and buildings. Black is ground you've never "
             .. "seen; dim is ground you've seen, but nothing of yours is there now. Enemy buildings you've found "
             .. "stay on the map." },

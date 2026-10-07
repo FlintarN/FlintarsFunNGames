@@ -28,6 +28,8 @@ local BUILDING_ART = {
     town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks", guard_tower = "WcFarm", altar_kings = "WcFarm",
     watch_tower = "WcBurrow", altar_storms = "WcBurrow",
     great_hall = "WcGreatHall", orc_burrow = "WcBurrow", orc_barracks = "WcOrcBarracks", gold_mine = "WcMine",
+    keep = "WcTownHall", castle = "WcTownHall", stronghold = "WcGreatHall", fortress = "WcGreatHall",
+    blacksmith = "WcBarracks", war_mill = "WcOrcBarracks", scout_tower = "WcFarm",
 }
 
 local function WC() return ns.WC end
@@ -391,6 +393,7 @@ function P.New(parent, kind)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
+        D = true, E = true, U = true,
         L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
@@ -803,6 +806,11 @@ function P:Events(events)
                 self:Say("The enemy sounds the alarm!")
             end
             W.PlaySound("RAID_WARNING")
+        elseif ev.kind == "researched" and ev.owner == ME then
+            local r = WC().Research[ev.key]
+            self:Say(ev.upgrade and (WC().Buildings[ev.upgrade].name .. " ready")
+                or ((r.names and r.names[ev.level] or r.name) .. " researched"))
+            W.PlaySound("IG_MAINMENU_OPTION")
         elseif ev.kind == "trained" and ev.owner == ME then
             W.PlaySound("U_CHAT_SCROLL_BUTTON")
         elseif ev.kind == "built" and ev.owner == ME then
@@ -1187,6 +1195,13 @@ function P:StartPlace(btype)
     self.targeting = nil
     self.ghost:SetTexture(ART .. BUILDING_ART[btype])
     self:Say("Click where to build (right-click cancels)")
+end
+
+function P:Research(key)
+    local b = self:Selected()[1]
+    if not b then return end
+    local ok, why = self:Cmd({ type = "research", building = b.id, key = key })
+    if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
 end
 
 function P:Train(utype)
@@ -1998,10 +2013,13 @@ function P:DrawPanel()
                 status = string.format("Under construction: %d%%", math.floor(first.progress * 100))
                 if first.paused then status = status .. " (paused: right-click it with a worker to carry on)" end
             elseif first.queue[1] then
-                local ud = WC().Units[first.queue[1]]
-                status = string.format("Training %s: %d%%", ud.name, math.floor(first.trainT / ud.time * 100))
+                local d, time, key, level = E().QueueItem(self.st, first, first.queue[1])
+                local what = key and (d.names and d.names[level] or d.name) or d.name
+                status = string.format("%s %s: %d%%", key and "Researching" or "Training", what,
+                    math.floor(first.trainT / time * 100))
                 for i, q in ipairs(first.queue) do
-                    self.queueButtons[i].icon:SetTexture(WC().Units[q].icon)
+                    local qd = E().QueueItem(self.st, first, q)
+                    self.queueButtons[i].icon:SetTexture(qd.icon)
                     self.queueButtons[i]:SetShown(first.owner == ME)
                 end
             elseif first.owner == ME and E().Def(first).trains then
@@ -2046,8 +2064,10 @@ function P:DrawCommands(sel)
                 for _, ut in ipairs(bd.trains) do table.insert(names, WC().Units[ut].name) end
                 tip = tip .. " Trains " .. table.concat(names, " and ") .. "."
             end
+            local miss = E().Missing(st, ME, bd.requires)
+            if miss then tip = "|cffff6060Requires " .. miss .. ".|r " .. tip end
             Add({ icon = bd.icon, key = bd.hotkey, title = "Build " .. bd.name .. " (" .. bd.hotkey .. ")", tip = tip,
-                cost = bd.cost, action = function() self.menu = nil self:StartPlace(bt) end })
+                cost = bd.cost, enabled = miss == nil, action = function() self.menu = nil self:StartPlace(bt) end })
         end
         list[8] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands (or right-click).",
             action = function() self.menu = nil end }
@@ -2075,10 +2095,26 @@ function P:DrawCommands(sel)
     if b then
         for _, ut in ipairs(E().Def(b).trains or {}) do
             local ud = WC().Units[ut]
+            local miss = E().Missing(st, ME, ud.requires)
+            local tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food,
+                E().MaxHp(st, ME, ut), ud.damage, ud.range > 1.5 and ", ranged" or "")
+            if miss then tip = "|cffff6060Requires " .. miss .. ".|r " .. tip end
             Add({ icon = ud.icon, key = ud.hotkey, title = "Train " .. ud.name .. " (" .. ud.hotkey .. ")", cost = ud.cost,
-                tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food, ud.hp, ud.damage,
-                    ud.range > 1.5 and ", ranged" or ""),
-                action = function() self:Train(ut) end })
+                tip = tip, enabled = miss == nil, action = function() self:Train(ut) end })
+        end
+        -- Research and upgrades done here.
+        for _, key in ipairs(WC().AI.RESEARCH) do
+            local r = WC().Research[key]
+            local level = E().Level(st, ME, key) + 1
+            if r.building == b.type and level <= (r.levels or 1) then
+                local name = r.names and r.names[level] or r.name
+                local ok, why = E().CanResearch(st, ME, key, b)
+                local tip = Cost(r.cost[level]) .. ". " .. (r.text or "")
+                if (r.levels or 1) > 1 then tip = tip .. string.format(" (level %d of %d)", level, r.levels) end
+                if not ok then tip = "|cffff6060" .. why:sub(1, 1):upper() .. why:sub(2) .. ".|r " .. tip end
+                Add({ icon = r.icon, key = r.hotkey, title = name .. " (" .. r.hotkey .. ")", cost = r.cost[level],
+                    tip = tip, enabled = ok, action = function() self:Research(key) end })
+            end
         end
         local fac = WC().Factions[st.players[ME].faction]
         if E().Def(b).hall or (E().Def(b).garrison and fac.alarm == "battleStations") then

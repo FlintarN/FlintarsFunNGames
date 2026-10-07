@@ -62,10 +62,121 @@ B.gold_mine = { name = "Gold Mine", hp = 1, armor = 0, size = 3, neutral = true,
 
 local F = {}
 ns.WC.Factions = F
-F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm", barracks = "barracks", tower = "guard_tower", alarm = "callToArms",
-    melee = "footman", ranged = "rifleman", builds = { "farm", "barracks", "lumber_mill", "guard_tower", "altar_kings", "town_hall" } }
-F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", tower = "watch_tower", alarm = "battleStations",
-    melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "watch_tower", "altar_storms", "great_hall" } }
+F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm", barracks = "barracks", tower = "scout_tower",
+    smith = "blacksmith", mill = "lumber_mill", altar = "altar_kings", alarm = "callToArms",
+    melee = "footman", ranged = "rifleman",
+    builds = { "farm", "barracks", "lumber_mill", "blacksmith", "scout_tower", "altar_kings", "town_hall" } }
+F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks",
+    tower = "watch_tower", smith = "war_mill", mill = "war_mill", altar = "altar_storms", alarm = "battleStations",
+    melee = "grunt", ranged = "headhunter",
+    builds = { "orc_burrow", "orc_barracks", "war_mill", "watch_tower", "altar_storms", "great_hall" } }
+
+---------------------------------------------------------------------------
+-- Tech (Warcraft III): tiers, requirements, research, damage and armour
+---------------------------------------------------------------------------
+-- Hall tiers: a Keep counts as a Town Hall, a Castle as both (counts).
+B.keep = { name = "Keep", hp = 2000, armor = 5, size = 4, cost = { 0, 0 }, time = 0, food = 12,
+    trains = { "peasant" }, dropoff = true, hall = true, counts = { "town_hall" }, icon = I .. "INV_BannerPVP_02" }
+B.castle = { name = "Castle", hp = 2500, armor = 5, size = 4, cost = { 0, 0 }, time = 0, food = 12,
+    trains = { "peasant" }, dropoff = true, hall = true, counts = { "town_hall", "keep" }, icon = I .. "INV_BannerPVP_02" }
+B.stronghold = { name = "Stronghold", hp = 2000, armor = 5, size = 4, cost = { 0, 0 }, time = 0, food = 12,
+    trains = { "peon" }, dropoff = true, hall = true, counts = { "great_hall" }, icon = I .. "INV_BannerPVP_01" }
+B.fortress = { name = "Fortress", hp = 2500, armor = 5, size = 4, cost = { 0, 0 }, time = 0, food = 12,
+    trains = { "peon" }, dropoff = true, hall = true, counts = { "great_hall", "stronghold" }, icon = I .. "INV_BannerPVP_01" }
+-- Upgrade buildings.
+B.blacksmith = { hotkey = "S", name = "Blacksmith", hp = 1200, armor = 5, size = 3, cost = { 140, 60 }, time = 40, food = 0,
+    requires = { "town_hall" }, icon = I .. "Trade_BlackSmithing" }
+B.war_mill = { hotkey = "M", name = "War Mill", hp = 1000, armor = 5, size = 3, cost = { 205, 0 }, time = 40, food = 0,
+    dropoff = "lumber", requires = { "great_hall" }, icon = I .. "INV_Hammer_05" }
+-- Scout Tower: sees far, no attack; upgrades to a Guard Tower (needs a Lumber Mill).
+B.scout_tower = { hotkey = "T", name = "Scout Tower", hp = 300, armor = 0, size = 2, cost = { 30, 20 }, time = 25, food = 0,
+    icon = I .. "INV_Misc_Spyglass_02" }
+B.guard_tower.cost = { 100, 70 } -- (as the Scout Tower plus its upgrade)
+B.watch_tower.requires = { "war_mill" }
+
+-- Units: who needs what.
+U.rifleman.requires = { "blacksmith" }
+U.headhunter.requires = { "war_mill" }
+
+-- Damage and armour types, and the Warcraft III table.
+for _, x in ipairs({ { "peasant", "normal", "medium" }, { "footman", "normal", "heavy" }, { "rifleman", "pierce", "medium" },
+    { "militia", "normal", "heavy" }, { "peon", "normal", "medium" }, { "grunt", "normal", "heavy" },
+    { "headhunter", "pierce", "medium" } }) do
+    U[x[1]].attackType, U[x[1]].armorType = x[2], x[3]
+end
+B.guard_tower.attack.type = "pierce"
+B.watch_tower.attack.type = "pierce"
+B.orc_burrow.attack.type = "pierce"
+ns.WC.DAMAGE = {
+    normal = { light = 1, medium = 1.5, heavy = 1, fortified = 0.7, unarmored = 1 },
+    pierce = { light = 2, medium = 0.75, heavy = 1, fortified = 0.35, unarmored = 1.5 },
+    siege = { light = 1, medium = 0.5, heavy = 1, fortified = 1.5, unarmored = 1.5 },
+}
+
+-- Research, done in a building like training (one at a time per building).
+-- Per level: cost, time, requires (buildings). upgrade = the building it turns
+-- into. effect per level: melee/ranged (+share of damage), armor (units),
+-- buildingArmor, lumber (per trip), rifleRange, gruntHp, gruntDamage,
+-- trollRegen (health per second).
+local R = {}
+ns.WC.Research = R
+R.keep = { name = "Upgrade to Keep", building = "town_hall", upgrade = "keep", hotkey = "U", levels = 1,
+    cost = { { 320, 210 } }, time = { 60 }, icon = I .. "INV_BannerPVP_02",
+    text = "More health; Steel and Advanced upgrades." }
+R.castle = { name = "Upgrade to Castle", building = "keep", upgrade = "castle", hotkey = "U", levels = 1,
+    cost = { { 360, 210 } }, time = { 70 }, requires = { { "altar_kings" } }, icon = I .. "INV_BannerPVP_02",
+    text = "More health; Mithril and Imbued upgrades." }
+R.stronghold = { name = "Upgrade to Stronghold", building = "great_hall", upgrade = "stronghold", hotkey = "U", levels = 1,
+    cost = { { 315, 190 } }, time = { 60 }, icon = I .. "INV_BannerPVP_01", text = "More health; Thorium upgrades." }
+R.fortress = { name = "Upgrade to Fortress", building = "stronghold", upgrade = "fortress", hotkey = "U", levels = 1,
+    cost = { { 325, 190 } }, time = { 70 }, requires = { { "altar_storms" } }, icon = I .. "INV_BannerPVP_01",
+    text = "More health; Arcanite upgrades." }
+R.guard_tower = { name = "Upgrade to Guard Tower", building = "scout_tower", upgrade = "guard_tower", hotkey = "G", levels = 1,
+    cost = { { 70, 50 } }, time = { 30 }, requires = { { "lumber_mill" } }, icon = I .. "INV_Misc_Spyglass_03",
+    text = "A tower that shoots enemies in range." }
+R.swords = { names = { "Iron Forged Swords", "Steel Forged Swords", "Mithril Forged Swords" }, building = "blacksmith",
+    hotkey = "S", levels = 3, cost = { { 100, 50 }, { 175, 175 }, { 250, 300 } }, time = { 45, 55, 65 },
+    requires = { nil, { "keep" }, { "castle" } }, effect = { melee = 0.15 }, icon = I .. "INV_Sword_04",
+    text = "Melee units deal 15% more damage." }
+R.gunpowder = { names = { "Black Gunpowder", "Refined Gunpowder", "Imbued Gunpowder" }, building = "blacksmith",
+    hotkey = "G", levels = 3, cost = { { 100, 50 }, { 175, 175 }, { 250, 300 } }, time = { 45, 55, 65 },
+    requires = { nil, { "keep" }, { "castle" } }, effect = { ranged = 0.15 }, icon = I .. "INV_Misc_Ammo_Gunpowder_01",
+    text = "Ranged units deal 15% more damage." }
+R.plating = { names = { "Iron Plating", "Steel Plating", "Mithril Plating" }, building = "blacksmith",
+    hotkey = "A", levels = 3, cost = { { 125, 75 }, { 150, 175 }, { 175, 275 } }, time = { 45, 55, 65 },
+    requires = { nil, { "keep" }, { "castle" } }, effect = { armor = 2 }, icon = I .. "INV_Chest_Plate06",
+    text = "Your army's armour +2." }
+R.harvest = { names = { "Improved Lumber Harvesting", "Advanced Lumber Harvesting" }, building = "lumber_mill",
+    hotkey = "L", levels = 2, cost = { { 100, 50 }, { 175, 100 } }, time = { 40, 50 }, requires = { nil, { "keep" } },
+    effect = { lumber = 5 }, icon = I .. "INV_Axe_02", text = "Workers carry 5 more lumber a trip." }
+R.masonry = { names = { "Improved Masonry", "Advanced Masonry", "Imbued Masonry" }, building = "lumber_mill",
+    hotkey = "M", levels = 3, cost = { { 125, 25 }, { 150, 75 }, { 175, 125 } }, time = { 45, 55, 65 },
+    requires = { nil, { "keep" }, { "castle" } }, effect = { buildingArmor = 2 }, icon = I .. "INV_Stone_15",
+    text = "Buildings' armour +2." }
+R.long_rifles = { name = "Long Rifles", building = "barracks", hotkey = "L", levels = 1, cost = { { 75, 125 } },
+    time = { 40 }, requires = { { "blacksmith" } }, effect = { rifleRange = 1.5 }, icon = I .. "INV_Weapon_Rifle_07",
+    text = "Riflemen shoot farther." }
+R.melee_o = { names = { "Steel Melee Weapons", "Thorium Melee Weapons", "Arcanite Melee Weapons" }, building = "war_mill",
+    hotkey = "W", levels = 3, cost = { { 100, 50 }, { 175, 175 }, { 250, 300 } }, time = { 45, 55, 65 },
+    requires = { nil, { "stronghold" }, { "fortress" } }, effect = { melee = 0.15 }, icon = I .. "INV_Axe_09",
+    text = "Melee units deal 15% more damage." }
+R.ranged_o = { names = { "Steel Ranged Weapons", "Thorium Ranged Weapons", "Arcanite Ranged Weapons" }, building = "war_mill",
+    hotkey = "R", levels = 3, cost = { { 100, 50 }, { 175, 175 }, { 250, 300 } }, time = { 45, 55, 65 },
+    requires = { nil, { "stronghold" }, { "fortress" } }, effect = { ranged = 0.15 }, icon = I .. "INV_Spear_06",
+    text = "Ranged units deal 15% more damage." }
+R.armor_o = { names = { "Steel Armor", "Thorium Armor", "Arcanite Armor" }, building = "war_mill",
+    hotkey = "A", levels = 3, cost = { { 150, 75 }, { 225, 175 }, { 300, 275 } }, time = { 45, 55, 65 },
+    requires = { nil, { "stronghold" }, { "fortress" } }, effect = { armor = 2 }, icon = I .. "INV_Shield_05",
+    text = "Your army's armour +2." }
+R.defenses = { name = "Reinforced Defenses", building = "war_mill", hotkey = "D", levels = 1, cost = { { 125, 200 } },
+    time = { 50 }, requires = { { "stronghold" } }, effect = { buildingArmor = 3 }, icon = I .. "INV_Shield_10",
+    text = "Buildings' armour +3." }
+R.berserker = { name = "Berserker Strength", building = "orc_barracks", hotkey = "B", levels = 1, cost = { { 100, 150 } },
+    time = { 45 }, requires = { { "stronghold" } }, effect = { gruntHp = 100, gruntDamage = 3 }, icon = I .. "Ability_Racial_BloodRage",
+    text = "Grunts +100 health and +3 damage." }
+R.regeneration = { name = "Troll Regeneration", building = "orc_barracks", hotkey = "E", levels = 1, cost = { { 100, 100 } },
+    time = { 40 }, requires = { { "stronghold" } }, effect = { trollRegen = 2 }, icon = I .. "Spell_Nature_Regenerate",
+    text = "Troll Headhunters heal 2 health a second." }
 
 -- Art from the WoW game files (file ids from the community listfile; M2
 -- files only: WMO files crash the client in a model frame). World models are
@@ -90,6 +201,13 @@ ns.WC.ART = {
         barracks = { file = 189445 },                             -- duskwood/duskwoodbarn
         lumber_mill = { file = 242697, fill = 0.95 },             -- redridge_lumbermill (gallery 44)
         guard_tower = { file = 2061082, tall = 2.0 },             -- 8hu_warfronts_magictower_v3 (gallery 112)
+        scout_tower = { file = 189632, tall = 2.0 },              -- elwynn/buildings/humanwatchtower (gallery 3)
+        keep = { file = 190505, fill = 1.08 },                    -- (the Town Hall's, bigger)
+        castle = { file = 190505, fill = 1.15 },
+        blacksmith = { file = 189601 },                           -- elwynn/buildings/blacksmith (gallery 5)
+        war_mill = { file = 199384 },                             -- generic/orc/tents/durotarorctent01 (gallery 22)
+        stronghold = { file = 189200, fill = 1.08 },              -- (the Great Hall's, bigger)
+        fortress = { file = 189200, fill = 1.15 },
         altar_kings = { file = 197831, fill = 0.8 },              -- generic/human/altars/altar01 (gallery 52)
         great_hall = { file = 189200 },                           -- burningsteppes/orctents/orctent
         orc_burrow = { file = 199387 },                           -- generic/orc/tents/orctent01 (gallery 24)
@@ -121,7 +239,7 @@ ns.WC.VIEW = { unit = 8, worker = 7, building = 7, hall = 9, tower = 10 }
 -- per wave; alarm: uses Call to Arms; income: gold/lumber per trip multiplier.
 ns.WC.DIFFICULTY = {
     easy = { name = "Easy", think = 2, workers = 7, firstAttack = 600, wave = 6, waveGrow = 1, waveMax = 8,
-        alarm = false, income = 1 },
+        alarm = false, income = 1, research = false },
     normal = { name = "Normal", think = 1, workers = 10, secondRax = 420, firstAttack = 360, wave = 6, waveGrow = 2,
         waveMax = 12, alarm = true, income = 1 },
     hard = { name = "Hard", think = 1, workers = 12, secondRax = 200, firstAttack = 240, wave = 5, waveGrow = 2,

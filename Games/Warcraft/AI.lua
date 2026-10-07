@@ -31,6 +31,10 @@ local function Mine(st, p)
     return E().NearestMine(st, E().Center(hall))
 end
 
+-- What the computer researches, in order of preference.
+AI.RESEARCH = { "keep", "stronghold", "guard_tower", "swords", "melee_o", "gunpowder", "ranged_o", "plating",
+    "armor_o", "harvest", "long_rifles", "berserker", "regeneration", "masonry", "defenses", "castle", "fortress" }
+
 function AI.Think(st, p)
     st.ai = st.ai or {}
     local diff = D().DIFFICULTY[st.difficulty or "normal"] or D().DIFFICULTY.normal
@@ -116,13 +120,52 @@ function AI.Think(st, p)
     elseif barracks == 1 and diff.secondRax and st.time > diff.secondRax and pl.gold > 450 then
         Build(f.barracks)
     end
+    -- The smithy (Blacksmith / War Mill): ranged units and upgrades.
+    local smith = (count.buildings[f.smith] or 0) + (count.building[f.smith] or 0)
+    if barracks >= 1 and smith == 0 and count.workers >= 7 and pl.gold > 220 then
+        if Build(f.smith) then return end
+    end
+    -- Humans also want a Lumber Mill (Guard Towers, Masonry, faster lumber).
+    if f.mill ~= f.smith then
+        local mill = (count.buildings[f.mill] or 0) + (count.building[f.mill] or 0)
+        if smith >= 1 and mill == 0 and st.time > 240 and pl.gold > 180 then
+            if Build(f.mill) then return end
+        end
+    end
+    -- Research (not on Easy): the hall's next tier after a while, then
+    -- upgrades, one at a time, keeping gold for the army.
+    if diff.research ~= false and st.time > 240 then
+        for _, id in ipairs(st.list) do
+            local b = st.ents[id]
+            if b and b.owner == p and b.kind == "building" and b.progress >= 1 and #b.queue == 0 then
+                for _, key in ipairs(AI.RESEARCH) do
+                    local r = D().Research[key]
+                    if r.building == b.type and E_.CanResearch(st, p, key, b) and (not r.upgrade or not D().Buildings[r.upgrade].hall
+                        or st.time > 420) then
+                        local cost = r.cost[E_.Level(st, p, key) + 1]
+                        if pl.gold >= cost[1] and pl.lumber >= cost[2] then
+                            E_.Command(st, p, { type = "research", building = b.id, key = key })
+                            mem.save = nil
+                        elseif pl.lumber >= cost[2] and not mem.save then
+                            -- Save up for it: soldiers wait a little.
+                            mem.save = { gold = cost[1], since = st.time }
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end
     -- A tower by the hall (not on Easy).
     local towers = (count.buildings[f.tower] or 0) + (count.building[f.tower] or 0)
+        + (f.tower == "scout_tower" and ((count.buildings.guard_tower or 0) + (count.building.guard_tower or 0)) or 0)
     if diff.alarm and barracks >= 1 and towers == 0 and st.time > 300 and pl.gold > 300 then
         if Build(f.tower) then return end
     end
-    -- Soldiers: melee and ranged in turn.
-    for _, id in ipairs(st.list) do
+    -- Soldiers: melee and ranged in turn (unless saving up for research).
+    if mem.save and (pl.gold >= mem.save.gold or st.time - mem.save.since > 25) then mem.save = nil end
+    local saving = mem.save ~= nil
+    for _, id in ipairs(saving and {} or st.list) do
         local b = st.ents[id]
         if b and b.owner == p and b.type == f.barracks and b.progress >= 1 and #b.queue < 2 then
             mem.flip = not mem.flip
