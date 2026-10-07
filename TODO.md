@@ -165,6 +165,7 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
 - [x] Warcraft III: unit voices (the real Warcraft III ones where WoW has them), combat, deaths, spells, warnings, level-up.
 
 ## Warcraft III custom games and maps (research in dev/research/, build later)
+- Player counts: 10 is the cap, not the target. Each mode at its natural size: co-op defense 4–5 players, Footmen 4, versus 4v4 or 5v5, melee 1v1/2v2.
 - [ ] Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
 - [ ] Map selection in the lobby: standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
 - [ ] Custom games, in order to be decided after the research: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.
