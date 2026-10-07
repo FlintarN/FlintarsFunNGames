@@ -36,7 +36,7 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Warcraft III: see the roadmap below.
 
-- [ ] Flaky test: "a made-up roll is not verified" (group games) failed once in ~5 runs on 2026-10-07; look at its timing.
+- [x] Flaky test "a made-up roll is not verified": 777 was sometimes a real roll; it now picks a number never rolled.
 
 ## PvP for Hearthstone and Warcraft III
 

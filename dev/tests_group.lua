@@ -104,8 +104,12 @@ end
 -- A host that makes up a roll: the players' copies flag it.
 function FakeTimelineCheck()
     local s = S.Get("deathroll")
-    table.insert(s.log, { name = "Flintar", roll = 777, lo = 1, hi = 1000 })
-    check(ns.Rolls.Saw("Flintar", 777, 1, 1000) == false, "a made-up roll is not verified")
+    -- A number the host never really rolled (by now it has rolled 1-1000
+    -- a few hundred times, so a fixed number like 777 is sometimes real).
+    local fake = 777
+    while ns.Rolls.Saw("Flintar", fake, 1, 1000) do fake = fake % 1000 + 1 end
+    table.insert(s.log, { name = "Flintar", roll = fake, lo = 1, hi = 1000 })
+    check(ns.Rolls.Saw("Flintar", fake, 1, 1000) == false, "a made-up roll is not verified")
     table.remove(s.log)
 end
 
