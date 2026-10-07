@@ -189,6 +189,16 @@ function L.Build(view, o)
     W.Tooltip(f.creeps, "Creeps", "Neutral monster camps guarding the expansions: experience, gold and items for whoever clears them.")
     f.start = W.Button(f, "Start Game", 120, function() L.Start(view) end, 26)
     f.start:SetPoint("BOTTOMRIGHT", -16, 16)
+    -- Online, a player who joined says when they're ready (the host then starts).
+    f.ready = W.Button(f, "Ready", 120, function()
+        local lobby = Lobby(view)
+        local mine
+        for _, s in ipairs(lobby.slots) do if s.kind == "me" then mine = s end end
+        ns.Session.Act(view.kind, "ready:" .. ((mine and mine.ready) and "off" or "on"))
+        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    end, 26)
+    f.ready:SetPoint("BOTTOMRIGHT", -16, 16)
+    f.ready:Hide()
 end
 
 -- Online: the session's lobby (the host shares it); nil in Single Player.
@@ -375,8 +385,9 @@ function L.Draw(view)
         r:SetShown(s ~= nil)
         if s then
             local who
-            if s.kind == "me" then who = ns.Me and ns.Me() or "You"
-            elseif s.kind == "player" then who = s.name or "Player"
+            if s.kind == "me" then
+                who = (ns.Me and ns.Me() or "You") .. ((online and not host and s.ready) and " |cff40ff40(ready)|r" or "")
+            elseif s.kind == "player" then who = (s.name or "Player") .. (s.ready and " |cff40ff40(ready)|r" or "")
             elseif s.kind == "cpu" then who = "Computer (" .. WC().DIFFICULTY[s.diff or "normal"].name .. ")"
             elseif s.kind == "open" then who = "Open"
             else who = "Closed" end
@@ -421,6 +432,16 @@ function L.Draw(view)
     local ok, why = L.CanStart(lobby)
     f.start:SetShown(host)
     f.start:SetEnabled(ok)
-    if not host then ok, why = false, "Waiting for the host to start." end
+    -- Online: Start for the host (when all are ready), Ready for the others.
+    local mine
+    for _, s in ipairs(lobby.slots) do if s.kind == "me" then mine = s end end
+    f.ready:SetShown(online ~= nil and not host)
+    f.ready:SetText((mine and mine.ready) and "Not ready" or "Ready")
+    if online and host then
+        local ok2, why2 = ns.Games.warcraft:CanStart(online)
+        if not ok2 then ok, why = false, why2 end
+        f.start:SetEnabled(ok)
+    end
+    if not host then ok, why = false, (mine and mine.ready) and "Waiting for the host to start." or "Click Ready when you are." end
     f.why:SetText(ok and "" or ("|cffaaaaaa" .. why .. "|r"))
 end

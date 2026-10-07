@@ -59,7 +59,7 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [x] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
 - [x] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
 - [x] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; claim victory after 45 s.
-- [x] Lobby: races, map, colours, teams, computers (up to 8). Left: ready buttons; the realm queue still uses the old two-player race pick.
+- [x] Lobby: races, map, colours, teams, computers (up to 8). [x] Ready buttons. (The realm queue keeps its quick race pick: it starts by itself.)
 - [x] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
 - [x] Wins and losses in the stats and on a leaderboard (warcraftpvp; no board on the page yet).
 

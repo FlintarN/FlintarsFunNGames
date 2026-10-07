@@ -82,7 +82,10 @@ function G.LobbyView(s, me)
             k = k + 1
             v.name = others[k]
         end
-        if v.name then v.kind = v.name == me and "me" or "player" end
+        if v.name then
+            v.kind = v.name == me and "me" or "player"
+            v.ready = v.name == s.host or (lobby.ready and lobby.ready[v.name]) or false
+        end
         out.slots[i] = v
     end
     return out
@@ -99,6 +102,11 @@ end
 
 function G:CanStart(s)
     if #s.players > G.MaxPlayers(s) then return false, "More players than seats." end
+    for _, p in ipairs(s.players) do
+        if p.name ~= s.host and not (s.lobby.ready and s.lobby.ready[p.name]) then
+            return false, "Waiting for " .. p.name .. " to be ready."
+        end
+    end
     return ns.WarcraftLobby.CanStart(G.LobbyView(s))
 end
 
@@ -181,6 +189,13 @@ end
 local function LobbyAct(s, name, verb, arg)
     local lobby = s.lobby
     local host = name == s.host
+    if verb == "ready" then
+        -- A player (not the host) says they're ready, or not.
+        if host or not G.Seat(s, name) then return false end
+        lobby.ready = lobby.ready or {}
+        lobby.ready[name] = arg ~= "off" or nil
+        return true
+    end
     if verb == "creeps" then
         if not host then return false end
         lobby.creeps = arg ~= "off"
@@ -199,6 +214,7 @@ local function LobbyAct(s, name, verb, arg)
         if not host or not m or m.players < #s.players or (m.mode or "melee") ~= (lobby.mode or "melee") then return false end
         lobby.map = arg
         Fit(lobby)
+        lobby.ready = nil -- a new map: everyone checks again
         return true
     end
     local i, value = arg:match("^(%d+):?(.*)$")

@@ -645,8 +645,9 @@ await Section('Warcraft III PvP over a code lobby', async () => {
   await bob.run(`WcPvpJoin("${code}")`);
   await Pump(players, 2);
   await bob.run('WcPvpLobby("race:2:orc")');
+  await bob.run('WcPvpLobby("ready:on")');
   await Pump(players, 1);
-  await host.run(`check(WcPvpSeat(2) == "Bob", "wc pvp: Bob sits in seat 2")`);
+  await host.run(`check(WcPvpSeat(2):find("Bob", 1, true) ~= nil, "wc pvp: Bob sits in seat 2")`);
   await host.run('WcPvpStart()');
   await Pump(players, 1);
   for (let i = 0; i < 160; i++) {
@@ -694,7 +695,11 @@ await Section('Warcraft 4: three players and a computer', async () => {
   await cara.run('WcPvpLobby("team:3:2")');      // Cara with the computer
   await cara.run('WcPvpLobby("race:3:orc")');
   await Pump(players, 1);
-  await cara.run(`check(WcPvpSeat(4) == "Computer (Normal)" and WcPvpSeat(2) == "Bob", "wc 3p: Cara's lobby shows Bob and the computer")`);
+  await host.run(`check(not ns.Games.warcraft:CanStart(ns.Session.Get("warcraft")), "wc 3p: the host can't start before everyone is ready")`);
+  await bob.run('WcPvpLobby("ready:on")');
+  await cara.run('WcPvpLobby("ready:on")');
+  await Pump(players, 1);
+  await cara.run(`check(WcPvpSeat(4) == "Computer (Normal)" and WcPvpSeat(2):find("Bob", 1, true) ~= nil, "wc 3p: Cara's lobby shows Bob and the computer")`);
   await host.run('WcPvpStart(3)');
   await Pump(players, 1);
   for (let i = 0; i < 160; i++) {
