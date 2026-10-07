@@ -45,8 +45,20 @@ function TttPractice()
     local shown = {}
     for _, c in ipairs(home.cards) do if c:IsShown() then table.insert(shown, c.kind) end end
     local arcade = {}
-    for _, kind in ipairs(ns.GAME_ORDER) do if ns.Games[kind].arcade then table.insert(arcade, kind) end end
+    for _, kind in ipairs(ns.GAME_ORDER) do
+        if ns.HomePage.SectionOf(kind) == "arcade" then table.insert(arcade, kind) end
+    end
     check(#shown == #arcade and shown[1] == arcade[1], "home: the Arcade shows only arcade games (" .. table.concat(shown, ",") .. ")")
+    -- The third section: Blizzard Games.
+    home.sectionButtons[3]._scripts.OnClick()
+    Advance(0)
+    local blizz = {}
+    for _, c in ipairs(home.cards) do if c:IsShown() then table.insert(blizz, c.kind) end end
+    table.sort(blizz)
+    check(table.concat(blizz, ",") == "hearthstone,warcraft", "home: Blizzard Games has Hearthstone and Warcraft III ("
+        .. table.concat(blizz, ",") .. ")")
+    home.sectionButtons[2]._scripts.OnClick()
+    Advance(0)
     home.sectionButtons[1]._scripts.OnClick()
     Advance(0)
     local casino = 0

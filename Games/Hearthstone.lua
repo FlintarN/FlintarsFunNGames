@@ -14,6 +14,7 @@ ns.Games = ns.Games or {}
 local G = {
     key = "hearthstone",
     arcade = true,
+    section = "blizzard", -- the home page's Blizzard Games section
     solo = true,
     name = "Hearthstone",
     icon = "Interface\\AddOns\\FlintarsFunNGames\\Art\\IconHearthstone",

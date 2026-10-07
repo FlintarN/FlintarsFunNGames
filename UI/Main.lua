@@ -111,11 +111,11 @@ end
 -- Game tabs only show while that game has a table, or while you look at
 -- it; Games, Settle up and Statistics always show. Visible tabs stack
 -- from the top with no gaps.
--- Which side you're on: "casino" or "arcade". Set by the home page's
--- switch and by opening a game; Statistics and Settings keep it.
+-- Which side you're on: "casino", "arcade" or "blizzard". Set by the home
+-- page's switch and by opening a game; Statistics and Settings keep it.
 function UI:Side()
     local G = ns.Games[self.tab or ""]
-    if G then return G.arcade and "arcade" or "casino" end
+    if G then return G.section or (G.arcade and "arcade" or "casino") end
     if self.tab == "settle" then return "casino" end
     if self.tab == "home" then return ns.db.homeSection or "casino" end
     return self.side or ns.db.homeSection or "casino"
@@ -124,6 +124,7 @@ end
 UI.FOOTER = {
     casino = "Every number comes from the game's own /roll, so no one can fake a roll.",
     arcade = "Arcade: just for fun, no betting.",
+    blizzard = "Blizzard Games: Hearthstone and Warcraft III, just for fun.",
 }
 
 function UI:LayoutTabs()

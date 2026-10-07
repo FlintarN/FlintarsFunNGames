@@ -58,15 +58,23 @@ local function Card(parent, info)
     return c
 end
 
--- The two sections: Casino (money games) and Arcade (just for fun).
+-- The sections: Casino (money games), Arcade (just for fun) and Blizzard
+-- Games (Hearthstone and Warcraft III, rebuilt in WoW). A game's section is
+-- G.section, else Arcade for arcade games, else Casino.
 local SECTIONS = {
-    { key = "casino", label = "Casino", help = "Games for gold: dice, cards, slots, roulette, raffles." },
-    { key = "arcade", label = "Arcade", help = "Just for fun, no betting. Play your group, your guild, the realm, or friends with a code." },
+    { key = "casino", label = "Casino", help = "Games for gold: dice, cards, slots, roulette, raffles.",
+        hint = "Games for gold." },
+    { key = "arcade", label = "Arcade", help = "Just for fun, no betting. Play your group, your guild, the realm, or friends with a code.",
+        hint = "Just for fun: no bets." },
+    { key = "blizzard", label = "Blizzard Games", help = "Hearthstone and Warcraft III, rebuilt in WoW: play the computer, a friend, or anyone on your realm.",
+        hint = "Blizzard's games, in WoW. Just for fun." },
 }
 
 local function SectionOf(kind)
-    return ns.Games[kind].arcade and "arcade" or "casino"
+    local G = ns.Games[kind]
+    return G.section or (G.arcade and "arcade" or "casino")
 end
+Home.SectionOf = SectionOf
 
 -- Place a card at slot i of the grid.
 local function Place(c, i, w)
@@ -82,8 +90,8 @@ function Home:Build(page)
     self.sectionButtons = {}
     for i, sec in ipairs(SECTIONS) do
         local b = CreateFrame("Button", nil, page)
-        b:SetSize(120, 24)
-        b:SetPoint("TOPLEFT", (i - 1) * 126, 0)
+        b:SetSize(150, 24)
+        b:SetPoint("TOPLEFT", (i - 1) * 156, 0)
         b.label = W.Label(b, sec.label, "GameFontNormalLarge")
         b.label:SetPoint("CENTER")
         b.bar = b:CreateTexture(nil, "ARTWORK")
@@ -153,7 +161,9 @@ function Home:Refresh()
         b.bar:SetShown(on)
         b.label:SetTextColor(on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6)
     end
-    self.sectionHint:SetText(section == "arcade" and "Just for fun: no bets." or "Games for gold.")
+    for _, sec in ipairs(SECTIONS) do
+        if sec.key == section then self.sectionHint:SetText(sec.hint) end
+    end
     local count = 0
     for _, c in ipairs(self.cards) do
         if c.section == section then count = count + 1 end
