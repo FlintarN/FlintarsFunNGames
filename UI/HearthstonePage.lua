@@ -69,9 +69,17 @@ end
 -- that haven't loaded yet are asked again now and then (P:Tick).
 local MODELS = setmetatable({}, { __mode = "k" })
 
+-- Creature id -> model (display) id. Heroes with a `display` use that model
+-- directly: newer creatures the server may not know, from the game files.
 local function Looks()
     local rec = Save()
-    rec.looks = rec.looks or {}
+    if not rec.looks or not rec.looksHeroes then
+        rec.looks = rec.looks or {}
+        for _, h in pairs(ns.HS.Heroes) do
+            if h.display then rec.looks[h.npc] = h.display end
+        end
+        rec.looksHeroes = true
+    end
     return rec.looks
 end
 
@@ -848,6 +856,16 @@ function P:ShowStart()
     self.backButton:Hide()
     self.againButton:Hide()
     self.resumeButton:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
+    -- Side by side when both show.
+    self.resumeButton:ClearAllPoints()
+    self.friendButton:ClearAllPoints()
+    if self.resumeButton:IsShown() and self.friendButton:IsShown() then
+        self.resumeButton:SetPoint("BOTTOMRIGHT", self.overlay, "BOTTOM", -6, 30)
+        self.friendButton:SetPoint("BOTTOMLEFT", self.overlay, "BOTTOM", 6, 30)
+    else
+        self.resumeButton:SetPoint("BOTTOM", 0, 30)
+        self.friendButton:SetPoint("BOTTOM", 0, 30)
+    end
 end
 
 -- Step two: the hero's decks (the basic one, then yours).
