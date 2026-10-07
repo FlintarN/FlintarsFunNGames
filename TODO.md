@@ -39,6 +39,28 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Flaky test: "a made-up roll is not verified" (group games) failed once in ~5 runs on 2026-10-07; look at its timing.
 
+## PvP for Hearthstone and Warcraft III
+
+Both engines are already built for it: plain data, seeded random numbers, and every move goes in as a
+command, so two clients can run the same game. Lobbies, invites and whispers come from the Arcade
+(Session/Live), like Tic-Tac-Toe and Battleship.
+
+### Hearthstone PvP (first: turn-based, little data)
+- [ ] Lobby: invite a friend or group member, both pick a deck (class + saved deck); the host deals.
+- [ ] The host runs the engine and sends each player their view (`E.View`): your own hand, the opponent's hand only as card backs; hidden cards go by whisper, like poker hole cards.
+- [ ] Moves go to the host as commands (play card, attack, hero power, end turn); the host checks them with the same rules as against the computer.
+- [ ] A turn timer (75 s, with the rope at the end), concede, and a win if the other player disconnects.
+- [ ] Mulligan at the start (needed for PvP fairness).
+- [ ] Wins and losses in the stats, separate from games against the computer; a guild/realm leaderboard.
+
+### Warcraft III PvP (second: real time)
+- [ ] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
+- [ ] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
+- [ ] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; drop and win after 30 s.
+- [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies.
+- [ ] Fog of war (roadmap step 6) before PvP goes live, so you can't see the other base.
+- [ ] Wins and losses in the stats and on a leaderboard.
+
 ## Warcraft III roadmap
 
 Goal: play like Warcraft III (The Frozen Throne melee), one step at a time, top to bottom. Every step
@@ -92,7 +114,7 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Creep camps around the map (WoW creatures) that guard expansions and give heroes experience and item drops; a neutral shop and mercenary camp.
 - [ ] Bigger maps, more than one map, map picker; 4 players (2 vs 2 against the AI).
 - [ ] Choose your race and the computer's (Human, Orc, Night Elf, Undead, Random).
-- [ ] PvP: lockstep (both clients run the engine with the same commands), lobbies like the other Arcade games.
+- [ ] PvP: see "PvP for Hearthstone and Warcraft III" below.
 
 ### 7. Feel
 - [ ] Unit sounds (WoW voice lines and weapon sounds), building sounds, "Our town is under attack" warnings, a minimap ping.
