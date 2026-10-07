@@ -62,6 +62,7 @@ UI\AgarioPage.lua
 UI\HearthstonePage.lua
 UI\HearthstoneDecks.lua
 UI\WarcraftPage.lua
+UI\WarcraftDepthTest.lua
 UI\Help.lua
 UI\SettlePage.lua
 UI\StatsPage.lua
