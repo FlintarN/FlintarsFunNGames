@@ -253,7 +253,7 @@ local function TSpin(view, p)
 end
 G.TSpin = TSpin
 
-local function Lock(view)
+local function Lock(view, dropped)
     local p = view.piece
     local spin = TSpin(view, p)
     local above = true
@@ -309,9 +309,9 @@ local function Lock(view)
 
     if n > 0 then
         view.flashRows, view.flash = full, CLEAR_DELAY
-        W.PlaySound((n == 4 or spin) and "LEVELUP" or "LOOTWINDOW_COIN_SOUND")
+        W.Sfx((n == 4 or spin) and "big" or "line")
     else
-        if spin then W.PlaySound("LOOTWINDOW_COIN_SOUND") end
+        if spin then W.Sfx("big") elseif not dropped then W.Sfx("land") end
         Spawn(view)
     end
 end
@@ -330,7 +330,9 @@ local function Clear(view)
     for y = keep, TOP, -1 do rows[y] = {} end
     view.board = rows
     view.lines = view.lines + #view.flashRows
+    local level = view.level
     view.level = math.floor(view.lines / 10) + 1
+    if view.level > level then W.Sfx("levelup") end
     view.flash, view.flashRows = nil, nil
     Spawn(view)
 end
@@ -349,10 +351,10 @@ end
 function G:Key(view, key)
     if not view.piece then return end
     if MOVE[key] then
-        Shift(view, MOVE[key])
+        if Shift(view, MOVE[key]) then W.Sfx("move") end
         view.das = { key = key, dx = MOVE[key], t = DAS }
     elseif TURN[key] then
-        Rotate(view, TURN[key])
+        if Rotate(view, TURN[key]) then W.Sfx("rotate") end
     elseif HOLD[key] then
         Hold(view)
     elseif key == "SPACE" then
@@ -364,7 +366,8 @@ function G:Key(view, key)
         end
         if dropped > 0 then p.lastRot = false end
         view:SetScore(view.score + dropped * 2)
-        Lock(view)
+        W.Sfx("drop")
+        Lock(view, true)
     end
     if view.running then self:Draw(view) end
 end

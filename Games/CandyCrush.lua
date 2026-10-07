@@ -164,7 +164,7 @@ local function Explode(view, r, c)
         end
     end
     view:SetScore(view.score + n * 15)
-    W.PlaySound("RAID_WARNING")
+    W.Sfx("special")
 end
 
 -- Gems fall into the gaps, new ones drop in from the top.
@@ -200,6 +200,7 @@ function G:Swap(view, r1, c1, r2, c2)
         if grid[r1][c1] and grid[r1][c1].kind == SKULL then Explode(view, r1, c1) end
         return
     end
+    W.Sfx("swap")
     if next((Find(grid))) then
         view.moves = view.moves - 1
     else
@@ -215,7 +216,7 @@ function G:Click(view, x, y)
         return self:Swap(view, s[1], s[2], r, c)
     end
     view.sel = (s and s[1] == r and s[2] == c) and nil or { r, c }
-    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    W.Sfx("click")
     self:Draw(view)
 end
 
@@ -249,13 +250,14 @@ local function Resolve(view)
             view.comboTime = 0.9
         end
         view.pending = nil
-        W.PlaySound(view.combo >= 3 and "LEVELUP" or "LOOTWINDOW_COIN_SOUND")
+        W.Sfx(view.combo >= 3 and "combo" or #skulls > 0 and "special" or "match")
         return
     end
     if view.pending then
         local p = view.pending
         view.pending = nil
         Swapped(view.grid, p[1], p[2], p[3], p[4])
+        W.Sfx("wrong")
         return
     end
     view.resolving, view.lastSwap = false, nil

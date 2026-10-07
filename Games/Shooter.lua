@@ -120,6 +120,7 @@ function G:Key(view, key)
     if (key == "SPACE" or key == "UP" or key == "W") and view.cooldown <= 0 then
         table.insert(view.shots, { x = view.x, y = PLAYER_Y - 14 })
         view.cooldown = SHOT_CD
+        W.Sfx("shoot")
     end
 end
 
@@ -127,8 +128,8 @@ local function Hurt(view)
     if view.hurt > 0 then return end
     view.lives = view.lives - 1
     Boom(view, view.x, PLAYER_Y, 50, { 1, 0.6, 0.2 })
-    W.PlaySound("RAID_WARNING")
     if view.lives <= 0 then return view:Over(view.score, "Shot down") end
+    W.Sfx("crash")
     view.hurt = 1.8
 end
 
@@ -204,7 +205,7 @@ function G:Step(view, dt)
                     hit = true
                     view:SetScore(view.score + ROW_KIND[a.r].points * view.wave)
                     Boom(view, x, y, 34, ROW_KIND[a.r].color)
-                    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+                    W.Sfx("explode")
                     break
                 end
             end
@@ -225,7 +226,7 @@ function G:Step(view, dt)
     end
     if Alive(view) == 0 then
         view:SetScore(view.score + 100 * view.wave)
-        W.PlaySound("LEVELUP")
+        W.Sfx("levelup")
         NewWave(view)
     end
     self:Draw(view)

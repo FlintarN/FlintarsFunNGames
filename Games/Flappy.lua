@@ -104,7 +104,7 @@ local function Flap(view)
         view.started = true
         AddPipe(view, 360)
     end
-    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    W.Sfx("flap")
 end
 
 function G:Key(view) Flap(view) end
@@ -134,17 +134,17 @@ function G:Step(view, dt)
         if not p.passed and p.x + PIPE_W / 2 < BIRD_X - R then
             p.passed = true
             view:SetScore(view.score + 1)
-            W.PlaySound("LOOTWINDOW_COIN_SOUND")
+            W.Sfx("point")
         end
         if p.x < -PIPE_W then table.remove(view.list, i) end
     end
     self:Draw(view)
     if view.y + R >= GROUND then
         view.y = GROUND - R
-        return view:Over(view.score, "Splat!")
+        return view:Over(view.score, "Splat!", "crash")
     end
     for _, p in ipairs(view.list) do
-        if G.Hits(p, view.y) then return view:Over(view.score, "Bonk!") end
+        if G.Hits(p, view.y) then return view:Over(view.score, "Bonk!", "crash") end
     end
 end
 

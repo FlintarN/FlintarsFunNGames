@@ -137,6 +137,22 @@ function W.PlaySound(kit, alert)
     if PlaySound and SOUNDKIT and SOUNDKIT[kit] then PlaySound(SOUNDKIT[kit]) end
 end
 
+-- The Arcade games' sounds: WoW game files by name, so every game picks from
+-- one palette (W.Sfx("line")). Ids from the community listfile.
+W.SFX = {
+    click = 567489, move = 567576, rotate = 567472, drop = 567566, land = 567567,
+    line = 567428, big = 567413, levelup = 567431, eat = 567546, crash = 567955, flap = 567673,
+    point = 567428, merge = 567568, reveal = 567562, flag = 567551, boom = 567962, win = 567408,
+    lose = 567488, type = 567489, enter = 567566, right = 567568, close = 567551, wrong = 567415,
+    swap = 567576, match = 567568, combo = 567413, special = 568429, launch = 567673, hit = 567567,
+    pop = 567962, shoot = 567721, enemyHit = 567880, explode = 567955, powerup = 567431,
+    place = 567566, miss = 567557, sink = 567955, grow = 567546, split = 567673, eaten = 567488,
+}
+
+function W.Sfx(name)
+    return W.PlayFile(W.SFX[name], "game")
+end
+
 -- A sound file from the game (by file id). kind "game": a game sound (Game
 -- sounds on); "voice": the same, but a new voice cuts off the last one, like
 -- Warcraft III; "alert": an alert (Alerts on).

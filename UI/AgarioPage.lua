@@ -194,7 +194,7 @@ function P:OnEvent(sender, kind, data)
             self.me.alive = false
             self.eatenBy = sender
             self:SaveBest()
-            W.PlaySound("RAID_WARNING")
+            W.Sfx("eaten")
         end
     elseif self.rt then
         self.rt.peers[data] = nil
@@ -290,6 +290,14 @@ function P:Others()
     return list
 end
 
+-- A gulp, at most every 0.1 s.
+function P:Gulp()
+    local now = GetTime()
+    if now - (self.gulpAt or -1) < 0.1 then return end
+    self.gulpAt = now
+    W.Sfx("eat")
+end
+
 function P:Move(dt)
     local G, me = self.G, self.me
     if not me.alive then return end
@@ -314,6 +322,7 @@ function P:Move(dt)
         if Dist(me.x, me.y, f.x, f.y) < me.r then
             me.r = G.Feed(me.r)
             self:SpawnFood(i)
+            self:Gulp()
         end
     end
     -- Smaller blobs
@@ -326,7 +335,7 @@ function P:Move(dt)
                 ns.Live.Event(self.rt, "eat", o.name)
                 self.rt.peers[o.name] = nil
             end
-            W.PlaySound("LOOTWINDOW_COIN_SOUND")
+            self:Gulp()
         end
     end
     me.r = G.Decay(me.r, dt)

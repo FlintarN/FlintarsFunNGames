@@ -120,7 +120,7 @@ function G:Press(view, r, c, button)
     if view.open[r][c] then return end
     if button == "RightButton" then
         view.flag[r][c] = not view.flag[r][c] or nil
-        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        W.Sfx("flag")
         return self:Draw(view)
     end
     if view.flag[r][c] then return end
@@ -128,13 +128,14 @@ function G:Press(view, r, c, button)
     if view.mine[r][c] then
         view.boom = { r, c }
         self:Draw(view)
-        W.PlaySound("RAID_WARNING")
-        return view:Over(nil, "Boom!")
+        return view:Over(nil, "Boom!", "boom")
     end
     Open(view, r, c)
     self:Draw(view)
     if view.opened == N * N - MINES then
-        view:Over(math.floor(view.time), "Cleared!")
+        view:Over(math.floor(view.time), "Cleared!", "win")
+    else
+        W.Sfx("reveal")
     end
 end
 

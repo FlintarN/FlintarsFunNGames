@@ -160,15 +160,16 @@ function P:SetScore(n)
     self.scoreText:SetText(self.G.FormatScore and self.G.FormatScore(n) or tostring(n))
 end
 
--- The run is over: score it, show it, offer another go.
-function P:Over(score, text)
+-- The run is over: score it, show it, offer another go. sfx: the game's own
+-- end sound (a crash, a boom), played instead of the win/lose one.
+function P:Over(score, text, sfx)
     if self.over then return end
     self.over, self.running = true, false
     running[self.kind] = nil
     if score ~= nil then self:SetScore(score) end
     local best = score ~= nil and ns.Scores.Submit(self.kind, self.score)
     self:ShowOverlay(text or "Game over", (best and "|cff40ff40New best!|r  " or "") .. "Click New game to play again.")
-    W.PlaySound(best and "LEVELUP" or "U_CHAT_SCROLL_BUTTON")
+    W.Sfx(sfx or (best and "win" or "lose"))
     self.canvas:KeysOff()
     ns.Changed()
 end

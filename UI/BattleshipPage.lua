@@ -190,7 +190,7 @@ function P:PlaceAt(r, c)
         local cells = G.Cells(self.board, r, c, G.SHIPS[i].size, self.horiz)
         if not cells then return end
         self.board = G.Put(self.board, cells, i)
-        W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        W.Sfx("place")
     end
     self:Refresh()
 end
@@ -232,7 +232,7 @@ local function Pop(tex, size)
     end)
 end
 
--- One cell's marker: hit, miss or nothing (popping in when new).
+-- One cell's marker: hit, miss or nothing (popping in when new). True when new.
 local function Mark(cell, res, animate)
     local was = cell.res
     cell.res = res
@@ -247,7 +247,7 @@ local function Mark(cell, res, animate)
     end
     if res and res ~= was and animate then
         Pop(cell.mark, CELL)
-        W.PlaySound(res == "hit" and "RAID_WARNING" or "U_CHAT_SCROLL_BUTTON")
+        return true
     end
 end
 
@@ -289,7 +289,7 @@ function P:DrawMine(s)
             else
                 cell.preview:Hide()
             end
-            Mark(cell, shots[G.Key(r, c)], self.animate)
+            if Mark(cell, shots[G.Key(r, c)], self.animate) then self.newShot = shots[G.Key(r, c)] end
         end
     end
 end
@@ -309,7 +309,7 @@ function P:DrawTheirs(s)
             local ship = reveal and G.Cell(reveal.board, r, c) or 0
             cell.ship:SetShown(ship ~= 0)
             if ship ~= 0 then cell.ship:SetVertexColor(0.55, 0.55, 0.6, res and 1 or 0.6) end
-            Mark(cell, res, self.animate)
+            if Mark(cell, res, self.animate) then self.newShot = res end
             cell:SetEnabled(canFire and res == nil)
         end
     end
@@ -340,9 +340,27 @@ function P:Refresh()
     end
     if s.stage ~= "placing" and G.mine[s.id] then self.board = G.mine[s.id].board end
 
+    local animate = self.animate
+    self.newShot = nil
     self:DrawMine(s)
     local other = self:DrawTheirs(s)
     self.animate = true
+
+    -- One sound for what just happened: the end, a sinking, or a shot.
+    local sunkN = 0
+    for _, list in pairs(s.sunk or {}) do sunkN = sunkN + #list end
+    local ended = s.phase == "done" and s.result and s.result.winner and not self.cheered
+    if ended then self.cheered = true elseif s.phase ~= "done" then self.cheered = nil end
+    if animate then
+        if ended then
+            W.Sfx(s.result.winner == me and "win" or "lose")
+        elseif sunkN > (self.sunkN or 0) then
+            W.Sfx("sink")
+        elseif self.newShot then
+            W.Sfx(self.newShot)
+        end
+    end
+    self.sunkN = sunkN
 
     self.banner:SetText(s.banner or (G:Status(s) or ""))
     local afloat = #G.SHIPS - #(s.sunk and s.sunk[me] or {})

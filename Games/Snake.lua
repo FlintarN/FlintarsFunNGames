@@ -85,16 +85,16 @@ function G:Step(view, dt)
     local head = view.snake[1]
     local nx, ny = head[1] + view.dir[1], head[2] + view.dir[2]
     local grow = view.apple_at and nx == view.apple_at[1] and ny == view.apple_at[2]
-    if nx < 0 or nx >= N or ny < 0 or ny >= N then return view:Over(view.score, "Crashed!") end
+    if nx < 0 or nx >= N or ny < 0 or ny >= N then return view:Over(view.score, "Crashed!", "crash") end
     for i = 1, #view.snake - (grow and 0 or 1) do
         local seg = view.snake[i]
-        if seg[1] == nx and seg[2] == ny then return view:Over(view.score, "Bit your tail!") end
+        if seg[1] == nx and seg[2] == ny then return view:Over(view.score, "Bit your tail!", "crash") end
     end
     table.insert(view.snake, 1, { nx, ny })
     if grow then
         view:SetScore(view.score + 1)
         view.apple_at = Free(view)
-        ns.Widgets.PlaySound("LOOTWINDOW_COIN_SOUND")
+        ns.Widgets.Sfx("eat")
     else
         table.remove(view.snake)
     end

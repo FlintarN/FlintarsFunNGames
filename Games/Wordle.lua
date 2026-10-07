@@ -148,22 +148,26 @@ local function Submit(view)
         view.lastPts = TRIES + 1 - #view.guesses
         view:SetScore(view.score + view.lastPts)
         view.wait = 1.8
-        W.PlaySound("LOOTWINDOW_COIN_SOUND")
-    elseif #view.guesses >= TRIES then
-        view.wait = 1.2
+        W.Sfx("win")
+    else
+        if #view.guesses >= TRIES then view.wait = 1.2 end
+        W.Sfx("enter")
     end
 end
 
 function G:Key(view, key)
     if view.wait then return end
     if key == "BACKSPACE" then
+        if view.cur == "" then return end
         view.cur = view.cur:sub(1, -2)
+        W.Sfx("click")
     elseif key == "ENTER" then
-        if #view.cur < LEN then return W.PlaySound("U_CHAT_SCROLL_BUTTON") end
+        if #view.cur < LEN then return W.Sfx("wrong") end
         return Submit(view)
     elseif #key == 1 and key:match("%u") then
         if #view.cur >= LEN then return end
         view.cur = view.cur .. key
+        W.Sfx("type")
     else
         return
     end

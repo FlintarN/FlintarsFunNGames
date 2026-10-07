@@ -198,7 +198,7 @@ function G.Fire(view)
     view.shotsLeft = view.shotsLeft - 1
     view.state = "flying"
     view.dragging = nil
-    W.PlaySound("U_CHAT_SCROLL_BUTTON")
+    W.Sfx("launch")
 end
 
 function G:Key(view, key)
@@ -237,7 +237,7 @@ local function Pop(view, r, c)
     view:SetScore(view.score + 500)
     local x1, y1, x2, y2 = CellRect(c, r)
     Puff(view, (x1 + x2) / 2, (y1 + y2) / 2, { 0.5, 1, 0.5 }, 34)
-    W.PlaySound("LOOTWINDOW_COIN_SOUND")
+    W.Sfx("pop")
 end
 G.Pop = Pop
 
@@ -262,6 +262,14 @@ local function CellAt(x, y)
     return r, c
 end
 
+-- The boulder hits the fort: one thud at most every 0.15 s.
+local function Thud(view)
+    local now = GetTime()
+    if now - (view.thudAt or -1) < 0.15 then return end
+    view.thudAt = now
+    W.Sfx("hit")
+end
+
 local function MoveBall(view, dt)
     local b = view.ball
     b.t = b.t + dt
@@ -279,8 +287,10 @@ local function MoveBall(view, dt)
                 b.vx, b.vy = b.vx * 0.8, b.vy * 0.8
             elseif speed > 110 and Smash(view, r, c) then
                 b.vx, b.vy = b.vx * 0.55, b.vy * 0.55
+                Thud(view)
             else
                 -- Bounce off: back out and turn round.
+                Thud(view)
                 b.x, b.y = b.x - b.vx * dt, b.y - b.vy * dt
                 if p[1] ~= 0 then b.vx = -b.vx * 0.3 else b.vy = -b.vy * 0.3 end
                 b.vx = b.vx * 0.7
@@ -379,7 +389,7 @@ function G:Step(view, dt)
                 view.wait = 1.4
                 view.banner:SetText("Level cleared!")
                 view.bannerTime = 1.4
-                W.PlaySound("LEVELUP")
+                W.Sfx("win")
             elseif view.shotsLeft <= 0 then
                 view.state = "done"
                 return view:Over(view.score, "Out of boulders")

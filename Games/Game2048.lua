@@ -142,14 +142,16 @@ function G:Key(view, key)
     view:SetScore(view.score + gained)
     Spawn(view)
     self:Draw(view, true)
+    local sfx = gained > 0 and "merge" or "move"
     for _, row in ipairs(view.grid) do
         for _, t in pairs(row) do
             if t.v == 2048 and not view.won then
                 view.won = true
-                W.PlaySound("LEVELUP")
+                sfx = "win"
             end
         end
     end
+    W.Sfx(sfx)
     if not CanMove(view) then view:Over(view.score, "No more moves") end
 end
 

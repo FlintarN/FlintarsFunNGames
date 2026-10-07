@@ -171,6 +171,7 @@ function P:Refresh()
 
     -- Board
     local animate = self.prevBoard and self.prevId == s.id and self.prevGames == s.games
+    local placed = false
     local inLine = {}
     for _, i in ipairs(s.line or {}) do inLine[i] = true end
     for i, c in ipairs(self.cells) do
@@ -180,7 +181,7 @@ function P:Refresh()
             c.mark:Show()
             if animate and self.prevBoard[i] == "" then
                 PopIn(c.mark)
-                W.PlaySound("U_CHAT_SCROLL_BUTTON")
+                placed = true
             end
         else
             c.mark:Hide()
@@ -192,11 +193,13 @@ function P:Refresh()
         self.prevBoard = { unpack(s.board) }
     end
     self.prevId, self.prevGames = s.id, s.games
-    if animate and s.phase == "done" and s.result and s.result.winner and not self.cheered then
+    if animate and s.phase == "done" and s.result and not self.cheered then
         self.cheered = true
-        W.PlaySound(s.result.winner == me and "LEVELUP" or "U_CHAT_SCROLL_BUTTON")
-    elseif s.phase ~= "done" then
-        self.cheered = nil
+        local winner = s.result.winner
+        W.Sfx(not winner and "click" or winner == me and "win" or "lose")
+    else
+        if s.phase ~= "done" then self.cheered = nil end
+        if placed then W.Sfx("place") end
     end
 
     -- Players
