@@ -88,6 +88,29 @@ local function MakeDoodad(parent)
     if sc.SetCameraNearClip then sc:SetCameraNearClip(0.1) end
     if sc.SetCameraFarClip then sc:SetCameraFarClip(5000) end
     -- Place the camera for a model of radius r around (cx, cy, cz).
+    -- Stand the model on the ground at the frame's centre, its width
+    -- filling fp pixels (a building's footprint): see Fit.
+    function sc:Ground(fp, look)
+        if self.fp ~= fp or self.look ~= look then
+            self.fp, self.look, self.sig = fp, look, nil
+        end
+    end
+    function sc:AimGround(x1, y1, z1, x2, y2, z2)
+        local look = self.look
+        local w = math.max(x2 - x1, y2 - y1, 0.01)
+        local h = math.max(z2 - z1, 0.01)
+        -- Pixels per model unit: fill the footprint, but not too tall.
+        local scale = math.min((look.fill or 1) * self.fp / w, (look.tall or view.tall) * self.fp / h)
+        local fh = self:GetHeight()
+        if not fh or fh <= 0 then return false end
+        local dist = fh / (2 * math.tan(view.fov / 2) * scale)
+        self:SetCameraOrientationByYawPitchRoll(view.yaw, view.bpitch, 0)
+        local fx, fy, fz = 1, 0, 0
+        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
+        local cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        self:SetCameraPosition(cx - fx * dist, cy - fy * dist, z1 - fz * dist)
+        return true
+    end
     function sc:Aim(cx, cy, cz, r)
         self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
         local fx, fy, fz = 1, 0, 0
@@ -106,14 +129,19 @@ local function MakeDoodad(parent)
         end
         local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
         local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
-        local sig = string.format("%.2f %.2f %.2f %.2f", cx, cy, cz, r)
+        local sig = string.format("%.2f %.2f %.2f %.2f %s %s", cx, cy, cz, r, tostring(self.fp),
+            tostring(self.GetHeight and self:GetHeight()))
         if r <= 0.01 then
             self:Aim(0, 0, 5, 20)
             return false
         end
         if sig == self.sig then return true end
         self.sig = sig
-        self:Aim(cx, cy, cz, r)
+        if self.fp then
+            if not self:AimGround(x1, y1, z1, x2, y2, z2) then self.sig = nil end
+        else
+            self:Aim(cx, cy, cz, r)
+        end
         self.fitted = true
         return true
     end
@@ -1209,10 +1237,12 @@ function P:Draw()
             Place(t.shadow, self.view, px + size / 2 + 4, py + size / 2 + 6)
             t.shadow:Show()
             if t.model and look then
-                local ms = size * look.grow
-                t.model:SetSize(ms, ms)
+                -- A big frame centred on the footprint: the model stands at its centre.
+                local fs = size * 2 * ((look.tall or ns.WC.ART.view.tall) + 0.6)
+                t.model:SetSize(fs, fs)
+                t.model:Ground(size, look)
                 t.model:Use(look.file, look.facing)
-                Place(t.model, self.view, px + size / 2, py + size / 2 - (look.y or 0))
+                Place(t.model, self.view, px + size / 2, py + size / 2)
                 t.model:SetAlpha(alpha)
                 t.model:Show()
                 t.art:Hide()
@@ -1747,8 +1777,8 @@ SlashCmdList.FNGWCVIEW = function(msg)
     local key, value = (msg or ""):match("^(%a+)%s+([%-%d%.]+)")
     local view = ns.WC.ART.view
     if key and view[key] ~= nil then view[key] = tonumber(value) end
-    ns.Print(string.format("Warcraft view: yaw %.2f, pitch %.2f, fov %.2f, margin %.2f", view.yaw, view.pitch,
-        view.fov, view.margin))
+    ns.Print(string.format("Warcraft view: yaw %.2f, pitch %.2f, bpitch %.2f, fov %.2f, margin %.2f, tall %.2f",
+        view.yaw, view.pitch, view.bpitch, view.fov, view.margin, view.tall))
     local page = ns.UI.pages and ns.UI.pages.warcraft and ns.UI.pages.warcraft.view
     if not page then return end
     local function Refit(m)

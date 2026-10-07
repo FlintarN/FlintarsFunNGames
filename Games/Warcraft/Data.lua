@@ -67,11 +67,12 @@ F.human = { name = "Human", hall = "town_hall", worker = "peasant", farm = "farm
 F.orc = { name = "Orc", buildInside = true, hall = "great_hall", worker = "peon", farm = "orc_burrow", barracks = "orc_barracks", tower = "watch_tower", alarm = "battleStations",
     melee = "grunt", ranged = "headhunter", builds = { "orc_burrow", "orc_barracks", "watch_tower", "altar_storms", "great_hall" } }
 
--- Art from the WoW game files (file ids from the community listfile; all
--- vanilla-era files). World models are shown in a ModelScene that fits each
--- model to its frame from its bounding box, seen from above at an angle
--- (view). Per model: file, grow (frame size compared to the footprint),
--- y (pixels to lift it), facing (radians, turns the model).
+-- Art from the WoW game files (file ids from the community listfile; M2
+-- files only: WMO files crash the client in a model frame). World models are
+-- shown in a ModelScene. Buildings stand on the ground at the centre of
+-- their footprint and are scaled so their width fills it (fill, default 1),
+-- but never taller than `tall` footprints (default view.tall); facing turns
+-- them (radians). Trees and the /wcgallery are fitted whole (view.margin).
 ns.WC.ART = {
     ground = 187126, -- tileset/elwynn/elwynngrassbase.blp
     groundRepeat = 4, -- tiles per texture repeat
@@ -80,20 +81,21 @@ ns.WC.ART = {
     treeGrow = 1.6, treeY = 8,
     -- The camera: from yaw (around), pitch (down), with this field of view;
     -- margin > 1 leaves room around the model.
-    view = { yaw = math.pi, pitch = 0.75, fov = 0.6, margin = 1.0 },
+    -- bpitch: the buildings' camera, lower so walls show, not just roofs.
+    view = { yaw = math.pi, pitch = 0.75, bpitch = 0.55, fov = 0.6, margin = 1.0, tall = 1.6 },
     models = {
-        gold_mine = { file = 189620, grow = 1.4, y = 4 },      -- elwynn/buildings/goldmine
-        town_hall = { file = 189629, grow = 1.6, y = 12 },     -- elwynn/buildings/humanguardtower
-        farm = { file = 242696, grow = 1.5, y = 8 },           -- redridge_human_farm_closed (gallery 16)
-        barracks = { file = 189445, grow = 1.5, y = 6 },       -- duskwood/duskwoodbarn
-        lumber_mill = { file = 242697, grow = 1.25, y = 5 },   -- redridge_lumbermill (gallery 44)
-        great_hall = { file = 189200, grow = 1.6, y = 8 },     -- burningsteppes/orctents/orctent
-        orc_burrow = { file = 199387, grow = 1.6, y = 6 },     -- generic/orc/tents/orctent01 (gallery 24)
-        orc_barracks = { file = 1910329, grow = 1.6, y = 6 },  -- 8or_warfronts_barracks_v2 (gallery 114)
-        guard_tower = { file = 2061082, grow = 2.4, y = 16 },  -- 8hu_warfronts_magictower_v3 (gallery 112)
-        watch_tower = { file = 2061081, grow = 2.4, y = 16 },  -- 8or_warfronts_magictower_v3 (gallery 115)
-        altar_kings = { file = 197831, grow = 1.3, y = 2 },    -- generic/human/altars/altar01 (gallery 52)
-        altar_storms = { file = 189141, grow = 1.3, y = 2 },   -- lavaaltar (gallery 54)
+        gold_mine = { file = 189620, fill = 1.1 },                -- elwynn/buildings/goldmine
+        town_hall = { file = 189629, fill = 1.0, tall = 1.5 },    -- elwynn/buildings/humanguardtower
+        farm = { file = 242696 },                                 -- redridge_human_farm_closed (gallery 16)
+        barracks = { file = 189445 },                             -- duskwood/duskwoodbarn
+        lumber_mill = { file = 242697, fill = 0.95 },             -- redridge_lumbermill (gallery 44)
+        guard_tower = { file = 2061082, tall = 2.0 },             -- 8hu_warfronts_magictower_v3 (gallery 112)
+        altar_kings = { file = 197831, fill = 0.8 },              -- generic/human/altars/altar01 (gallery 52)
+        great_hall = { file = 189200 },                           -- burningsteppes/orctents/orctent
+        orc_burrow = { file = 199387 },                           -- generic/orc/tents/orctent01 (gallery 24)
+        orc_barracks = { file = 1910329 },                        -- 8or_warfronts_barracks_v2 (gallery 114)
+        watch_tower = { file = 2061081, tall = 2.0 },             -- 8or_warfronts_magictower_v3 (gallery 115)
+        altar_storms = { file = 189141, fill = 0.8 },             -- lavaaltar (gallery 54)
     },
     -- Models whose bounding box is smaller than what is drawn: more room
     -- around them (margin) and the camera aimed higher (up, in radii).
