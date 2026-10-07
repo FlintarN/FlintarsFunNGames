@@ -333,5 +333,29 @@ function WcDemo()
     view.SpellEvents = nil
     check(hits > 0, "wc demo: a knight attacks the Target Dummy when told (" .. hits .. " hits)")
     check(knight.order and knight.order.type == "attack", "wc demo: still on it")
+    -- Looks: Avatar makes a hero bigger and grey; Bladestorm spins; the
+    -- Catapult is a model file; flyers have a shadow.
+    local mk, bm, cat, hawk
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.type == "mountain_king" then mk = e end
+        if e and e.type == "blademaster" then bm = e end
+        if e and e.type == "catapult" then cat = e end
+        if e and e.type == "dragonhawk_rider" then hawk = e end
+    end
+    view.camX, view.camY = 0, mk.y * 20 - 150
+    view:Draw()
+    local m = view.unitFrames[mk.id].model
+    local before = m.k
+    E.AddBuff(mk, "avatar", 10)
+    view:Draw()
+    check(m.k > before and m.desat > 0.5, "wc looks: Avatar, bigger and grey (" .. before .. " > " .. m.k .. ")")
+    E.AddBuff(bm, "bladestorm", 10, { dps = 0 })
+    view:Draw()
+    check(view.unitFrames[bm.id].model.anim == 17, "wc looks: Bladestorm swings round")
+    view.camX, view.camY = cat.x * 20 - 300, cat.y * 20 - 150
+    view:Draw()
+    check(view.unitFrames[cat.id].model.disp == "f" .. WC.Units.catapult.file, "wc looks: the Catapult's own model")
+    check(view.unitFrames[hawk.id].shadow ~= nil, "wc looks: a flyer's shadow")
     view:ShowMenu()
 end

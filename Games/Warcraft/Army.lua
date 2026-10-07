@@ -46,7 +46,7 @@ U.dragonhawk_rider = Unit({ npc = 3837, hotkey = "D", name = "Dragonhawk Rider",
     cooldown = 1.75, range = 4.5, speed = 4, cost = { 200, 30 }, time = 32, food = 3, attackType = "pierce", armorType = "light",
     air = true, icon = I .. "Ability_Hunter_Pet_DragonHawk" })
 -- Orc
-U.catapult = Unit({ npc = 16121, hotkey = "C", name = "Catapult", hp = 425, armor = 2, damage = 90, cooldown = 4.5, range = 9,
+U.catapult = Unit({ npc = 16121, file = 189709, hotkey = "C", name = "Catapult", hp = 425, armor = 2, damage = 90, cooldown = 4.5, range = 9,
     speed = 2.2, cost = { 220, 50 }, time = 40, food = 4, attackType = "siege", armorType = "heavy", splash = 1.5,
     groundOnly = true, requires = { "war_mill" }, icon = I .. "INV_Misc_Bomb_02" })
 U.raider = Unit({ npc = 13440, hotkey = "R", name = "Raider", hp = 610, armor = 1, damage = 24, cooldown = 1.85, range = 1,

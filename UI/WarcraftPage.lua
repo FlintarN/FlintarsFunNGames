@@ -65,7 +65,30 @@ local MODEL_PAD = 1.8
 local UNIT_SIZE = 0.7
 -- A unit's height on screen in pixels, and where its feet are (below the frame's centre).
 local UNIT_PX, UNIT_FEET = MODEL_H / 1.1 * UNIT_SIZE, -6
-local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
+local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6, fly = 135 }
+
+-- How units look next to each other: bigger heroes, beasts and machines
+-- (their models are all fitted to one height first).
+local UNIT_LOOK = {
+    peasant = 0.85, peon = 0.85, knight = 1.25, tauren = 1.4, kodo = 1.6, raider = 1.25, siege_engine = 1.35,
+    catapult = 1.3, mortar_team = 0.95, gryphon_rider = 1.45, wind_rider = 1.45, dragonhawk_rider = 1.3,
+    batrider = 1.15, flying_machine = 1.1, sheep = 0.55, healing_ward = 0.8, target_dummy = 0.9,
+    water_elemental1 = 1.2, water_elemental2 = 1.3, water_elemental3 = 1.4, phoenix1 = 1.5,
+    spirit_wolf1 = 0.9, spirit_wolf2 = 1, spirit_wolf3 = 1.1,
+}
+local HERO_LOOK = 1.25
+-- What a buff does to the look: size, grey (desaturated), animation speed,
+-- see-through, spinning (Bladestorm).
+local BUFF_LOOK = {
+    avatar = { scale = 1.5, desat = 0.85 },
+    bloodlust = { scale = 1.2, speed = 1.4 },
+    slow = { speed = 0.6 },
+    noAttack = { alpha = 0.45, desat = 0.6 },
+    bladestorm = { spin = true, speed = 1.6 },
+    stun = { speed = 0 },
+    windwalk = { alpha = 0.45 },
+}
+P.UNIT_LOOK, P.BUFF_LOOK = UNIT_LOOK, BUFF_LOOK
 
 local function Looks()
     local rec = Save()
@@ -262,6 +285,32 @@ local function MakeUnitModel(parent)
         actor:SetModelByCreatureDisplayID(disp)
         self:Fit()
     end
+    -- Some units are a model file rather than a creature (the Catapult).
+    function sc:UseFile(file)
+        if self.disp == "f" .. file then return end
+        self.disp, self.sig, self.watch, self.loaded, self.anim = "f" .. file, nil, 0, false, nil
+        actor:SetModelByFileID(file)
+        self:Fit()
+    end
+    -- Bigger or smaller (the frame grows with it, so nothing is cut off),
+    -- and greyer.
+    sc.k = 1
+    function sc:SetLook(k, desat)
+        if self.k ~= k then
+            self.k = k
+            self:SetSize(MODEL_W * MODEL_PAD * k, MODEL_H * MODEL_PAD * k)
+            self:ClearAllPoints()
+            self:SetPoint("CENTER", self:GetParent(), "CENTER", 0, UNIT_FEET + UNIT_PX * k / 2)
+        end
+        if self.desat ~= desat then
+            self.desat = desat
+            if actor.SetDesaturation then actor:SetDesaturation(desat) end
+        end
+    end
+    function sc:HasAnimation(anim)
+        if actor.HasAnimation then return actor:HasAnimation(anim) end
+        return false
+    end
     -- Facing a screen direction (0 right, pi/2 down, towards the viewer): the
     -- same turn the old unit frames used (SetFacing(pi/2 - phi)), counted
     -- from looking straight at the camera.
@@ -270,8 +319,8 @@ local function MakeUnitModel(parent)
         local toCamera = ATAN2(-f[2], -f[1])
         if actor.SetYaw then actor:SetYaw(toCamera + math.pi / 2 - phi) end
     end
-    function sc:SetAnimation(anim)
-        if actor.SetAnimation then actor:SetAnimation(anim) end
+    function sc:SetAnimation(anim, speed)
+        if actor.SetAnimation then actor:SetAnimation(anim, 0, speed or 1) end
     end
     return sc
 end
@@ -1824,6 +1873,14 @@ function P:UnitFrame(id, utype)
         if f.model then
             f.model:SetPoint("CENTER", f, "CENTER", 0, UNIT_FEET + UNIT_PX / 2)
             f.model.npc = WC().Units[utype].npc
+            f.model.fileId = WC().Units[utype].file
+            -- A flyer's shadow on the ground.
+            if WC().Units[utype].air then
+                f.shadow = f:CreateTexture(nil, "BACKGROUND")
+                f.shadow:SetTexture(ART .. "Blob")
+                f.shadow:SetVertexColor(0, 0, 0, 0.45)
+                f.shadow:SetSize(24, 10)
+            end
             f.model:SetFrameLevel(f:GetFrameLevel() + 1)
         end
         local top = CreateFrame("Frame", nil, f)
@@ -2035,8 +2092,13 @@ function P:Draw()
                     f.carry:Hide()
                 end
                 f:ClearAllPoints()
-                local lift = WC().Units[e.type] and WC().Units[e.type].air and 18 or 0
+                local air = WC().Units[e.type] and WC().Units[e.type].air
+                local lift = air and (30 + math.sin(now * 2 + id) * 3) or 0
                 f:SetPoint("CENTER", self.view, "TOPLEFT", px, -(py - lift))
+                if f.shadow then
+                    f.shadow:ClearAllPoints()
+                    f.shadow:SetPoint("CENTER", f, "CENTER", 0, -6 - lift)
+                end
                 local lv = self:Depth(e.y)
                 if f.depth ~= lv then
                     f.depth = lv
@@ -2046,22 +2108,40 @@ function P:Draw()
                 end
                 -- Always the model (the panels above the map hide anything poking out).
                 local m = f.model
-                local disp = m and Looks()[m.npc]
+                local disp = m and (m.fileId or Looks()[m.npc])
                 if m and not disp then self:Probe(m.npc) end
                 if m and disp then
                     if not m:IsShown() then m:Show() end
-                    m:UseCreature(disp)
+                    if m.fileId then m:UseFile(m.fileId) else m:UseCreature(disp) end
                     m:SetDepth(self:DepthAt(e.y, RADIUS.unit or 3))
                     f.icon:SetShown(not m.loaded)
                     f.ring:SetShown(not m.loaded)
-                    m:SetFacing(e.facing or math.pi / 2)
+                    -- Its look: the unit's size, then what its buffs do.
+                    local ud = WC().Units[e.type]
+                    local k = UNIT_LOOK[look] or (ud and ud.hero and HERO_LOOK) or 1
+                    local desat, speed, spin, alpha = 0, 1, false, nil
+                    for buff in pairs(e.buffs or {}) do
+                        local L = BUFF_LOOK[buff]
+                        if L then
+                            k = k * (L.scale or 1)
+                            desat = math.max(desat, L.desat or 0)
+                            speed = speed * (L.speed or 1)
+                            spin = spin or L.spin
+                            alpha = L.alpha or alpha
+                        end
+                    end
+                    m:SetLook(k, desat)
+                    if alpha then f:SetAlpha(alpha) end
+                    -- Bladestorm: spinning round with the blade out.
+                    m:SetFacing(spin and (now * 14) or (e.facing or math.pi / 2))
                     -- Walking: it moved within the last few engine steps (frames come
                     -- faster than steps, so a per-frame check would flicker).
                     local moved = e.walkT and st.time - e.walkT < 0.16
-                    local anim = AnimFor(e, moved)
-                    if m.anim ~= anim and m.SetAnimation then
-                        m:SetAnimation(anim)
-                        m.anim = anim
+                    local anim = spin and ANIM.attack or AnimFor(e, moved)
+                    if air and anim ~= ANIM.attack and m:HasAnimation(ANIM.fly) then anim = ANIM.fly end
+                    if (m.anim ~= anim or m.speed ~= speed) and m.SetAnimation then
+                        m:SetAnimation(anim, speed)
+                        m.anim, m.speed = anim, speed
                     end
                 else
                     if m then m:Hide() end
