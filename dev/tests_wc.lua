@@ -197,6 +197,20 @@ function WcPageTests()
     view:Key("1")
     check(#view.sel == all, "wc page: 1 selects group 1 again")
     view.sel, view.lastClick = { worker.id }, nil
+    -- Depth: a unit lower on the map has its camera nearer (so it's drawn in front).
+    Advance(0.5)
+    view:Draw()
+    view:Draw()
+    local near, far
+    for id, f in pairs(view.unitFrames) do
+        local e = st.ents[id]
+        if e and f.model and f.model.depth then
+            if not near or e.y > near.y + 0.6 then near = { y = e.y, d = f.model.depth } end
+            if not far or e.y < far.y - 0.6 then far = { y = e.y, d = f.model.depth } end
+        end
+    end
+    check(near and far, "wc page: units have a depth")
+    if near and far and near.y > far.y then check(near.d < far.d, "wc page: lower on the map, nearer the camera") end
     view:Draw()
     local labels = {}
     for _, c in ipairs(view.cmds) do if c:IsShown() then table.insert(labels, c.title) end end

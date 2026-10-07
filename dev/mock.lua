@@ -67,6 +67,14 @@ function methods:SetHeight(h) self._h = h end
 function methods:GetCenter() return 0, 0 end
 function methods:GetEffectiveScale() return 1 end
 function methods:SetScale(k) self._scale = k end
+-- 3D: model scenes have actors with a bounding box; creatures have a display id.
+function methods:CreateActor()
+    local a = new("Actor", nil, self)
+    function a:GetActiveBoundingBox() return -1, -1, 0, 1, 1, 2 end
+    return a
+end
+function methods:GetDisplayInfo() return 4321 end
+function methods:SetCameraPosition(x, y, z) self._cam = { x, y, z } end
 function methods:GetScale() return self._scale or 1 end
 function methods:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
 function methods:RegisterEvent(e)

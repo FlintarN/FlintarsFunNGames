@@ -29,6 +29,7 @@ local BUILDING_ART = {
 local function WC() return ns.WC end
 local function E() return ns.WC.Engine end
 local function Now() return GetTime and GetTime() or 0 end
+local ATAN2 = math.atan2 or math.atan
 
 -- Shift held: orders go after the current one (Warcraft III's order queue).
 local function Shift() return IsShiftKeyDown and IsShiftKeyDown() and true or nil end
@@ -41,8 +42,8 @@ local function Save()
 end
 
 ---------------------------------------------------------------------------
--- Unit models: each unit is its WoW creature. A creature's look is saved
--- the first time it loads, so every copy matches and later loads are quick.
+-- Unit models: each unit is its WoW creature, by its display id (found once
+-- per creature with a hidden model frame, then saved: see P:Probe).
 ---------------------------------------------------------------------------
 local MODEL_W, MODEL_H = 40, 48
 local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
@@ -53,28 +54,45 @@ local function Looks()
     return rec.looks
 end
 
-local function LoadModel(m)
-    local look = Looks()[m.npc]
-    if look and m.SetDisplayInfo then m:SetDisplayInfo(look) else m:SetCreature(m.npc) end
-    m.anim = nil
-    m.tried = Now()
+-- Depth. WoW draws all 3D model frames into one shared depth buffer, so
+-- overlapping models cut into each other whatever their frame level. To get
+-- 2D layering (lower on the map = in front), every model frame uses the same
+-- near and far clip, and its camera stands at a distance set by its map row
+-- (see P:PlanDepth): further up the map, further away. A narrower lens makes
+-- up for the distance, so the model fills the same pixels as before.
+local NEAR, FAR = 20, 200000
+local RADIUS = {} -- model file or display id -> its size (radius around where the camera looks)
+
+-- The camera's forward and right directions (right: from the client, or worked out).
+local function CameraDirs(sc, yaw, pitch)
+    local f = { math.cos(pitch) * math.cos(yaw), math.cos(pitch) * math.sin(yaw), -math.sin(pitch) }
+    local r = { -math.sin(yaw), math.cos(yaw), 0 }
+    if sc.GetCameraForward then
+        local x, y, z = sc:GetCameraForward()
+        if x then f = { x, y, z } end
+    end
+    if sc.GetCameraRight then
+        local x, y, z = sc:GetCameraRight()
+        if x then r = { x, y, z } end
+    end
+    return f, r
 end
 
-local function MakeModel(parent)
-    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
-    if not ok or not m or not m.SetCreature then return nil end
-    m:SetSize(MODEL_W, MODEL_H)
-    m.waits = pcall(m.SetScript, m, "OnModelLoaded", function(self)
-        self.loaded = true
-        if self.npc and not Looks()[self.npc] and self.GetDisplayInfo then
-            local look = self:GetDisplayInfo()
-            if look and look > 0 then Looks()[self.npc] = look end
-        end
-        if self.SetPortraitZoom then self:SetPortraitZoom(0) end
-        self.anim = nil
-    end)
-    m:SetScript("OnShow", function(self) if self.npc then LoadModel(self) end end)
-    return m
+-- Point the camera at (tx, ty, tz) from `dist0` away with the usual lens, or,
+-- with a depth set, from that far away with a lens narrowed to match.
+local function Camera(sc, tx, ty, tz, dist0, pitch)
+    local view = ns.WC.ART.view
+    local d, fov = dist0, view.fov
+    if sc.depth then
+        d = sc.depth
+        fov = 2 * math.atan(math.tan(view.fov / 2) * dist0 / d)
+        if sc.SetCameraNearClip then sc:SetCameraNearClip(NEAR) end
+        if sc.SetCameraFarClip then sc:SetCameraFarClip(FAR) end
+    end
+    if sc.SetCameraFieldOfView then sc:SetCameraFieldOfView(fov) end
+    sc:SetCameraOrientationByYawPitchRoll(view.yaw, pitch, 0)
+    local f = CameraDirs(sc, view.yaw, pitch)
+    sc:SetCameraPosition(tx - f[1] * d, ty - f[2] * d, tz - f[3] * d)
 end
 
 -- A world object (building, tree, mine) from its file id, in a ModelScene:
@@ -90,12 +108,18 @@ local function MakeDoodad(parent)
     if sc.SetCameraFieldOfView then sc:SetCameraFieldOfView(view.fov) end
     if sc.SetCameraNearClip then sc:SetCameraNearClip(0.1) end
     if sc.SetCameraFarClip then sc:SetCameraFarClip(5000) end
-    -- Place the camera for a model of radius r around (cx, cy, cz).
     -- Stand the model on the ground at the frame's centre, its width
     -- filling fp pixels (a building's footprint): see Fit.
     function sc:Ground(fp, look)
         if self.fp ~= fp or self.look ~= look then
             self.fp, self.look, self.sig = fp, look, nil
+        end
+    end
+    -- How far the camera stands (set from the map row; nil: just fit it).
+    function sc:SetDepth(d)
+        if self.depth ~= d then
+            self.depth, self.sig = d, nil
+            if self.file then self:Fit() end
         end
     end
     function sc:AimGround(x1, y1, z1, x2, y2, z2)
@@ -107,21 +131,15 @@ local function MakeDoodad(parent)
         local fh = self:GetHeight()
         if not fh or fh <= 0 then return false end
         local dist = fh / (2 * math.tan(view.fov / 2) * scale)
-        self:SetCameraOrientationByYawPitchRoll(view.yaw, view.bpitch, 0)
-        local fx, fy, fz = 1, 0, 0
-        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
-        local cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-        self:SetCameraPosition(cx - fx * dist, cy - fy * dist, z1 - fz * dist)
+        self.rr = math.sqrt(((x2 - x1) / 2) ^ 2 + ((y2 - y1) / 2) ^ 2 + h * h)
+        Camera(self, (x1 + x2) / 2, (y1 + y2) / 2, z1, dist, view.bpitch)
         return true
     end
     function sc:Aim(cx, cy, cz, r)
-        self:SetCameraOrientationByYawPitchRoll(view.yaw, view.pitch, 0)
-        local fx, fy, fz = 1, 0, 0
-        if self.GetCameraForward then fx, fy, fz = self:GetCameraForward() end
         local fit = ns.WC.ART.fit[self.file] or {}
         cz = cz + r * (fit.up or 0)
-        local dist = r / math.tan(view.fov / 2) * view.margin * (fit.margin or 1)
-        self:SetCameraPosition(cx - fx * dist, cy - fy * dist, cz - fz * dist)
+        self.rr = r * (1 + (fit.up or 0))
+        Camera(self, cx, cy, cz, r / math.tan(view.fov / 2) * view.margin * (fit.margin or 1), view.pitch)
     end
     function sc:Fit()
         local x1, y1, z1, x2, y2, z2
@@ -132,8 +150,8 @@ local function MakeDoodad(parent)
         end
         local cx, cy, cz = (x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2
         local r = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2 + (z2 - z1) ^ 2) / 2
-        local sig = string.format("%.2f %.2f %.2f %.2f %s %s", cx, cy, cz, r, tostring(self.fp),
-            tostring(self.GetHeight and self:GetHeight()))
+        local sig = string.format("%.2f %.2f %.2f %.2f %s %s %s", cx, cy, cz, r, tostring(self.fp),
+            tostring(self.GetHeight and self:GetHeight()), tostring(self.depth))
         if r <= 0.01 then
             self:Aim(0, 0, 5, 20)
             return false
@@ -145,6 +163,7 @@ local function MakeDoodad(parent)
         else
             self:Aim(cx, cy, cz, r)
         end
+        if self.rr then RADIUS[self.file] = self.rr end
         self.fitted = true
         return true
     end
@@ -171,6 +190,68 @@ local function MakeDoodad(parent)
         actor:SetModelByFileID(file)
         if actor.SetYaw then actor:SetYaw(facing or 0) end
         self:Fit()
+    end
+    return sc
+end
+
+-- A unit: its WoW creature (by display id) in a ModelScene, fitted to the
+-- frame by its height, seen from the same angle as the buildings.
+local function MakeUnitModel(parent)
+    local ok, sc = pcall(CreateFrame, "ModelScene", nil, parent)
+    if not ok or not sc or not sc.CreateActor then return nil end
+    local actor = sc:CreateActor()
+    if not actor or not actor.SetModelByCreatureDisplayID then return nil end
+    sc:SetSize(MODEL_W, MODEL_H)
+    sc.actor = actor
+    local view = ns.WC.ART.view
+    function sc:SetDepth(d)
+        if self.depth ~= d then
+            self.depth, self.sig = d, nil
+            self:Fit()
+        end
+    end
+    function sc:Fit()
+        if not self.disp or not actor.GetActiveBoundingBox then return false end
+        local x1, y1, z1, x2, y2, z2 = actor:GetActiveBoundingBox()
+        if not x1 or not x2 or (z2 - z1) <= 0.01 then return false end
+        local sig = string.format("%.2f %.2f %.2f %s", x1, z1, z2, tostring(self.depth))
+        self.loaded = true
+        if sig == self.sig then return true end
+        self.sig = sig
+        local h = z2 - z1
+        self.rr = math.sqrt(((x2 - x1) / 2) ^ 2 + ((y2 - y1) / 2) ^ 2 + (h / 2) ^ 2)
+        RADIUS["unit"] = math.max(RADIUS["unit"] or 0, self.rr)
+        -- Its height fills most of the frame.
+        Camera(self, (x1 + x2) / 2, (y1 + y2) / 2, z1 + h / 2, (h * 0.55) / math.tan(view.fov / 2), view.bpitch)
+        return true
+    end
+    sc:SetScript("OnUpdate", function(self, elapsed)
+        if not self.disp then return end
+        self.watch = (self.watch or 0) + elapsed
+        if self.watch > 4 and self.loaded then return end
+        self.tick = (self.tick or 0) + elapsed
+        if self.tick < 0.1 then return end
+        self.tick = 0
+        self:Fit()
+    end)
+    function sc:UseCreature(disp)
+        if self.disp == disp then return end
+        self.disp, self.sig, self.watch, self.loaded, self.anim = disp, nil, 0, false, nil
+        actor:SetModelByCreatureDisplayID(disp)
+        self:Fit()
+    end
+    -- Facing a screen direction (0 right, pi/2 down, towards the viewer).
+    function sc:SetFacing(phi)
+        local f, r = CameraDirs(self, view.yaw, view.bpitch)
+        local fl = math.max(math.sqrt(f[1] ^ 2 + f[2] ^ 2), 0.0001)
+        local rl = math.max(math.sqrt(r[1] ^ 2 + r[2] ^ 2), 0.0001)
+        local c, s = math.cos(phi), math.sin(phi)
+        local dx = c * r[1] / rl - s * f[1] / fl
+        local dy = c * r[2] / rl - s * f[2] / fl
+        if actor.SetYaw then actor:SetYaw(ATAN2(dy, dx)) end
+    end
+    function sc:SetAnimation(anim)
+        if actor.SetAnimation then actor:SetAnimation(anim) end
     end
     return sc
 end
@@ -1181,7 +1262,12 @@ function P:DrawTrees()
                 end
                 local size = TILE * 2 * art.treeGrow * (n >= 3 and 1 or 0.8)
                 t:SetSize(size, size)
-                if t.Use then t:Use(art.trees[(bx / 2 + by / 2) % #art.trees + 1], (bx * 7 + by * 3) % 6) end
+                if t.Use then
+                    local file = art.trees[(bx / 2 + by / 2) % #art.trees + 1]
+                    t.row = by + 2
+                    t:SetDepth(self:DepthAt(t.row, RADIUS[file] or 25))
+                    t:Use(file, (bx * 7 + by * 3) % 6)
+                end
                 t:Show()
                 Place(t, self.view, (bx + 1) * TILE - self.camX, (by + 1) * TILE - self.camY - art.treeY)
                 -- A soft shadow at its foot.
@@ -1207,6 +1293,80 @@ end
 -- four levels each: a unit's frame, model and health bar fit in one step).
 function P:Depth(y)
     return self.buildLayer:GetFrameLevel() + 1 + math.max(0, math.min(100, math.floor(y * 2))) * 4
+end
+
+-- The depth plan: each half row of the map gets a slice of distance from the
+-- camera, thick enough for the biggest model standing on it; the bottom row
+-- is nearest. A model stands in its row's slice, so anything lower on the map
+-- is always nearer than anything higher up, whatever their shapes.
+local DEPTH_BASE = 60 -- the nearest slice (beyond the near clip)
+function P:PlanDepth()
+    local st = self.st
+    local thick = {}
+    local function Add(row, r)
+        local b = math.floor(row * 2)
+        thick[b] = math.max(thick[b] or 0, 2 * r)
+    end
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind ~= "unit" then
+            local look = ns.WC.ART.models[e.type]
+            Add(e.y + e.size, look and RADIUS[look.file] or 30)
+        end
+    end
+    local treeR = 0
+    for _, file in ipairs(ns.WC.ART.trees) do treeR = math.max(treeR, RADIUS[file] or 25) end
+    for i in pairs(st.trees) do
+        local y = math.floor(i / st.w)
+        Add(y - y % 2 + 2, treeR)
+    end
+    local unitThick = 2 * (RADIUS.unit or 3) + 1
+    local plan, off = {}, DEPTH_BASE
+    for b = st.h * 2 + 4, -4, -1 do
+        plan[b] = off
+        off = off + math.max(thick[b] or 0, unitThick) + 1
+    end
+    self.depthPlan = plan
+end
+
+-- The camera distance for a model of size rr standing at map row `row`.
+function P:DepthAt(row, rr)
+    local plan = self.depthPlan
+    if not plan then return nil end
+    local b = math.max(-4, math.min(self.st.h * 2 + 4, math.floor(row * 2)))
+    return (plan[b] or DEPTH_BASE) + rr
+end
+
+-- A creature's display id (the unit model needs it): load the creature once
+-- in a tiny model frame and read it; saved for next time.
+function P:Probe(npc)
+    local m = self.prober
+    if m == false then return end
+    if not m then
+        local ok
+        ok, m = pcall(CreateFrame, "PlayerModel", nil, self.view)
+        if not ok or not m or not m.SetCreature or not m.GetDisplayInfo then
+            self.prober = false
+            return
+        end
+        m:SetSize(8, 8)
+        m:SetPoint("TOPLEFT", 0, 0)
+        m:SetAlpha(0.01)
+        pcall(m.SetScript, m, "OnModelLoaded", function(s)
+            local d = s:GetDisplayInfo()
+            if s.npc and d and d > 0 then Looks()[s.npc] = d end
+        end)
+        self.prober = m
+    end
+    if m.npc and not Looks()[m.npc] then
+        local d = m:GetDisplayInfo()
+        if d and d > 0 then Looks()[m.npc] = d end
+    end
+    -- One creature at a time; give each a couple of seconds to load.
+    if m.npc and not Looks()[m.npc] and Now() - (m.t or 0) < 2 then return end
+    if m.npc == npc and Looks()[npc] then return end
+    m.npc, m.t = npc, Now()
+    m:SetCreature(npc)
 end
 
 function P:UnitFrame(id, utype)
@@ -1246,7 +1406,7 @@ function P:UnitFrame(id, utype)
         f.ring = f:CreateTexture(nil, "OVERLAY")
         f.ring:SetAllPoints(f.icon)
         f.ring:SetTexture(ART .. "WcRing")
-        f.model = MakeModel(f)
+        f.model = MakeUnitModel(f)
         if f.model then
             f.model:SetPoint("BOTTOM", f, "CENTER", 0, -8)
             f.model.npc = WC().Units[utype].npc
@@ -1312,6 +1472,11 @@ function P:Draw()
         t:Show()
     end
     for i = #plans + 1, #self.planTex do self.planTex[i]:Hide() end
+    -- Depth: lower on the map = nearer the camera = in front (see PlanDepth).
+    self:PlanDepth()
+    for _, t in ipairs(self.treeModels or {}) do
+        if t.SetDepth and t.row and t:IsShown() then t:SetDepth(self:DepthAt(t.row, RADIUS[t.file] or 25)) end
+    end
     local selected = {}
     for _, id in ipairs(self.sel) do selected[id] = true end
     -- Buildings and the mine.
@@ -1353,6 +1518,7 @@ function P:Draw()
                 local lv = self:Depth(e.y + e.size)
                 if t.model:GetFrameLevel() ~= lv then t.model:SetFrameLevel(lv) end
                 t.model:Ground(size, look)
+                t.model:SetDepth(self:DepthAt(e.y + e.size, RADIUS[look.file] or 30))
                 t.model:Use(look.file, look.facing)
                 Place(t.model, self.view, px + size / 2, py + size / 2)
                 t.model:SetAlpha(alpha)
@@ -1453,12 +1619,15 @@ function P:Draw()
                 end
                 -- Always the model (the panels above the map hide anything poking out).
                 local m = f.model
-                if m then
+                local disp = m and Looks()[m.npc]
+                if m and not disp then self:Probe(m.npc) end
+                if m and disp then
                     if not m:IsShown() then m:Show() end
-                    if m.waits and not m.loaded and now - (m.tried or 0) > 2 then LoadModel(m) end
-                    f.icon:Hide()
-                    f.ring:Hide()
-                    if m.SetFacing then m:SetFacing(math.pi / 2 - (e.facing or 0)) end
+                    m:UseCreature(disp)
+                    m:SetDepth(self:DepthAt(e.y, RADIUS.unit or 3))
+                    f.icon:SetShown(not m.loaded)
+                    f.ring:SetShown(not m.loaded)
+                    m:SetFacing(e.facing or math.pi / 2)
                     -- Walking: it moved within the last few engine steps (frames come
                     -- faster than steps, so a per-frame check would flicker).
                     local moved = e.walkT and st.time - e.walkT < 0.16
@@ -1468,6 +1637,7 @@ function P:Draw()
                         m.anim = anim
                     end
                 else
+                    if m then m:Hide() end
                     f.icon:Show()
                     f.ring:Show()
                 end
@@ -1908,6 +2078,12 @@ SlashCmdList.FNGWCVIEW = function(msg)
         end
     end
     for _, t in ipairs(page.buildTex or {}) do Refit(t.model) end
+    for _, f in pairs(page.unitFrames or {}) do
+        if f.model then
+            f.model.sig = nil
+            f.model:Fit()
+        end
+    end
     for _, m in ipairs(page.treeModels or {}) do Refit(m) end
 end
 
