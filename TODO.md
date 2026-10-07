@@ -163,3 +163,8 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
 2. [x] Arcade games: Tetris (move, rotate, drop, line, Tetris, level up), Snake (eat, crash), Flappy (flap, point, crash), 2048 (slide, merge), Minesweeper (reveal, flag, boom, win), Wordle (type, enter, right/close/wrong, win), Candy Crush (swap, match, combo, special), Angry Birds (launch, hit, pig pops, level done), Shooter (shoot, hit, explode, power-up), Agar.io (eat, split, eaten), Tic-Tac-Toe and Battleship (place, hit, miss, sink).
 3. [ ] Warcraft III leftovers: mining and chopping, construction hammering, research/upgrade done, buying and drinking, building click sounds, Catapult and summons, victory and defeat music.
 - [x] Warcraft III: unit voices (the real Warcraft III ones where WoW has them), combat, deaths, spells, warnings, level-up.
+
+## Warcraft III custom games and maps (research in dev/research/, build later)
+- [ ] Up to 8–10 players: the lockstep needs to broadcast to everyone (one RAID/PARTY addon message per turn instead of a whisper to each player), seats/teams in the lobby, more start spots, the AI for empty seats.
+- [ ] Map selection in the lobby: standard melee maps plus our own custom maps, as map data (tile legend, start spots, mines, creep camps, shops).
+- [ ] Custom games, in order to be decided after the research: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.
