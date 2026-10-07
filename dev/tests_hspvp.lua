@@ -230,3 +230,44 @@ function HsMulliganTests()
     check(not E.Mulliganing(st) and coin and st.turn == 1 and #st.players[1].hand == 4,
         "hs mulligan: then the coin and the first turn (with its draw)")
 end
+
+function HsMenuTests()
+    Open()
+    local v = View()
+    v:ShowMenu()
+    check(v.menu:IsShown() and v.queueButton:IsShown() and not v.pick[1]:IsShown(), "hs menu: the main menu first")
+    v.soloButton._scripts.OnClick()
+    check(v.pick[1]:IsShown() and v.backButton:IsShown() and not v.menu:IsShown(), "hs menu: Solo Adventures picks a hero")
+    v.backButton._scripts.OnClick()
+    check(v.menu:IsShown(), "hs menu: Back goes to the menu")
+    v.collectionButton._scripts.OnClick()
+    v.pick[1]._scripts.OnClick()
+    check(v.deckRows[1]:IsShown() and not v.deckRows[1].play:IsShown(), "hs menu: My Collection shows decks to edit, not to play")
+    v:ShowMenu()
+end
+
+function HsQueueJoin(hero)
+    Open()
+    local v = View()
+    v:ShowMenu()
+    v.queueButton._scripts.OnClick()
+    for _, b in ipairs(v.pick) do if b.key == hero then b._scripts.OnClick() end end
+    v.deckRows[1].play._scripts.OnClick()
+    check(ns.Queue.IsQueued("hearthstone") and v.queueFrame:IsShown(), "hs queue: " .. PLAYER_NAME .. " is looking")
+end
+
+function HsQueueStage()
+    local s = S.Get("hearthstone")
+    View():Refresh()
+    return s and s.stage or "none"
+end
+
+function HsQueueCheck(hero)
+    local v = View()
+    v:Refresh()
+    local s = S.Get("hearthstone")
+    check(s and s.stage == "play" and #s.players == 2, "hs queue: " .. PLAYER_NAME .. " matched and playing ("
+        .. tostring(s and s.stage) .. ")")
+    check(not ns.Queue.IsQueued("hearthstone"), "hs queue: " .. PLAYER_NAME .. " is out of the queue")
+    check(v.st and v.st.players[1].heroKey == hero, "hs queue: " .. PLAYER_NAME .. " plays the hero picked before queueing")
+end

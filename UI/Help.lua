@@ -240,6 +240,9 @@ H.RULES = {
             .. "on the board) and spells, paid for with mana: one crystal on your first turn, one more every "
             .. "turn, up to 10. You draw a card every turn; the player going second gets The Coin (one extra "
             .. "mana, once)." },
+        { "Menu", "Play finds you an opponent on your realm: pick a hero and deck, and the game starts as soon "
+            .. "as someone else is looking (keep the window open; Cancel stops looking). Solo Adventures is the "
+            .. "computer, Play a Friend opens a lobby, My Collection builds decks." },
         { "Play a friend", "On the start screen, Play a friend opens a lobby: your group, guild, realm or a private "
             .. "code (or practice against a bot). When you're both in, the host clicks Start and you each pick a hero "
             .. "and deck. You never see each other's hand. A turn lasts 75 seconds (the End Turn button counts down "

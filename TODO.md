@@ -54,11 +54,14 @@ command, so two clients can run the same game. Lobbies, invites and whispers com
 - [x] Mulligan at the start (PvP and against the computer).
 - [x] Wins and losses in the stats (history + your PvP record); guild/realm leaderboards on the start screen.
 
+- [x] A realm queue (Core/Queue.lua) and a Hearthstone-style main menu (Play, Solo Adventures, Play a Friend, My Collection).
+- [ ] Queue: also match through the guild; rank by PvP record later.
+
 ### Warcraft III PvP (second: real time)
 - [ ] Lockstep: both clients run the engine; every 0.25 s each side sends the commands for that turn (or "nothing"), and a turn only runs when both sides' commands are in. Commands are small (unit ids + a point), so addon messages are enough.
 - [ ] A checksum of the game state every few seconds to catch a desync, with a message if it happens.
 - [ ] Lag: a short command delay (2 turns), and "waiting for player" when messages stop; drop and win after 30 s.
-- [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies.
+- [ ] Lobby: pick races and the map, colours, ready buttons; 1 vs 1 first, then 2 vs 2 with AI allies or enemies. Use the realm queue (Core/Queue.lua) too.
 - [ ] Fog of war (pulled forward from roadmap step 6), so you can't see the other base.
 - [ ] Wins and losses in the stats and on a leaderboard.
 

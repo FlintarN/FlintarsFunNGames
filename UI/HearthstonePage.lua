@@ -531,7 +531,7 @@ function P.New(parent, kind)
     self.setup:Hide()
     local back = W.Button(self.setup, "Back", 90, function()
         self.setupOpen = false
-        self:ShowStart()
+        self:ShowMenu()
         self:Refresh()
     end, 22)
     back:SetPoint("BOTTOMLEFT", 10, 10)
@@ -633,7 +633,7 @@ function P.New(parent, kind)
     self.statsText = W.Label(b, "", "GameFontHighlightSmall")
     self.statsText:SetPoint("TOPLEFT", 6, -6)
     self.statsText:SetJustifyH("LEFT")
-    self.newButton = W.Button(b, "New game", 80, function() self:ShowStart() end, 20)
+    self.newButton = W.Button(b, "Menu", 80, function() self:ShowMenu() end, 20)
     self.newButton:SetPoint("TOPLEFT", 4, -40)
     self.status = W.Label(b, "", "GameFontNormal")
     self.status:SetPoint("CENTER", b, "TOPLEFT", CX, -Y.mid)
@@ -791,6 +791,7 @@ function P.New(parent, kind)
         row.count:SetPoint("LEFT", 214, 0)
         row.play = W.Button(row, "Play", 60, function()
             if self.pvp then return self:PvpDeck(self.deckHero, row.deck) end
+            if self.mode == "queue" then return self:StartQueue(self.deckHero, row.deck) end
             self:NewGame(self.deckHero, nil, row.deck.cards)
         end, 22)
         row.play:SetPoint("RIGHT", -128, 0)
@@ -815,7 +816,9 @@ function P.New(parent, kind)
         ns.HearthstoneDecks.Open(self, self.deckHero)
     end, 24)
     self.newDeckButton:SetPoint("BOTTOM", -56, 30)
-    self.backButton = W.Button(o, "Back", 100, function() self:ShowStart() end, 24)
+    self.backButton = W.Button(o, "Back", 100, function()
+        if self.screen == "decks" then self:ShowStart() else self:ShowMenu() end
+    end, 24)
     self.backButton:SetPoint("LEFT", self.newDeckButton, "RIGHT", 12, 0)
 
     -- Leaderboards: wins against the computer and PvP wins, guild or realm.
@@ -867,13 +870,119 @@ function P.New(parent, kind)
     bp:Hide()
     self.boardPanel = bp
 
-    self.friendButton = W.Button(o, "Play a friend", 140, function()
+    -- The main menu, like Hearthstone's: a framed box of big stone buttons.
+    local BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
+    local function Frame(parent, edge)
+        local f = CreateFrame("Frame", nil, parent, BACKDROP)
+        if f.SetBackdrop then
+            f:SetBackdrop({ bgFile = "Interface\\FrameGeneral\\UI-Background-Rock", edgeFile =
+                "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", tile = true, tileSize = 128, edgeSize = edge or 32,
+                insets = { left = 10, right = 10, top = 10, bottom = 10 } })
+        end
+        return f
+    end
+    local function MenuButton(parent, text, sub, w, h, fn)
+        local btn = CreateFrame("Button", nil, parent, BACKDROP)
+        btn:SetSize(w, h)
+        if btn.SetBackdrop then
+            btn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile =
+                "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", edgeSize = 16,
+                insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+            btn:SetBackdropColor(0.24, 0.17, 0.1, 1)
+        end
+        local shine = btn:CreateTexture(nil, "ARTWORK")
+        shine:SetPoint("TOPLEFT", 5, -5)
+        shine:SetPoint("BOTTOMRIGHT", -5, 5)
+        shine:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
+        shine:SetVertexColor(0.55, 0.45, 0.32)
+        shine:SetAlpha(0.5)
+        btn.label = W.BigLabel(btn, h >= 50 and 22 or 15, "GameFontNormalHuge")
+        btn.label:SetPoint("CENTER", 0, sub and 7 or 0)
+        btn.label:SetText(text)
+        btn.label:SetTextColor(1, 0.86, 0.4)
+        if sub then
+            btn.sub = W.Label(btn, sub, "GameFontHighlightSmall")
+            btn.sub:SetPoint("TOP", btn.label, "BOTTOM", 0, -3)
+            btn.sub:SetTextColor(0.85, 0.8, 0.7)
+        end
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetPoint("TOPLEFT", 5, -5)
+        hl:SetPoint("BOTTOMRIGHT", -5, 5)
+        hl:SetColorTexture(1, 0.8, 0.3, 0.14)
+        btn:SetScript("OnClick", function()
+            W.PlaySound("IG_MAINMENU_OPTION")
+            fn()
+        end)
+        return btn
+    end
+    local menu = CreateFrame("Frame", nil, o)
+    menu:SetAllPoints()
+    menu:SetFrameLevel(o:GetFrameLevel() + 4)
+    menu.logo = W.BigLabel(menu, 38, "GameFontNormalHuge")
+    menu.logo:SetPoint("TOP", 0, -26)
+    menu.logo:SetText("HEARTHSTONE")
+    menu.logo:SetTextColor(1, 0.8, 0.25)
+    local box = Frame(menu)
+    box:SetSize(340, 268)
+    box:SetPoint("TOP", 0, -78)
+    self.queueButton = MenuButton(box, "Play", "Find an opponent on your realm", 290, 62, function()
+        self.mode = "queue"
+        self:ShowStart()
+    end)
+    self.queueButton:SetPoint("TOP", 0, -22)
+    self.soloButton = MenuButton(box, "Solo Adventures", "Play against the computer", 290, 62, function()
+        self.mode = "solo"
+        self:ShowStart()
+    end)
+    self.soloButton:SetPoint("TOP", self.queueButton, "BOTTOM", 0, -12)
+    self.friendButton = MenuButton(box, "Play a Friend", "Your group, guild, realm or a private code", 290, 62, function()
         self.setupOpen = true
         self:Refresh()
-    end, 24)
-    self.friendButton:SetPoint("BOTTOM", 0, 30)
-    W.Tooltip(self.friendButton, "Play a friend", "Open a lobby for your group, guild, realm or a private code, "
-        .. "or join someone else's. You each pick a hero and a deck.")
+    end)
+    self.friendButton:SetPoint("TOP", self.soloButton, "BOTTOM", 0, -12)
+    self.collectionButton = MenuButton(menu, "My Collection", nil, 160, 36, function()
+        self.mode = "collection"
+        self:ShowStart()
+    end)
+    self.collectionButton:SetPoint("TOPRIGHT", box, "BOTTOM", -6, -14)
+    self.menuResume = MenuButton(menu, "Back to the game", nil, 160, 36, function() self.overlay:Hide() end)
+    self.menuResume:SetPoint("TOPLEFT", box, "BOTTOM", 6, -14)
+    menu:Hide()
+    self.menu = menu
+
+    -- Finding an opponent: a turning portal, how long, and Cancel.
+    local qf = CreateFrame("Frame", nil, o)
+    qf:SetAllPoints()
+    qf:SetFrameLevel(o:GetFrameLevel() + 4)
+    qf.title = W.BigLabel(qf, 28, "GameFontNormalHuge")
+    qf.title:SetPoint("TOP", 0, -70)
+    qf.title:SetText("Finding Opponent...")
+    qf.title:SetTextColor(1, 0.82, 0.3)
+    qf.swirl = qf:CreateTexture(nil, "ARTWORK")
+    qf.swirl:SetSize(150, 150)
+    qf.swirl:SetPoint("CENTER", 0, -10)
+    qf.swirl:SetTexture("Interface\\Icons\\Spell_Arcane_PortalDalaran")
+    if qf.CreateMaskTexture then
+        local mask = qf:CreateMaskTexture()
+        if mask then
+            mask:SetTexture(ART .. "HsOvalMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(qf.swirl)
+            qf.swirl:AddMaskTexture(mask)
+        end
+    end
+    qf.ring = qf:CreateTexture(nil, "OVERLAY")
+    qf.ring:SetPoint("TOPLEFT", qf.swirl, -12, 12)
+    qf.ring:SetPoint("BOTTOMRIGHT", qf.swirl, 12, -12)
+    qf.ring:SetTexture(ART .. "HsHeroFrame")
+    qf.deck = W.Label(qf, "", "GameFontHighlight")
+    qf.deck:SetPoint("TOP", qf.title, "BOTTOM", 0, -8)
+    qf.info = W.Label(qf, "", "GameFontHighlight")
+    qf.info:SetPoint("TOP", qf.swirl, "BOTTOM", 0, -22)
+    qf.cancel = MenuButton(qf, "Cancel", nil, 140, 36, function() self:CancelQueue() end)
+    qf.cancel:SetPoint("BOTTOM", 0, 30)
+    qf:Hide()
+    self.queueFrame = qf
+
     -- PvP lobby: who's in, and the buttons for what you can do now.
     self.lobbyText = W.Label(o, "", "GameFontHighlight")
     self.lobbyText:SetPoint("TOP", self.overSub, "BOTTOM", 0, -16)
@@ -893,7 +1002,7 @@ function P.New(parent, kind)
     PvpButton("close", "Close lobby", 110, function() A.CloseLobby(self) self:Refresh() end)
     PvpButton("done", "Back", 100, function() S.Dismiss(self.kind) self:Refresh() end)
 
-    self.againButton = W.Button(o, "Play again", 110, function() self:ShowStart() end, 26)
+    self.againButton = W.Button(o, "Play again", 110, function() self:ShowMenu() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self.overlay:Hide() end, 22)
     self.resumeButton:SetPoint("BOTTOM", 0, 30)
@@ -915,7 +1024,7 @@ function P.New(parent, kind)
         self.overlay:Hide()
         ns.Solo.SetRunning(kind, true)
     else
-        self:ShowStart()
+        self:ShowMenu()
     end
     self:Draw()
     return self
@@ -924,38 +1033,57 @@ end
 ---------------------------------------------------------------------------
 -- Games
 ---------------------------------------------------------------------------
-function P:ShowStart()
+-- The main menu: Play (queue), Solo Adventures, Play a Friend, My Collection.
+function P:ShowMenu()
+    self.mode, self.screen = nil, "menu"
     self.overlay:Show()
+    self:HideScreens()
+    self.menu:Show()
+    self.overTitle:SetText("")
+    self.overSub:SetText("")
+    self.menuResume:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
+    self.boardButton:Show()
+    self:DrawBoards()
+end
+
+-- Everything the overlay can show, off.
+function P:HideScreens()
+    self.menu:Hide()
+    self.queueFrame:Hide()
+    for _, b in ipairs(self.pick) do b:Hide() end
+    for _, r in ipairs(self.deckRows) do r:Hide() end
+    for _, b in ipairs({ self.newDeckButton, self.backButton, self.againButton, self.resumeButton, self.boardButton }) do
+        b:Hide()
+    end
+    self:PvpButtons({})
+    self.lobbyText:SetText("")
+    self.boardOpen = false
+    self:DrawBoards()
+end
+
+local MODE_TEXT = {
+    solo = "Solo Adventures: pick your hero. Your opponent is picked at random.",
+    queue = "Play: pick your hero and deck, then we find you an opponent on your realm.",
+    collection = "My Collection: pick a hero to see and build its decks.",
+}
+
+function P:ShowStart()
+    self.screen = "heroes"
+    self.overlay:Show()
+    self:HideScreens()
     self.overTitle:SetText("Choose your hero")
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(self.pvp and "Pick your hero, then a deck. Your opponent does the same."
-        or "Play the computer (your opponent is picked at random), or a friend.")
-    self:PvpButtons({})
-    self.lobbyText:SetText("")
-    self.friendButton:SetShown(not self.pvp)
-    self.boardButton:SetShown(not self.pvp)
-    self:DrawBoards()
+        or MODE_TEXT[self.mode or "solo"])
     for _, b in ipairs(self.pick) do b:Show() end
-    for _, r in ipairs(self.deckRows) do r:Hide() end
-    self.newDeckButton:Hide()
-    self.backButton:Hide()
-    self.againButton:Hide()
-    self.resumeButton:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
-    -- Side by side when both show.
-    self.resumeButton:ClearAllPoints()
-    self.friendButton:ClearAllPoints()
-    if self.resumeButton:IsShown() and self.friendButton:IsShown() then
-        self.resumeButton:SetPoint("BOTTOMRIGHT", self.overlay, "BOTTOM", -6, 30)
-        self.friendButton:SetPoint("BOTTOMLEFT", self.overlay, "BOTTOM", 6, 30)
-    else
-        self.resumeButton:SetPoint("BOTTOM", 0, 30)
-        self.friendButton:SetPoint("BOTTOM", 0, 30)
-    end
+    self.backButton:SetShown(not self.pvp)
 end
 
 -- Step two: the hero's decks (the basic one, then yours).
 function P:ShowDecks(heroKey)
-    self.deckHero = heroKey
+    self.deckHero, self.screen = heroKey, "decks"
+    self.menu:Hide()
+    self.queueFrame:Hide()
     self.overlay:Show()
     local h = ns.HS.Heroes[heroKey]
     self.overTitle:SetText(h.name)
@@ -978,6 +1106,7 @@ function P:ShowDecks(heroKey)
             local ok, why = ns.HS.CheckDeck(heroKey, d.cards)
             row.count:SetText(ok and "|cff40ff4030 cards|r" or ("|cffff6060" .. why .. "|r"))
             row.play:SetEnabled(ok)
+            row.play:SetShown(self.mode ~= "collection" or self.pvp)
             row.edit:SetShown(not d.basic)
             row.delete:SetShown(not d.basic)
         end
@@ -1015,12 +1144,13 @@ end
 
 -- Stop without counting it (closing the tab).
 function P:Quit()
+    if ns.Queue.IsQueued(self.kind) then self:CancelQueue() end
     if self.pvp then return self:LeavePvp() end
     if not self.st then return end
     self.st = nil
     Save().game = nil
     ns.Solo.SetRunning(self.kind, false)
-    self:ShowStart()
+    self:ShowMenu()
     self:Draw()
     ns.Changed()
 end
@@ -1324,6 +1454,7 @@ function P:Tick()
         self.endButton:SetEnabled(can)
         if st then self:Draw() end -- playable cards light up again
     end
+    if self.queueFrame:IsShown() then self:QueueTick() end
     if self.pvp then return self:PvpTick() end
     if not st or st.over or self.overlay:IsShown() then return end
     if E().Mulliganing(st) then
@@ -2005,6 +2136,8 @@ function P:PvpScreen(title, sub, lobby, keys)
     end
     self.boardOpen = false
     self:DrawBoards()
+    self.menu:Hide()
+    self.queueFrame:Hide()
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(sub or "")
@@ -2078,7 +2211,7 @@ function P:LeavePvp()
     self.concede:Hide()
     local saved = Save().game
     self.st = (saved and saved.players and not saved.over) and saved or nil
-    self:ShowStart()
+    self:ShowMenu()
     if self.st then self:Draw() end
 end
 
@@ -2105,6 +2238,10 @@ function P:RefreshPvp(s)
     local who = "Players: " .. table.concat(names, ", ")
     self.concede:SetShown(s.phase == "rolling" and s.stage == "play" and seated)
 
+    if s.phase == "lobby" and (s.queued or self.queueDeck) then
+        self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
+        return
+    end
     if s.phase == "lobby" then
         local keys = {}
         if host then
@@ -2124,6 +2261,12 @@ function P:RefreshPvp(s)
         return
     end
 
+    if s.stage == "decks" and seated and self.queueDeck and not (s.chosen and s.chosen[me]) then
+        local q = self.queueDeck
+        self.queueDeck = nil
+        self:PvpDeck(q.hero, q.deck)
+        return
+    end
     if s.stage == "decks" then
         if seated and not (s.chosen and s.chosen[me]) then
             -- Pick a hero and deck (the normal start screen, sent to the host).
@@ -2166,7 +2309,10 @@ function P:RefreshPvp(s)
             if not (s.phase == "done" and first) then self.overlay:Hide() end
             if first then
                 self:Draw()
-                self:Banner(self.st.active == ME and "You go first" or "Your opponent goes first", 1.2)
+                local them
+                for _, p in ipairs(s.players) do if p.name ~= me then them = p.name end end
+                local h1, h2 = ns.HS.Heroes[self.st.players[1].heroKey], ns.HS.Heroes[self.st.players[2].heroKey]
+                self:Banner(h1.name .. "   VS   " .. h2.name .. "\n|cffffffff" .. tostring(them) .. "|r", 2.6)
             else
                 self:Animate(self:PvpEvents(s), before)
             end
@@ -2206,6 +2352,40 @@ function P:PvpOver(s)
         "Score: " .. table.concat(score, "  -  ") .. string.format("\nYour PvP record: %d wins, %d losses.",
             rec.pvpWins or 0, rec.pvpLosses or 0), keys)
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
+end
+
+-- Play: into the queue with this hero and deck.
+function P:StartQueue(heroKey, deck)
+    local ok, why = ns.Queue.Join(self.kind)
+    if not ok then
+        self.overSub:SetText("|cffff6060" .. tostring(why) .. "|r")
+        return
+    end
+    self.queueDeck = { hero = heroKey, deck = deck }
+    self:HideScreens()
+    self.overlay:Show()
+    self.overTitle:SetText("")
+    self.overSub:SetText("")
+    self.queueFrame:Show()
+    self.queueFrame.deck:SetText(ns.HS.Heroes[heroKey].name .. ", " .. deck.name)
+    self:QueueTick()
+end
+
+function P:CancelQueue()
+    ns.Queue.Leave(self.kind)
+    self.queueDeck = nil
+    self:ShowMenu()
+end
+
+function P:QueueTick()
+    local qf = self.queueFrame
+    if not ns.Queue.IsQueued(self.kind) then return end
+    local t = ns.Queue.Since(self.kind)
+    qf.swirl:SetRotation(-(Now() * 1.6) % (2 * math.pi))
+    local others = ns.Queue.Others(self.kind)
+    qf.info:SetText(string.format("Searching %d:%02d\n%s", math.floor(t / 60), math.floor(t % 60),
+        others > 0 and (others .. (others == 1 and " other player" or " other players") .. " looking on your realm")
+            or "Nobody else is looking right now. Keep the window open, or ask a friend!"))
 end
 
 -- The leaderboard panel (start screen).

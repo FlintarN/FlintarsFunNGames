@@ -32,7 +32,8 @@ The card game, in WoW, against the computer or **a friend (PvP)**.
 - Minions show their **WoW creature** as a live 3D model: Murloc Raider, Boulderfist Ogre, Core Hound, War Golem and more.
 - Taunt, Charge, Divine Shield, Windfury, Freeze, Spell Damage, Battlecries, Overload, hero powers and fatigue.
 - **Build your own decks**: class and neutral cards, two copies each, 30 cards.
-- **PvP**: open a lobby for your group, guild, realm or a private code, pick your heroes and decks and play. Nobody sees the other hand, there's a mulligan, a turn timer, concede, rematch and a PvP leaderboard.
+- **Play**: queue up and get matched with someone on your realm, like the real thing.
+- **PvP with friends**: open a lobby for your group, guild, realm or a private code, pick your heroes and decks and play. Nobody sees the other hand, there's a mulligan, a turn timer, concede, rematch and a PvP leaderboard.
 - A Hearthstone-style board: tavern table, hero portraits in gold frames, the oval End Turn button. Drag cards onto the board, watch spells fly and minions lunge.
 
 ### Warcraft III

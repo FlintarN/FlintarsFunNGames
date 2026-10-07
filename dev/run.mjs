@@ -550,6 +550,7 @@ await Section('Hearthstone PvP', async () => {
   await p.run('HsMirrorTests()');
   await p.run('HsMulliganTests()');
   await p.run('HsPvpPractice()');
+  await p.run('HsMenuTests()');
 });
 
 await Section('Hearthstone PvP over a code lobby', async () => {
@@ -574,6 +575,22 @@ await Section('Hearthstone PvP over a code lobby', async () => {
   }
   await Pump(players, 1);
   for (const q of players) await q.run('HsPvpEnd()');
+});
+
+await Section('Hearthstone: the realm queue', async () => {
+  const a = await Player('Flintar', []);
+  const b = await Player('Bob', []);
+  const players = [a, b];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_hspvp.lua'), 'utf8'));
+  await a.run('HsQueueJoin("jaina")');
+  await b.run('HsQueueJoin("thrall")');
+  for (let i = 0; i < 12; i++) {
+    await Pump(players, 4);
+    if ((await Get(a, 'HsQueueStage()')) === 'play' && (await Get(b, 'HsQueueStage()')) === 'play') break;
+  }
+  await Pump(players, 1);
+  await a.run('HsQueueCheck("jaina")');
+  await b.run('HsQueueCheck("thrall")');
 });
 
 await Section('Warcraft III engine and AI', async () => {

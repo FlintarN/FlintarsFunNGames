@@ -42,6 +42,7 @@ Games\Warcraft\Engine.lua
 Games\Warcraft\AI.lua
 Games\Warcraft.lua
 Core\Session.lua
+Core\Queue.lua
 Core\Live.lua
 Core\Scores.lua
 UI\Widgets.lua
