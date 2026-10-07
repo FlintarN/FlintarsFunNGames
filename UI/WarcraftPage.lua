@@ -210,7 +210,7 @@ function P.New(parent, kind)
     barFrame:SetPoint("TOPLEFT")
     barFrame:SetPoint("TOPRIGHT")
     barFrame:SetHeight(BAR)
-    barFrame:SetFrameLevel(b:GetFrameLevel() + 150)
+    barFrame:SetFrameLevel(b:GetFrameLevel() + 480)
     local bar = barFrame:CreateTexture(nil, "BACKGROUND")
     bar:SetPoint("TOPLEFT")
     bar:SetPoint("TOPRIGHT")
@@ -264,13 +264,13 @@ function P.New(parent, kind)
         f:SetFrameLevel(view:GetFrameLevel() + level)
         return f
     end
-    -- Buildings get a level each (their bottom row on the map, see DrawBuildings),
-    -- so the ones lower on the screen stand in front: room for 60 rows.
+    -- Buildings and units share one depth order: whatever stands lower on the
+    -- map (its feet, a building's bottom edge) is drawn in front (see Depth).
     self.treeLayer = Layer(1)
     self.buildLayer = Layer(2)
-    self.buildTop = Layer(64) -- building health bars and team flags, above the models
-    self.unitLayer = Layer(70)
-    self.fxLayer = Layer(90)
+    self.unitLayer = Layer(2)
+    self.buildTop = Layer(410) -- building health bars and team flags, above everything on the map
+    self.fxLayer = Layer(420)
     self.box = self.fxLayer:CreateTexture(nil, "OVERLAY")
     self.box:SetColorTexture(0.3, 1, 0.3, 0.18)
     self.box:Hide()
@@ -298,7 +298,7 @@ function P.New(parent, kind)
     local hud = CreateFrame("Frame", nil, b)
     hud:SetPoint("TOPLEFT", 0, -(BAR + VIEW_H))
     hud:SetPoint("BOTTOMRIGHT")
-    hud:SetFrameLevel(view:GetFrameLevel() + 120)
+    hud:SetFrameLevel(view:GetFrameLevel() + 450)
     hud:EnableMouse(true)
     local hbg = hud:CreateTexture(nil, "BACKGROUND")
     hbg:SetAllPoints()
@@ -405,7 +405,7 @@ function P.New(parent, kind)
     -- Start / game over overlay.
     local o = CreateFrame("Frame", nil, b)
     o:SetAllPoints()
-    o:SetFrameLevel(b:GetFrameLevel() + 200)
+    o:SetFrameLevel(b:GetFrameLevel() + 520)
     o:EnableMouse(true)
     local shade = o:CreateTexture(nil, "BACKGROUND")
     shade:SetAllPoints()
@@ -1130,6 +1130,12 @@ function P:DrawTrees()
     for j = used + 1, #self.shadeTex do self.shadeTex[j]:Hide() end
 end
 
+-- The frame level for something standing at map row y (half-tile steps,
+-- four levels each: a unit's frame, model and health bar fit in one step).
+function P:Depth(y)
+    return self.buildLayer:GetFrameLevel() + 1 + math.max(0, math.min(100, math.floor(y * 2))) * 4
+end
+
 function P:UnitFrame(id, utype)
     local f = self.unitFrames[id]
     if f and f.type == utype then return f end
@@ -1176,6 +1182,7 @@ function P:UnitFrame(id, utype)
         local top = CreateFrame("Frame", nil, f)
         top:SetAllPoints()
         top:SetFrameLevel(f:GetFrameLevel() + 3)
+        f.top = top
         f.hpBg = top:CreateTexture(nil, "OVERLAY", nil, 1)
         f.hpBg:SetColorTexture(0, 0, 0, 0.8)
         f.hpBg:SetSize(20, 3)
@@ -1270,7 +1277,8 @@ function P:Draw()
                 local fs = size * 2 * ((look.tall or ns.WC.ART.view.tall) + 0.6)
                 t.model:SetSize(fs, fs)
                 -- Lower on the map (bigger bottom row): in front.
-                t.model:SetFrameLevel(self.buildLayer:GetFrameLevel() + 1 + math.min(60, e.y + e.size))
+                local lv = self:Depth(e.y + e.size)
+                if t.model:GetFrameLevel() ~= lv then t.model:SetFrameLevel(lv) end
                 t.model:Ground(size, look)
                 t.model:Use(look.file, look.facing)
                 Place(t.model, self.view, px + size / 2, py + size / 2)
@@ -1363,6 +1371,13 @@ function P:Draw()
                 end
                 f:ClearAllPoints()
                 f:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
+                local lv = self:Depth(e.y)
+                if f.depth ~= lv then
+                    f.depth = lv
+                    f:SetFrameLevel(lv)
+                    if f.model then f.model:SetFrameLevel(lv + 1) end
+                    if f.top then f.top:SetFrameLevel(lv + 3) end
+                end
                 -- Always the model (the panels above the map hide anything poking out).
                 local m = f.model
                 if m then
