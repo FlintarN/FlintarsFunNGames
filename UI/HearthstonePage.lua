@@ -1039,6 +1039,7 @@ function P:ShowMenu()
     self.overlay:Show()
     self:HideScreens()
     self.menu:Show()
+    for _, b in ipairs({ self.queueButton, self.soloButton, self.friendButton, self.collectionButton }) do b:Show() end
     self.overTitle:SetText("")
     self.overSub:SetText("")
     self.menuResume:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
@@ -2238,7 +2239,17 @@ function P:RefreshPvp(s)
     local who = "Players: " .. table.concat(names, ", ")
     self.concede:SetShown(s.phase == "rolling" and s.stage == "play" and seated)
 
-    if s.phase == "lobby" and (s.queued or self.queueDeck) then
+    -- A queue match: our own invite lobby is still "Finding Opponent" until
+    -- the other player sits down; then it starts by itself.
+    if s.phase == "lobby" and s.queued and #s.players < 2 and ns.Queue.IsQueued(self.kind) then
+        self.pvp = nil
+        self:HideScreens()
+        self.overlay:Show()
+        self.queueFrame:Show()
+        self:QueueTick()
+        return
+    end
+    if s.phase == "lobby" and s.queued and #s.players >= 2 then
         self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
         return
     end
@@ -2383,9 +2394,11 @@ function P:QueueTick()
     local t = ns.Queue.Since(self.kind)
     qf.swirl:SetRotation(-(Now() * 1.6) % (2 * math.pi))
     local others = ns.Queue.Others(self.kind)
-    qf.info:SetText(string.format("Searching %d:%02d\n%s", math.floor(t / 60), math.floor(t % 60),
-        others > 0 and (others .. (others == 1 and " other player" or " other players") .. " looking on your realm")
-            or "Nobody else is looking right now. Keep the window open, or ask a friend!"))
+    local partner = ns.Queue.Partner(self.kind)
+    local line = partner and ("Found " .. partner .. ", setting up the game...")
+        or (others > 0 and (others .. (others == 1 and " other player" or " other players") .. " looking on your realm"))
+        or "Nobody else is looking right now. Keep the window open, or ask a friend!"
+    qf.info:SetText(string.format("Searching %d:%02d", math.floor(t / 60), math.floor(t % 60)) .. "\n" .. line)
 end
 
 -- The leaderboard panel (start screen).

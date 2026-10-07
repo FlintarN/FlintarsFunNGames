@@ -271,3 +271,25 @@ function HsQueueCheck(hero)
     check(not ns.Queue.IsQueued("hearthstone"), "hs queue: " .. PLAYER_NAME .. " is out of the queue")
     check(v.st and v.st.players[1].heroKey == hero, "hs queue: " .. PLAYER_NAME .. " plays the hero picked before queueing")
 end
+
+-- Alone in the queue: never "found", and Play a Friend is still on the menu after.
+function HsQueueAlone()
+    Open()
+    local v = View()
+    HsQueueJoin("jaina")
+    for _ = 1, 5 do Advance(4) v:Refresh() v:Tick() end
+    check(ns.Queue.IsQueued("hearthstone") and v.queueFrame:IsShown() and S.Get("hearthstone") == nil,
+        "hs queue: alone, still looking (no lobby, nobody found)")
+    v.queueFrame.cancel._scripts.OnClick()
+    check(not ns.Queue.IsQueued("hearthstone") and v.menu:IsShown() and v.friendButton:IsShown()
+        and v.queueButton:IsShown() and v.soloButton:IsShown(), "hs queue: Cancel goes back to the full menu")
+    -- After a deck screen and a lobby, the menu still has every button.
+    v.friendButton._scripts.OnClick()
+    v.practiceButton._scripts.OnClick()
+    Advance(1)
+    v:Refresh()
+    v.pvpButtons.close._scripts.OnClick()
+    Advance(1)
+    v:Refresh()
+    check(v.menu:IsShown() and v.friendButton:IsShown(), "hs menu: Play a Friend is back after a lobby")
+end

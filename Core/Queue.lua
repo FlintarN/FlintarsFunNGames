@@ -51,7 +51,9 @@ end
 -- Join the queue (false, why if the realm channel can't be used).
 function Q.Join(kind)
     if ns.db.realmLobbies == false then return false, "Realm lobbies are off in Settings." end
-    if ns.Session.IsActive(ns.Session.Get(kind)) then return false, "You're already in a game." end
+    local S = ns.Session
+    if S.IsActive(S.Get(kind)) then return false, "You're already in a lobby or game. Close it first." end
+    if S.Get(kind) then S.Dismiss(kind) end -- a finished one: put it away
     ns.Net.JoinChannel(ns.Net.REALM_CHANNEL)
     Q.queued[kind] = { since = Now() }
     local function Loop()
@@ -83,6 +85,12 @@ local function Matched(kind)
     ns.Changed()
 end
 
+-- Who we're trying to get into a game with right now (invited or inviting), or nil.
+function Q.Partner(kind)
+    local q = Q.queued[kind]
+    return q and (q.hosting or q.joiningWith)
+end
+
 -- Host side: is our invited player seated? Start. Taking too long? Give up
 -- on them and keep looking.
 function Q.Check(kind)
@@ -95,7 +103,7 @@ function Q.Check(kind)
         if s and S.Find(s, ns.Me()) then
             Matched(kind)
         elseif Now() - q.joining > Q.INVITE then
-            q.joining = nil
+            q.joining, q.joiningWith = nil, nil
         end
         return
     end
@@ -137,7 +145,7 @@ ns.Net.On("MI", function(sender, data)
     local q = kind and Q.queued[kind]
     if not q or q.hosting then return end
     if q.joining or ns.Session.IsActive(ns.Session.Get(kind)) then return end
-    q.joining = Now()
+    q.joining, q.joiningWith = Now(), sender
     ns.Session.JoinCode(code)
     ns.Changed()
 end)
