@@ -229,6 +229,11 @@ H.RULES = {
         { "Call to Arms", "Human Town Hall: Call to Arms (C) rings the alarm. Peasants nearby run to the hall and "
             .. "fight as Militia for 45 seconds. Orc: Battle Stations (B) sends peons into the burrows (4 each), "
             .. "and burrows with peons throw spears. Back to Work (W) ends it early." },
+        { "Heroes", "Build an altar and train a hero (at most three; the second needs a Keep, the third a "
+            .. "Castle). Heroes gain levels from enemies dying near them; each level gives a skill point: click Hero "
+            .. "Abilities (O) to learn or improve one of four abilities (the last one from level 6). Abilities cost "
+            .. "mana and have a cooldown; click one, then a target or a spot. A fallen hero can be revived at the "
+            .. "altar with its level and skills." },
         { "Tech", "Upgrade your hall (U): Town Hall > Keep > Castle, Great Hall > Stronghold > Fortress. Some "
             .. "things need other buildings first (a greyed-out button says what): Riflemen a Blacksmith, "
             .. "Headhunters a War Mill, a Castle an Altar. Research in buildings like training: weapons and armour "

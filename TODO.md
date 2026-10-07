@@ -75,12 +75,8 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Pick models for the new buildings (Keep, Castle, Stronghold, Fortress, Blacksmith, War Mill, Scout Tower) in /wcgallery.
 
 ### 2. Heroes
-- [ ] Altars train heroes (the first one costs less; at most 3, the next one needs the next hall tier); revive dead heroes at the altar.
-- [ ] Levels 1 to 10 from experience (kills nearby), hero stats (strength, agility, intelligence), mana and regeneration.
-- [ ] Four abilities each (the ultimate at level 6), learned with skill points; a hero card on the command card.
-- [ ] Human: Paladin (Holy Light, Divine Shield, Devotion Aura, Resurrection), Archmage (Blizzard, Water Elemental, Brilliance Aura, Mass Teleport), Mountain King (Storm Bolt, Thunder Clap, Bash, Avatar), Blood Mage (Flame Strike, Banish, Siphon Mana, Phoenix).
-- [ ] Orc: Blademaster (Wind Walk, Mirror Image, Critical Strike, Bladestorm), Far Seer (Chain Lightning, Far Sight, Feral Spirit, Earthquake), Tauren Chieftain (Shockwave, War Stomp, Endurance Aura, Reincarnation), Shadow Hunter (Healing Wave, Hex, Serpent Ward, Big Bad Voodoo).
-- [ ] Spell effects with WoW spell visuals; autocast for some spells; the AI picks a hero, learns spells and casts them.
+- [ ] Spell visuals from the game files (WoW spell models) instead of rings and messages.
+- [ ] Items and a 6-slot inventory come with shops (step 3) and creeps (step 6).
 
 ### 3. The rest of the Human and Orc armies
 - [ ] Human: Knight (Barracks with Castle, Blacksmith, Lumber Mill), Priest and Sorceress (Arcane Sanctum), Spell Breaker, Flying Machine and Siege Engine (Workshop), Gryphon Rider and Dragonhawk Rider (Gryphon Aviary), Mortar Team.

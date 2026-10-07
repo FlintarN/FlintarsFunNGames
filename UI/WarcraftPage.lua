@@ -393,7 +393,7 @@ function P.New(parent, kind)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
-        D = true, E = true, U = true,
+        D = true, E = true, U = true, N = true, V = true, X = true,
         L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
@@ -742,6 +742,7 @@ function P:Tick(elapsed)
         self.sayUntil = nil
     end
     if not st then return end
+    self:FadeFlash()
     if self.ls then
         if not self.paused then self:Scroll(elapsed) end
         self:Draw()
@@ -768,6 +769,13 @@ function P:Tick(elapsed)
         end
     end
     self:Draw()
+end
+
+function P:FadeFlash()
+    if self.flashTex and self.flashUntil then
+        local left = self.flashUntil - Now()
+        if left <= 0 then self.flashTex:Hide() self.flashUntil = nil else self.flashTex:SetAlpha(math.min(1, left)) end
+    end
 end
 
 function P:Say(text)
@@ -806,6 +814,26 @@ function P:Events(events)
                 self:Say("The enemy sounds the alarm!")
             end
             W.PlaySound("RAID_WARNING")
+        elseif ev.kind == "cast" then
+            local a = WC().Abilities[ev.ability]
+            if ev.owner == ME then self:Say(a.name) end
+            if ev.x then self:Flash(ev.x, ev.y, ev.ability) end
+            W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        elseif ev.kind == "bolt" then
+            local a, t = self.st.ents[ev.id], self.st.ents[ev.target]
+            if a and t then
+                local ax, ay = E().Center(a)
+                local tx, ty = E().Center(t)
+                self:Shot(ax, ay, tx, ty)
+            end
+        elseif ev.kind == "levelUp" and ev.owner == ME then
+            self:Say(WC().Units[ev.type].name .. " reached level " .. ev.level .. "!")
+            W.PlaySound("LEVELUP")
+        elseif ev.kind == "heroDied" then
+            self:Say(ev.owner == ME and ("Your " .. WC().Units[ev.type].name .. " has fallen. Revive at the altar.")
+                or ("Enemy " .. WC().Units[ev.type].name .. " slain!"))
+        elseif ev.kind == "revived" and ev.owner == ME then
+            self:Say(WC().Units[ev.type].name .. " is back!")
         elseif ev.kind == "researched" and ev.owner == ME then
             local r = WC().Research[ev.key]
             self:Say(ev.upgrade and (WC().Buildings[ev.upgrade].name .. " ready")
@@ -1133,6 +1161,13 @@ function P:TargetAt(x, y)
     if mode == "attack" then return self:AttackAt(x, y) end
     local st = self.st
     self:Mark(x, y)
+    if mode == "cast" then
+        local target = self:SeenAt(x, y) or self:SeenAt(x, y + 0.7)
+        local ok, why = self:Cmd({ type = "cast", unit = self.castHero, ability = self.castKey,
+            target = target and target.id, x = x, y = y, queue = Shift() })
+        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+        return
+    end
     if mode == "move" then
         local units = self:MyUnits()
         if #units > 0 then self:Cmd({ type = "move", units = units, x = x, y = y, queue = Shift() }) end
@@ -1220,6 +1255,43 @@ function P:Target(mode, text)
     self.targeting = mode
     self.place = nil
     self:Say(text .. " (right-click cancels)")
+end
+
+function P:CastAbility(hero, key)
+    local a = WC().Abilities[key]
+    if a.target == "self" then
+        local ok, why = self:Cmd({ type = "cast", unit = hero.id, ability = key })
+        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+        return
+    end
+    self.castHero, self.castKey = hero.id, key
+    self:Target("cast", a.name .. ": click " .. (a.target == "point" and "where" or "a target"))
+end
+
+function P:Revive(utype)
+    local b = self:Selected()[1]
+    if not b then return end
+    local ok, why = self:Cmd({ type = "revive", building = b.id, utype = utype })
+    if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+end
+
+-- A ring where a spell lands, in its colour.
+local FLASH = { blizzard = { 0.5, 0.8, 1 }, flame_strike = { 1, 0.5, 0.1 }, earthquake = { 0.7, 0.5, 0.2 },
+    far_sight = { 0.6, 0.9, 1 }, shockwave = { 0.9, 0.7, 0.3 }, serpent_ward = { 0.3, 1, 0.3 } }
+function P:Flash(x, y, key)
+    local a = WC().Abilities[key]
+    local col = FLASH[key] or { 1, 1, 0.6 }
+    local r = a and (type(a.radius) == "table" and a.radius[1] or a.radius) or 1
+    local t = self.flashTex or self.fxLayer:CreateTexture(nil, "OVERLAY")
+    self.flashTex = t
+    t:SetTexture(ART .. "WcSelect")
+    t:SetVertexColor(col[1], col[2], col[3])
+    t:SetSize(r * 2 * TILE, r * TILE * 1.4)
+    t:ClearAllPoints()
+    t:SetPoint("CENTER", self.view, "TOPLEFT", x * TILE - self.camX, -(y * TILE - self.camY))
+    t:SetAlpha(1)
+    t:Show()
+    self.flashUntil = Now() + 1.2
 end
 
 function P:Hold()
@@ -1320,6 +1392,19 @@ function P:UpdateFog()
             end
         end
     end
+    -- Far Sight.
+    for _, r in ipairs(st.reveals or {}) do
+        if r.owner == ME then
+            for ty = math.max(0, math.floor(r.y - r.r)), math.min(st.h - 1, math.floor(r.y + r.r)) do
+                for tx = math.max(0, math.floor(r.x - r.r)), math.min(st.w - 1, math.floor(r.x + r.r)) do
+                    if (tx + 0.5 - r.x) ^ 2 + (ty + 0.5 - r.y) ^ 2 <= r.r * r.r then
+                        local i = ty * st.w + tx
+                        vis[i], explored[i] = true, true
+                    end
+                end
+            end
+        end
+    end
     self.vis = vis
     -- Enemy buildings seen once stay known.
     for _, id in ipairs(st.list) do
@@ -1345,6 +1430,7 @@ end
 function P:Sees(e)
     if e.owner == ME then return true end
     if e.kind ~= "unit" then return self.known[e.id] == true or self:TileSeen(e) end
+    if E().Hidden and E().Hidden(e) then return false end
     return self.vis[math.floor(e.y) * self.st.w + math.floor(e.x)] == true
 end
 
@@ -1824,8 +1910,10 @@ function P:Draw()
             local px, py = e.x * TILE - cx, e.y * TILE - cy
             if not e.inside and not e.insideBuild and px > -30 and px < BW + 30 and py > -10 and py < VIEW_H + 50 then
                 seen[id] = true
-                local f = self:UnitFrame(id, e.type)
+                local look = (e.buffs and e.buffs.hex) and "sheep" or e.type
+                local f = self:UnitFrame(id, look)
                 f:Show()
+                f:SetAlpha((e.illusion or (e.buffs and e.buffs.windwalk)) and 0.55 or 1)
                 f.team:SetVertexColor(col[1], col[2], col[3])
                 f.ring:SetVertexColor(col[1], col[2], col[3])
                 f.sel:SetShown(selected[id] == true)
@@ -1986,11 +2074,16 @@ function P:DrawPanel()
         self.selStatus:SetPoint("TOPLEFT", self.selHp, "BOTTOMLEFT", 0, -3)
         local d = E().Def(first)
         self.portrait:SetTexture(d.icon)
-        self.selName:SetText(d.name)
+        self.selName:SetText(d.name .. (first.level and (" (level " .. first.level .. ")") or "")
+            .. (first.illusion and " (image)" or first.summon and " (summoned)" or ""))
         if first.kind == "mine" then
             self.selHp:SetText("Gold left: " .. (first.gold or 0))
         else
-            self.selHp:SetText(string.format("%d / %d", math.max(0, math.floor(first.hp)), first.maxHp))
+            local text = string.format("%d / %d", math.max(0, math.floor(first.hp)), first.maxHp)
+            if first.maxMana and first.maxMana > 0 then
+                text = text .. string.format("   |cff6fa8ffMana %d / %d|r", math.floor(first.mana), first.maxMana)
+            end
+            self.selHp:SetText(text)
         end
         local o = first.order
         local status = ""
@@ -2005,6 +2098,22 @@ function P:DrawPanel()
             elseif o.type == "toArms" then status = "Answering the call to arms"
             elseif o.type == "garrison" then status = "Running to a burrow" end
             if first.militia then status = string.format("Militia: %d s left. %s", math.ceil(first.militia.t), status) end
+            if o and o.type == "cast" then status = "Casting " .. WC().Abilities[o.ability].name end
+            if first.level and not first.illusion then
+                local need = WC().XP_LEVELS[first.level]
+                status = (need and string.format("XP %d / %d. ", first.xp, need) or "Top level. ")
+                    .. ((first.points or 0) > 0 and ("|cff40ff40" .. first.points .. " skill point" .. (first.points > 1 and "s" or "") .. " (O)|r. ") or "")
+                    .. status
+            end
+            local fx = {}
+            for name, label in pairs({ stun = "Stunned", invuln = "Invulnerable", slow = "Slowed", hex = "Hexed",
+                noAttack = "Banished", windwalk = "Invisible", avatar = "Avatar", bladestorm = "Bladestorm",
+                reinc = "Reincarnating" }) do
+                if first.buffs and first.buffs[name] then table.insert(fx, label) end
+            end
+            table.sort(fx)
+            if #fx > 0 then status = status .. "  |cffffd100" .. table.concat(fx, ", ") .. "|r" end
+            if first.expire then status = status .. string.format("  (%d s left)", math.ceil(first.expire - self.st.time)) end
         elseif first.kind == "building" then
             if first.garrison and first.progress >= 1 then
                 status = "Peons inside: " .. #first.garrison .. "/" .. E().Def(first).garrison
@@ -2050,10 +2159,39 @@ function P:DrawCommands(sel)
             end
         end
     end
-    if not hasWorker then self.menu = nil end
+    local hero
+    for _, e in ipairs(mine) do
+        if E().IsHero(e) and not e.illusion then hero = e break end
+    end
+    if not hasWorker and self.menu == "build" then self.menu = nil end
+    if not hero and self.menu == "learn" then self.menu = nil end
     local function Cost(c) return c[1] .. " gold" .. (c[2] > 0 and (", " .. c[2] .. " lumber") or "") end
     local function Add(item) table.insert(list, item) end
-    if hasWorker and self.menu == "build" then
+    local A = WC().Abilities
+    if hero and self.menu == "learn" then
+        -- Spend a skill point.
+        for _, key in ipairs(WC().Units[hero.type].abilities) do
+            local a = A[key]
+            local lv = E().Skill(hero, key) + 1
+            local top = a.ult and 1 or 3
+            local need = a.ult and 6 or (lv * 2 - 1)
+            local can = (hero.points or 0) > 0 and lv <= top and hero.level >= need
+            local amount = a.amount and (a.amount[math.min(lv, #a.amount)]) or (a.duration and a.duration[math.min(lv, #a.duration)])
+                or (a.count and a.count[math.min(lv, #a.count)]) or (a.mult and a.mult[math.min(lv, #a.mult)])
+                or (a.chance and a.chance[math.min(lv, #a.chance)]) or (a.radius and type(a.radius) == "table" and a.radius[1]) or 0
+            local tip = string.format(a.text or "", amount)
+            if lv > top then tip = "|cff40ff40Fully learned.|r " .. tip
+            elseif hero.level < need then tip = "|cffff6060Needs hero level " .. need .. ".|r " .. tip
+            else tip = string.format("Level %d of %d. ", lv, top) .. tip end
+            Add({ icon = a.icon, key = a.hotkey, title = "Learn " .. a.name .. " (" .. a.hotkey .. ")", tip = tip,
+                enabled = can, action = function()
+                    self:Cmd({ type = "learn", unit = hero.id, ability = key })
+                    if (hero.points or 0) <= 1 then self.menu = nil end
+                end })
+        end
+        list[8] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands.",
+            action = function() self.menu = nil end }
+    elseif hasWorker and self.menu == "build" then
         -- The worker's build menu.
         for _, bt in ipairs(f.builds) do
             local bd = WC().Buildings[bt]
@@ -2076,11 +2214,45 @@ function P:DrawCommands(sel)
             action = function() self:Target("move", "Click where to move") end })
         Add({ icon = IC .. "Spell_Nature_TimeStop", key = "S", title = "Stop (S)", tip = "Stop what they're doing.",
             action = function() self:Stop() end })
-        Add({ icon = IC .. "Ability_Defend", key = "H", title = "Hold Position (H)",
-            tip = "Stand still and only fight what comes in range.", action = function() self:Hold() end })
+        if hero and (hero.points or 0) > 0 then
+            -- Like Warcraft III's "+": skill points to spend.
+            Add({ icon = IC .. "Spell_Holy_Heal02", key = "O", title = "Hero Abilities (O)",
+                tip = "|cff40ff40" .. hero.points .. " skill point" .. (hero.points > 1 and "s" or "") .. " to spend.|r Learn or improve an ability.",
+                action = function() self.menu = "learn" end })
+        else
+            Add({ icon = IC .. "Ability_Defend", key = "H", title = "Hold Position (H)",
+                tip = "Stand still and only fight what comes in range.", action = function() self:Hold() end })
+        end
         Add({ icon = IC .. "Ability_SteelMelee", key = "A", title = "Attack (A)",
             tip = "Then click: an enemy to attack it, or the ground to attack-move there.",
             action = function() self:Target("attack", "Click a target or a spot") end })
+        if hero then
+            for _, key in ipairs(WC().Units[hero.type].abilities) do
+                local a = A[key]
+                local lv = E().Skill(hero, key)
+                local mana = a.mana and (a.mana[lv] or a.mana[#a.mana]) or 0
+                local tip
+                if lv == 0 then
+                    tip = "|cffaaaaaaNot learned yet.|r"
+                else
+                    local amount = a.amount and (a.amount[math.min(lv, #a.amount)]) or (a.duration and a.duration[math.min(lv, #a.duration)])
+                        or (a.count and a.count[math.min(lv, #a.count)]) or (a.mult and a.mult[math.min(lv, #a.mult)])
+                        or (a.chance and a.chance[math.min(lv, #a.chance)]) or (a.radius and type(a.radius) == "table" and a.radius[lv]) or 0
+                    tip = string.format("Level %d. ", lv) .. string.format(a.text or "", amount)
+                    if a.passive then
+                        tip = tip .. " |cffaaaaaa(Works by itself.)|r"
+                    else
+                        tip = tip .. string.format(" %d mana.", mana)
+                        local cd = hero.cds and hero.cds[key]
+                        if cd then tip = tip .. string.format(" |cffff6060Ready in %d s.|r", math.ceil(cd)) end
+                    end
+                end
+                local ready = lv > 0 and not a.passive and not (hero.cds and hero.cds[key]) and (hero.mana or 0) >= mana
+                Add({ icon = a.icon, key = (not a.passive and lv > 0) and a.hotkey or nil,
+                    title = a.name .. ((not a.passive and lv > 0) and (" (" .. a.hotkey .. ")") or ""), tip = tip,
+                    enabled = ready, action = function() self:CastAbility(hero, key) end })
+            end
+        end
         if hasWorker then
             Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
                 action = function() self:Target("gather", "Click the gold mine or a tree") end })
@@ -2095,12 +2267,29 @@ function P:DrawCommands(sel)
     if b then
         for _, ut in ipairs(E().Def(b).trains or {}) do
             local ud = WC().Units[ut]
+            local fallen = st.players[ME].fallen and st.players[ME].fallen[ut]
             local miss = E().Missing(st, ME, ud.requires)
+            if ud.hero and not miss then
+                local ok, why = E().CanTrainHero(st, ME, ut)
+                if not ok and not fallen then miss = why:gsub("^requires ", "") end
+            end
+            if fallen then
+                local cost = E().ReviveCost(st, ME, ut)
+                Add({ icon = ud.icon, key = ud.hotkey, title = "Revive " .. ud.name .. " (" .. ud.hotkey .. ")", cost = cost,
+                    tip = string.format("%s. Back at level %d with all its skills.", Cost(cost), fallen.level),
+                    enabled = not fallen.reviving, action = function() self:Revive(ut) end })
+            else
             local tip = string.format("%s, %d food. %d health, %d damage%s.", Cost(ud.cost), ud.food,
                 E().MaxHp(st, ME, ut), ud.damage, ud.range > 1.5 and ", ranged" or "")
             if miss then tip = "|cffff6060Requires " .. miss .. ".|r " .. tip end
+            if ud.hero then
+                tip = string.format("%s, %d food. A hero: gains levels, learns four abilities (the last at level 6).",
+                    Cost(ud.cost), ud.food)
+                if miss then tip = "|cffff6060" .. miss:sub(1, 1):upper() .. miss:sub(2) .. ".|r " .. tip end
+            end
             Add({ icon = ud.icon, key = ud.hotkey, title = "Train " .. ud.name .. " (" .. ud.hotkey .. ")", cost = ud.cost,
                 tip = tip, enabled = miss == nil, action = function() self:Train(ut) end })
+            end
         end
         -- Research and upgrades done here.
         for _, key in ipairs(WC().AI.RESEARCH) do

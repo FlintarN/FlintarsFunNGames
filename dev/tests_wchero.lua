@@ -327,3 +327,42 @@ function WcHeroAI()
     check(casts > 0, "wc hero AI: and cast spells (" .. casts .. ")")
     print("  wc hero AI: " .. table.concat(names, ", ") .. "; " .. casts .. " spells")
 end
+
+-- On the page: select a hero, learn a skill on the command card, cast it.
+function WcHeroPage()
+    if not ns.UI.frame then SlashCmdList.FUNNGAMES("") end
+    ns.UI.frame:Show()
+    ns.UI:SelectTab("warcraft")
+    Advance(0)
+    local view = ns.UI.pages.warcraft.view
+    view:NewGame("human", 21)
+    local st = view.st
+    local hall = E.Hall(st, 1)
+    local hx, hy = E.Center(hall)
+    local pal = E.Spawn(st, 1, "paladin", hx, hy + 4)
+    view.sel = { pal.id }
+    view:Draw()
+    local function Button(title)
+        for _, c in ipairs(view.cmds) do
+            if c:IsShown() and c.title and c.title:find(title, 1, true) then return c end
+        end
+    end
+    local plus = Button("Hero Abilities")
+    check(plus and plus:IsEnabled(), "wc hero page: a skill point shows Hero Abilities (O)")
+    plus.action()
+    view:Draw()
+    local learn = Button("Learn Holy Light")
+    check(learn and learn:IsEnabled() and not Button("Learn Resurrection"):IsEnabled(), "wc hero page: learn Holy Light, not the ultimate")
+    learn.action()
+    view:Draw()
+    check(pal.skills.holy_light == 1 and Button("Holy Light (T)") ~= nil, "wc hero page: Holy Light on the card")
+    local fm = E.Spawn(st, 1, "footman", hx + 2, hy + 4)
+    fm.hp = 100
+    Button("Holy Light (T)").action()
+    check(view.targeting == "cast", "wc hero page: click a target")
+    view:TargetAt(fm.x, fm.y)
+    for _ = 1, 20 do E.Step(st, 0.05) end
+    check(fm.hp == 300, "wc hero page: the footman was healed (" .. fm.hp .. ")")
+    view:Draw()
+    check(view.selHp:GetText():find("Mana") ~= nil, "wc hero page: mana in the selection panel")
+end
