@@ -36,6 +36,7 @@ Games\Hearthstone\Cards.lua
 Games\Hearthstone\Heroes.lua
 Games\Hearthstone\Engine.lua
 Games\Hearthstone\AI.lua
+Games\Hearthstone\Sounds.lua
 Games\Hearthstone.lua
 Games\Warcraft\Data.lua
 Games\Warcraft\Engine.lua

@@ -40,6 +40,8 @@ The card game, in WoW, against the computer or **a friend (PvP)**.
 
 A small real-time strategy game against the computer: Human or Orc, workers gathering gold and lumber, farms, barracks, lumber mills and towers, an army of Footmen and Riflemen (or Grunts and Troll Headhunters). Select with a box, right-click to command, attack-move with A, and watch the minimap: the computer attacks in growing waves.
 
+**Hearthstone sound**: every minion speaks with its WoW creature's voice; spells, hits, your turn, the rope, victory.
+
 **Warcraft III sound**: the original Warcraft III unit voices from WoW's own files, combat, spells and warnings. Settings has two switches: Game sounds and Alerts.
 
 **Warcraft III Showcase**: every building, unit and hero on one map to try out yourself, with Target Dummies.

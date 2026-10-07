@@ -157,8 +157,9 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [x] Practice with bots, + Bot button (2026-10-06)
 - [x] Forever-style look: portrait window, side tabs, marble panels with bronze borders, green felt table, tumbling die and spinning numbers (2026-10-06)
 
-## Sound (next, after the looks)
-- [x] Warcraft III: the real Warcraft III unit voices that are in WoW's files (sound/creature/peasant, peon, footman, grunt, rifleman, tauren...: "yes", "what", "ready", attack, warcry, pissed when clicked a lot); WoW NPC voices for the rest. Ready-when-trained, "work complete", "we're under attack", "not enough gold/lumber", building/construction and death sounds, spell sounds from sound/spells, weapon hits, gold mining and chopping, victory/defeat music.
-- Hearthstone: card play and draw, minion attack/death sounds from each creature's own WoW sounds, spell sounds, hero emotes/lines, turn start and timer warning, victory/defeat, a menu/queue sound.
-- [x] Two switches: Game sounds (everything inside the games) and Alerts (your turn, disconnects). Only on/off switches, no volume sliders (WoW's own volume settings handle that).
-- [ ] Missing: footsteps, mining/chopping, construction, victory/defeat music.
+## Sound for everything (the plan, in order)
+Two switches only: Game sounds (inside the games) and Alerts (your turn, disconnects). No volume sliders.
+1. [x] Hearthstone: card draw, play, mulligan; each minion's voice when played, attacking and dying (WoW NPC voices by race, beast/murloc/elemental/demon sounds); spells by school (fire, frost, arcane, nature, lightning, holy, shadow, physical); hero power; hero attacks; heal, armor, freeze, Divine Shield; weapons equip/break; your turn and the turn timer running out; victory and defeat; opponent found.
+2. [ ] Arcade games: Tetris (move, rotate, drop, line, Tetris, level up), Snake (eat, crash), Flappy (flap, point, crash), 2048 (slide, merge), Minesweeper (reveal, flag, boom, win), Wordle (type, enter, right/close/wrong, win), Candy Crush (swap, match, combo, special), Angry Birds (launch, hit, pig pops, level done), Shooter (shoot, hit, explode, power-up), Agar.io (eat, split, eaten), Tic-Tac-Toe and Battleship (place, hit, miss, sink).
+3. [ ] Warcraft III leftovers: mining and chopping, construction hammering, research/upgrade done, buying and drinking, building click sounds, Catapult and summons, victory and defeat music.
+- [x] Warcraft III: unit voices (the real Warcraft III ones where WoW has them), combat, deaths, spells, warnings, level-up.

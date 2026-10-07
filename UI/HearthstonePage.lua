@@ -35,6 +35,7 @@ local TINT = {
 local function HS() return ns.HS end
 local function E() return ns.HS.Engine end
 local function Card(key) return ns.HS.Cards[key] end
+local function Snd() return ns.HS.Sounds end
 local function Now() return GetTime and GetTime() or 0 end
 
 local function Save()
@@ -1097,6 +1098,7 @@ function P:NewGame(heroKey, seed, cards)
     ns.Solo.SetRunning(self.kind, true)
     self:Draw()
     self:Banner(st.active == ME and "You go first" or "Your opponent goes first", 1.2)
+    self:Greetings()
     W.PlaySound("IG_MAINMENU_OPTION")
     ns.Changed()
 end
@@ -1143,7 +1145,7 @@ function P:GameOver()
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
     self.overSub:SetText(string.format("Wins %d, losses %d. Win streak %d (best %d).", rec.wins, rec.losses,
         rec.streak, rec.best))
-    W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+    W.PlayFile(won and Snd().Victory or Snd().Defeat, "game")
     ns.Changed()
 end
 
@@ -1202,6 +1204,7 @@ function P:ConfirmMulligan()
         return
     end
     local before = self:Positions()
+    if #ids > 0 then W.PlayFile(Snd().Mulligan, "game") end
     local ok, events = E().Mulligan(st, ME, ids)
     if ok then self:Animate(events, before) end
     self:Draw()
@@ -1577,6 +1580,104 @@ end
 -- Play one action's events. `before` = positions before it happened.
 -- Each event gets a time: spells fly first, numbers wait for the hit, the
 -- board redraws when the last blow lands.
+---------------------------------------------------------------------------
+-- Sound (Games/Hearthstone/Sounds.lua): each minion's voice, spells by
+-- school, hits, turn, timer, victory. Played when the animation gets there.
+---------------------------------------------------------------------------
+local function Later(d, id, kind)
+    if not id then return end
+    if (d or 0) <= 0.01 then return W.PlayFile(id, kind or "game") end
+    C.Tween(0.01, function() end, function() W.PlayFile(id, kind or "game") end, d)
+end
+
+-- What a minion (by card) says: play, attack or death; a fallback for any
+-- card without its own.
+function P:MinionSound(key, what)
+    local S = Snd()
+    local m = S.Minions[key]
+    if m and m[what] then return m[what] end
+    local card = Card(key)
+    if what == "play" and card and card.race == "totem" then return S.Totem end
+    if what == "death" then return S.MinionDeath end
+    if what == "attack" then return S.Hit end
+end
+
+-- The two heroes greet each other at the start.
+function P:Greetings()
+    local S = Snd()
+    local st = self.st
+    if not S or not st then return end
+    local mine = S.Heroes[st.players[ME].heroKey]
+    local theirs = S.Heroes[st.players[AIP].heroKey]
+    if mine then Later(0.3, mine.play, "voice") end
+    if theirs then Later(2.2, theirs.play, "voice") end
+end
+
+function P:AttackSound(ev, lead, hitAt)
+    local S = Snd()
+    if not S then return end
+    local st = self.st
+    local voice
+    if ev.attacker <= 2 then
+        local h = S.Heroes[st.players[ev.attacker].heroKey]
+        voice = h and h.attack
+    else
+        local m = E().Find(st, ev.attacker)
+        voice = m and S.Minions[m.key] and S.Minions[m.key].attack
+    end
+    if voice then Later(lead, voice, "voice") end
+    Later(hitAt, ev.target <= 2 and S.HeroHit or S.Hit)
+end
+
+function P:EventSounds(events, at, last, lead)
+    local S = Snd()
+    if not S then return end
+    local st = self.st
+    local said = {} -- one of each kind per moment
+    local function Once(kind, d, id)
+        local k = kind .. math.floor((d or 0) * 10)
+        if said[k] then return end
+        said[k] = true
+        Later(d, id)
+    end
+    for i, ev in ipairs(events) do
+        local d = at[i] or last
+        local k = ev.kind
+        if k == "play" then
+            local card = Card(ev.key)
+            Later(lead, S.Play)
+            if card and card.type == "spell" then
+                Later(lead + 0.05, S.School[card.school or "arcane"] or S.School.arcane)
+            elseif card and card.type == "weapon" then
+                Later(lead + 0.05, S.Equip)
+            end
+        elseif k == "power" then
+            local h = ns.HS.Heroes[st.players[ev.owner].heroKey]
+            Later(lead + 0.05, S.School[h.power.school or "arcane"] or S.School.arcane)
+        elseif k == "summon" then
+            Later(lead + 0.15, self:MinionSound(ev.key, "play"), "voice")
+        elseif k == "draw" and ev.owner == ME then
+            Once("draw", 0, S.Draw)
+        elseif k == "heal" then
+            Once("heal", d, S.Heal)
+        elseif k == "freeze" then
+            Once("freeze", d, S.Freeze)
+        elseif k == "shield" then
+            Once("shield", d, S.Shield)
+        elseif k == "armor" then
+            Once("armor", d, S.Armor)
+        elseif k == "buff" then
+            Once("buff", d, S.Buff)
+        elseif k == "weaponBreak" then
+            Later(d, S.Break)
+        elseif k == "death" then
+            Once("death", d, self:MinionSound(ev.key, "death"))
+        elseif k == "turn" and ev.owner == ME and not self.pvp then
+            W.PlaySound("READY_CHECK", true) -- your turn (an alert)
+        end
+    end
+end
+
 function P:Animate(events, before)
     local st = self.st
     local lead = 0
@@ -1633,7 +1734,7 @@ function P:Animate(events, before)
                 end, function() f:SetFrameLevel(self.board:GetFrameLevel() + 10) end, lead)
                 self:Burst(t[1], t[2], SCHOOL.physical, ctx.start, 40)
             end
-            W.PlaySound("U_CHAT_SCROLL_BUTTON")
+            self:AttackSound(ev, lead, ctx.start)
         elseif k == "damage" or k == "heal" or k == "freeze" or k == "shield" or k == "buff" or k == "transform"
             or k == "armor" or k == "bounce" or k == "steal" or k == "doom" then
             local p = before[ev.id]
@@ -1681,6 +1782,7 @@ function P:Animate(events, before)
         end
     end
 
+    self:EventSounds(events, at, last, lead)
     for i, ev in ipairs(events) do
         local p = ev.id and before[ev.id]
         local d = at[i] or last
@@ -2215,6 +2317,10 @@ function P:RefreshPvp(s)
         return
     end
     if s.phase == "lobby" and s.queued and #s.players >= 2 then
+        if not self.foundSaid then
+            self.foundSaid = true
+            W.PlayFile(Snd().Found, "game")
+        end
         self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
         return
     end
@@ -2289,6 +2395,7 @@ function P:RefreshPvp(s)
                 for _, p in ipairs(s.players) do if p.name ~= me then them = p.name end end
                 local h1, h2 = ns.HS.Heroes[self.st.players[1].heroKey], ns.HS.Heroes[self.st.players[2].heroKey]
                 self:Banner(h1.name .. "   VS   " .. h2.name .. "\n|cffffffff" .. tostring(them) .. "|r", 2.6)
+                self:Greetings()
             else
                 self:Animate(self:PvpEvents(s), before)
             end
@@ -2318,7 +2425,7 @@ function P:PvpOver(s)
         elseif not draw then
             rec.pvpLosses = rec.pvpLosses + 1
         end
-        W.PlaySound(won and "LEVELUP" or "RAID_WARNING")
+        W.PlayFile(won and Snd().Victory or Snd().Defeat, "game")
     end
     local score = {}
     for _, p in ipairs(s.players) do table.insert(score, p.name .. " " .. ((s.score and s.score[p.name]) or 0)) end
@@ -2399,6 +2506,11 @@ function P:PvpTick()
     local left = math.ceil(self.G.TURN_TIME - (Now() - self.turnSeen))
     if left <= 20 and left >= 0 and st.active == ME then
         self.endButton:SetText("END TURN (" .. left .. ")")
+        -- The rope is burning: a warning at 10 seconds.
+        if left == 10 and self.ropeSaid ~= self.turnSeen then
+            self.ropeSaid = self.turnSeen
+            W.PlayFile(Snd().TimerLow, "game")
+        end
         self.ticking = true
     elseif self.ticking then
         self.ticking = false

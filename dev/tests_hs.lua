@@ -729,3 +729,40 @@ function HsClassTests()
     for _, k in ipairs(keys) do table.insert(line, k .. " " .. (wins[k] or 0)) end
     print("  classes: " .. games .. " games: " .. table.concat(line, ", "))
 end
+
+-- Sound: every minion and hero has a voice; playing, summoning, hitting
+-- and dying make their sounds when the animation gets there.
+function HsSoundTests()
+    local S = ns.HS.Sounds
+    local quiet = {}
+    for key, c in pairs(ns.HS.Cards) do
+        if c.type == "minion" and not (S.Minions[key] and S.Minions[key].play) and c.race ~= "totem" then
+            table.insert(quiet, key)
+        end
+    end
+    table.sort(quiet)
+    check(#quiet == 0, "hs sound: every minion has a voice (" .. table.concat(quiet, ", ") .. ")")
+    local noHero = {}
+    for key in pairs(ns.HS.Heroes) do if not (S.Heroes[key] and S.Heroes[key].play) then table.insert(noHero, key) end end
+    check(#noHero == 0, "hs sound: every hero has a greeting (" .. table.concat(noHero, ", ") .. ")")
+    local view = ns.UI.pages.hearthstone.view
+    local function Has(list, id)
+        if type(list) ~= "table" then return list == id end
+        for _, x in ipairs(list) do if x == id then return true end end
+    end
+    local function Played(list)
+        for _, id in ipairs(SOUND_FILES) do if Has(list, id) then return true end end
+    end
+    SOUND_FILES = {}
+    view:EventSounds({ { kind = "play", owner = 1, key = "chillwind_yeti" }, { kind = "summon", owner = 1, key = "chillwind_yeti" },
+        { kind = "play", owner = 1, key = "fireball" }, { kind = "death", key = "murloc_raider" } }, {}, 0.5, 0)
+    for _ = 1, 3 do ns.Cards.Tick(true) Advance(1) end
+    ns.Cards.Tick(true)
+    check(Played(S.Play) and Played(S.Minions.chillwind_yeti.play) and Played(S.School.fire) and Played(S.Minions.murloc_raider.death),
+        "hs sound: card, the Yeti's roar, Fireball, the murloc's death (" .. #SOUND_FILES .. " sounds)")
+    ns.db.sound = false
+    SOUND_FILES = {}
+    view:EventSounds({ { kind = "play", owner = 1, key = "fireball" } }, {}, 0, 0)
+    check(#SOUND_FILES == 0, "hs sound: Game sounds off: quiet")
+    ns.db.sound = true
+end
