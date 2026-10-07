@@ -35,9 +35,70 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, Classic-set class cards (secrets, combo, stealth, enrage), a card choice for Tracking.
 
-- [ ] Warcraft III next: heroes from the altars (Altar of Kings / Altar of Storms are buildable but empty), Blacksmith/War Mill upgrades, Scout Tower to Guard Tower upgrade, orc War Mill as lumber drop-off, the AI building lumber mills, more buildings (gallery picks pending), casters, fog of war, PvP (lockstep: both clients run the engine with the same commands).
+- [ ] Warcraft III: see the roadmap below.
 
 - [ ] Flaky test: "a made-up roll is not verified" (group games) failed once in ~5 runs on 2026-10-07; look at its timing.
+
+## Warcraft III roadmap
+
+Goal: play like Warcraft III (The Frozen Throne melee), one step at a time, top to bottom. Every step
+comes with engine tests, the AI using it, the Rules text and docs. Models come from the game files
+(M2 only), picked by the user from /wcgallery.
+
+### 1. Tech and upgrades (the base every later step needs)
+- [ ] Tech tree: buildings and units can require other buildings (e.g. Rifleman needs a Blacksmith); the command card shows greyed-out buttons with "Requires ..." tooltips.
+- [ ] Research queue in buildings (like training: cost, time, cancel and refund), one research at a time per building.
+- [ ] Hall upgrades: Town Hall > Keep > Castle, Great Hall > Stronghold > Fortress (unlock tier 2 and 3).
+- [ ] Human Blacksmith: Iron Forged Swords, Black Gunpowder, Iron Plating (3 levels each).
+- [ ] Human Lumber Mill: Improved Lumber Harvesting (2 levels), Masonry (building armour, 3 levels).
+- [ ] Orc War Mill (lumber and gold drop-off, the Orc Lumber Mill): Steel Melee Weapons, Steel Ranged Weapons, Steel Armor, Reinforced Defenses.
+- [ ] Scout Tower > Guard Tower / Cannon Tower / Arcane Tower; Orc Watch Tower; Spiked Barricades for the Burrow.
+- [ ] Damage and armour types (normal, pierce, siege, magic, hero vs light, medium, heavy, fortified, unarmored, hero) with the Warcraft III table.
+- [ ] Unit upgrades: Defend (Footman), Long Rifles (Rifleman), Berserker Strength (Grunt), Troll Regeneration, Berserker Upgrade (Headhunter).
+- [ ] The AI researches upgrades and upgrades its hall.
+
+### 2. Heroes
+- [ ] Altars train heroes (the first one costs less; at most 3, the next one needs the next hall tier); revive dead heroes at the altar.
+- [ ] Levels 1 to 10 from experience (kills nearby), hero stats (strength, agility, intelligence), mana and regeneration.
+- [ ] Four abilities each (the ultimate at level 6), learned with skill points; a hero card on the command card.
+- [ ] Human: Paladin (Holy Light, Divine Shield, Devotion Aura, Resurrection), Archmage (Blizzard, Water Elemental, Brilliance Aura, Mass Teleport), Mountain King (Storm Bolt, Thunder Clap, Bash, Avatar), Blood Mage (Flame Strike, Banish, Siphon Mana, Phoenix).
+- [ ] Orc: Blademaster (Wind Walk, Mirror Image, Critical Strike, Bladestorm), Far Seer (Chain Lightning, Far Sight, Feral Spirit, Earthquake), Tauren Chieftain (Shockwave, War Stomp, Endurance Aura, Reincarnation), Shadow Hunter (Healing Wave, Hex, Serpent Ward, Big Bad Voodoo).
+- [ ] Spell effects with WoW spell visuals; autocast for some spells; the AI picks a hero, learns spells and casts them.
+
+### 3. The rest of the Human and Orc armies
+- [ ] Human: Knight (Barracks with Castle, Blacksmith, Lumber Mill), Priest and Sorceress (Arcane Sanctum), Spell Breaker, Flying Machine and Siege Engine (Workshop), Gryphon Rider and Dragonhawk Rider (Gryphon Aviary), Mortar Team.
+- [ ] Orc: Catapult (Barracks), Shaman, Witch Doctor and Spirit Walker (Spirit Lodge), Raider, Kodo Beast, Wind Rider and Troll Batrider (Beastiary), Tauren (Tauren Totem).
+- [ ] Shops: Arcane Vault / Voodoo Lounge with items (potions, scrolls); a 6-slot hero inventory.
+- [ ] Caster abilities with mana: Heal, Inner Fire, Dispel, Slow, Invisibility, Polymorph, Bloodlust, Purge, Lightning Shield, Healing Ward, Sentry Ward, Stasis Trap, Ensnare...
+- [ ] Air units and what can hit them (air vs ground attacks).
+- [ ] Upkeep: less gold per trip above 50 and 80 food, shown in the resource bar.
+
+### 4. Night Elf
+- [ ] Wisps: gather lumber without cutting the trees down, gold from an entangled mine, are used up when they build.
+- [ ] Ancients that walk and fight (Tree of Life > Ages > Eternity, Ancient of War, Ancient of Lore, Ancient of Wind, Ancient Protector), Moon Wells (food, refill mana and health), Hunter's Hall.
+- [ ] Units: Archer, Huntress, Glaive Thrower, Dryad, Druid of the Claw, Druid of the Talon, Mountain Giant, Hippogryph, Faerie Dragon, Chimaera.
+- [ ] Shadowmeld at night (needs a day/night cycle), Altar of Elders heroes: Demon Hunter, Keeper of the Grove, Priestess of the Moon, Warden.
+
+### 5. Undead
+- [ ] Acolytes summon buildings (they don't stay), Ghouls gather lumber, the Necropolis > Halls of the Dead > Black Citadel, Haunted Gold Mine on top of the mine.
+- [ ] Blight: Undead build only on blight; it spreads around their buildings; Ziggurats (food, can become Spirit Towers).
+- [ ] Units: Ghoul, Crypt Fiend, Gargoyle, Necromancer (raise skeletons from corpses), Banshee, Meat Wagon, Abomination, Obsidian Statue, Frost Wyrm, Shade.
+- [ ] Corpses that stay on the ground for a while (needed for Raise Dead, Cannibalize, Meat Wagon).
+- [ ] Altar of Darkness heroes: Death Knight, Lich, Dreadlord, Crypt Lord.
+
+### 6. The map and the match
+- [ ] Fog of war and the black mask (explored / seen), unit sight ranges, shared sight for allies.
+- [ ] Day and night cycle (shorter sight at night, Night Elf bonuses).
+- [ ] Creep camps around the map (WoW creatures) that guard expansions and give heroes experience and item drops; a neutral shop and mercenary camp.
+- [ ] Bigger maps, more than one map, map picker; 4 players (2 vs 2 against the AI).
+- [ ] Choose your race and the computer's (Human, Orc, Night Elf, Undead, Random).
+- [ ] PvP: lockstep (both clients run the engine with the same commands), lobbies like the other Arcade games.
+
+### 7. Feel
+- [ ] Unit sounds (WoW voice lines and weapon sounds), building sounds, "Our town is under attack" warnings, a minimap ping.
+- [ ] Attack and spell projectiles from the game files (arrows, spears, cannon balls, fireballs).
+- [ ] Select and command buildings in groups; rally points for several buildings; Tab between unit types in a selection; a multi-unit selection panel with portraits.
+- [ ] Score screen at the end (units, buildings, resources, heroes).
 
 ## Done
 
