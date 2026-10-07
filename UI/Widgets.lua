@@ -25,6 +25,23 @@ function W.Button(parent, text, w, onClick, h)
     return b
 end
 
+-- Dark tavern planks (Art/WoodPlanks, dev/make_wood.py) filling a frame:
+-- the backdrop behind the Warcraft 4 and Hearthstone 2 menus.
+function W.Wood(parent, layer)
+    local t = parent:CreateTexture(nil, layer or "BACKGROUND")
+    t:SetAllPoints()
+    t:SetTexture("Interface\\AddOns\\FlintarsFunNGames\\Art\\WoodPlanks", "REPEAT", "REPEAT")
+    if t.SetHorizTile then t:SetHorizTile(true) end
+    if t.SetVertTile then t:SetVertTile(true) end
+    local function Fit()
+        local w, h = parent:GetWidth() or 512, parent:GetHeight() or 512
+        t:SetTexCoord(0, w / 384, 0, h / 384)
+    end
+    Fit()
+    if parent.HookScript then parent:HookScript("OnSizeChanged", Fit) end
+    return t
+end
+
 -- A main menu like Hearthstone's: a framed stone box and big stone buttons.
 local MENU_BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
 function W.MenuFrame(parent, edge)

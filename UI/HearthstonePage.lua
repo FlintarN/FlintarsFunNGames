@@ -723,9 +723,8 @@ function P.New(parent, kind)
     o:SetAllPoints()
     o:SetFrameLevel(b:GetFrameLevel() + 95)
     o:EnableMouse(true)
-    local shade = o:CreateTexture(nil, "BACKGROUND")
-    shade:SetAllPoints()
-    shade:SetColorTexture(0, 0, 0, 0.72)
+    -- Wood behind every screen here (the board underneath doesn't show through).
+    W.Wood(o)
     self.overlay = o
     self.overTitle = W.BigLabel(o, 26, "GameFontNormalHuge")
     self.overTitle:SetPoint("TOP", 0, -46)
@@ -906,6 +905,10 @@ function P.New(parent, kind)
     self.collectionButton:SetPoint("TOPRIGHT", box, "BOTTOM", -6, -14)
     self.menuResume = MenuButton(menu, "Back to the game", nil, 160, 36, function() self.overlay:Hide() end)
     self.menuResume:SetPoint("TOPLEFT", box, "BOTTOM", 6, -14)
+    self.menuQuit = MenuButton(menu, "Quit game", nil, 120, 30, function()
+        W.Confirm("Quit this game? It ends for good.", function() self:Quit() end)
+    end)
+    self.menuQuit:SetPoint("TOPLEFT", self.menuResume, "TOPRIGHT", 8, -3)
     menu:Hide()
     self.menu = menu
 
@@ -1002,6 +1005,7 @@ function P:ShowMenu()
     self.overTitle:SetText("")
     self.overSub:SetText("")
     self.menuResume:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
+    self.menuQuit:SetShown(self.menuResume:IsShown())
     self.boardButton:Show()
     self:DrawBoards()
 end
@@ -2277,10 +2281,10 @@ end
 function P:LeavePvp()
     self.pvp, self.pvpGame, self.pvpStep, self.setupOpen = nil, nil, nil, false
     self.concede:Hide()
-    local saved = Save().game
-    self.st = (saved and saved.players and not saved.over) and saved or nil
+    -- Back to the menu with no game (your own game ended when this one began).
+    self.st = nil
     self:ShowMenu()
-    if self.st then self:Draw() end
+    self:Draw()
 end
 
 function P:RefreshPvp(s)
@@ -2373,6 +2377,11 @@ function P:RefreshPvp(s)
     if s.view then
         if s.recordId ~= self.pvpGame then
             self.pvpGame, self.pvpStep, self.counted = s.recordId, nil, false
+            -- A game with others replaces your own game.
+            if Save().game then
+                Save().game = nil
+                ns.Solo.SetRunning(self.kind, false)
+            end
             local keys = {}
             for i = 1, 2 do
                 for _, c in ipairs(s.view.players[i].hand) do if c.key then table.insert(keys, c.key) end end

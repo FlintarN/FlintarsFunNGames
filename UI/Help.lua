@@ -257,7 +257,8 @@ H.RULES = {
             .. "Easy, Normal or Hard, open or closed; a race and a team each), the game and map on the right. Players "
             .. "on one team are allies: shared sight, auras and heals; the last team standing wins. Up to eight players." },
         { "Footmen Frenzy", "A game mode (pick it in the lobby): one tough barracks each, no workers. It sends out "
-            .. "your soldiers every few seconds (Send to, Z: the middle or an enemy). Kills give gold: buy the next tier of "
+            .. "your soldiers every few seconds: they wait at home, or go to your rally point (Y) or where Send to (Z) "
+            .. "says (the middle or an enemy). A fallen hero comes back by itself after a while. Kills give gold: buy the next tier of "
             .. "soldiers (from 3:00), Weapons and Armor levels, and one hero (Hire a Hero, H). The last barracks standing wins." },
         { "PvP", "Play a friend opens a lobby (group, guild, realm or a private code); Find an opponent looks for "
             .. "someone on your realm. You each pick a race. Both addons run the same game: your orders reach the "

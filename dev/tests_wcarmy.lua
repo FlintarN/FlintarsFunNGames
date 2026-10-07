@@ -302,7 +302,7 @@ function WcDemo()
     for id, p in pairs(where) do local e = st.ents[id] if e and math.abs(e.x + e.y - p) > 0.01 then moved = moved + 1 end end
     check(not st.over and casts == 0 and fights == 0 and moved == 0,
         "wc demo: nothing happens by itself (" .. casts .. " casts, " .. fights .. " hits, " .. moved .. " moved)")
-    check(ns.db.warcraft.game == saved, "wc demo: your saved game is left alone")
+    check(ns.db.warcraft.game == nil, "wc demo: the Showcase replaces your game (nothing left running)")
     check(view.demoText[1] and view.demoText[1]:IsShown(), "wc demo: names under everything")
     -- You cast: every ability is known, mana and cooldowns refill.
     local am

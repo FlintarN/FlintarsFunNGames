@@ -531,6 +531,16 @@ function P.New(parent, kind)
         t:SetPoint("TOPLEFT", 150 + ((i - 1) % 8) * 27, -10 - math.floor((i - 1) / 8) * 27)
         t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         t:Hide()
+        -- A small health bar under each icon.
+        t.hpBg = hud:CreateTexture(nil, "ARTWORK", nil, 1)
+        t.hpBg:SetColorTexture(0, 0, 0, 0.9)
+        t.hpBg:SetSize(24, 3)
+        t.hpBg:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -1)
+        t.hpBg:Hide()
+        t.hp = hud:CreateTexture(nil, "ARTWORK", nil, 2)
+        t.hp:SetHeight(3)
+        t.hp:SetPoint("LEFT", t.hpBg, "LEFT")
+        t.hp:Hide()
         self.groupIcons[i] = t
     end
     self.queueButtons = {}
@@ -619,9 +629,8 @@ function P.New(parent, kind)
     o:SetAllPoints()
     o:SetFrameLevel(b:GetFrameLevel() + 520)
     o:EnableMouse(true)
-    local shade = o:CreateTexture(nil, "BACKGROUND")
-    shade:SetAllPoints()
-    shade:SetColorTexture(0, 0, 0, 0.75)
+    -- Wood behind every screen here (the game underneath doesn't show through).
+    W.Wood(o)
     self.overlay = o
     self.overTitle = W.BigLabel(o, 26, "GameFontNormalHuge")
     self.overTitle:SetPoint("TOP", 0, -60)
@@ -699,8 +708,12 @@ function P.New(parent, kind)
         self:Refresh()
     end)
     self.friendButton:SetPoint("TOP", self.queueButton, "BOTTOM", 0, -12)
-    self.menuResume = W.MenuButton(menu, "Back to the game", nil, 180, 36, function() self:Resume() end)
-    self.menuResume:SetPoint("TOP", box, "BOTTOM", 0, -14)
+    self.menuResume = W.MenuButton(menu, "Back to the game", nil, 160, 36, function() self:Resume() end)
+    self.menuResume:SetPoint("TOPRIGHT", box, "BOTTOM", -6, -14)
+    self.menuQuit = W.MenuButton(menu, "Quit game", nil, 160, 36, function()
+        W.Confirm("Quit this game? It ends for good.", function() self:Quit() end)
+    end)
+    self.menuQuit:SetPoint("TOPLEFT", box, "BOTTOM", 6, -14)
     self.demoButton = W.MenuButton(menu, "Showcase", nil, 140, 30, function() self:StartDemo() end)
     self.demoButton:SetPoint("BOTTOMRIGHT", -16, 16)
     W.Tooltip(self.demoButton, "Showcase", "Every building, unit and hero on one map, with names. Heroes cast all their spells in turn.")
@@ -769,6 +782,7 @@ function P:ShowMenu()
     self.overTitle:SetText("")
     self.overSub:SetText("")
     self.menuResume:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
+    self.menuQuit:SetShown(self.menuResume:IsShown())
 end
 
 -- Everything the overlay can show, off.
@@ -819,7 +833,33 @@ end
 
 -- A game from the lobby: o from WarcraftLobby.GameOptions (factions, teams,
 -- starts, difficulties, map; me = your player, cpus = the computer's).
+-- The game on this page ends for good: no more saved game, nothing left
+-- running or drawn. (A game you were in comes back after a /reload; one you
+-- left or replaced doesn't.)
+function P:EndGame()
+    if self.ls then return end -- (a game with others: LeavePvp)
+    local demo = self.st and self.st.demo
+    self.st = nil
+    if not demo then Save().game = nil end
+    ns.Solo.SetRunning(self.kind, false)
+    self:ClearBoard()
+end
+
+-- Take everything of the last game off the board (units, effects, labels).
+function P:ClearBoard()
+    for id, f in pairs(self.unitFrames or {}) do
+        self.unitFrames[id] = nil
+        self:FreeFrame(f)
+    end
+    for _, f in ipairs(self.corpses or {}) do f:Hide() end
+    self.corpses = {}
+    for key in pairs(self.fx or {}) do self:FxStop(key) end
+    for _, fs in ipairs(self.demoText or {}) do fs:Hide() end
+    self.sel, self.place, self.targeting, self.menu = {}, nil, nil, nil
+end
+
 function P:StartSkirmish(o, seed)
+    self:EndGame() -- a new game replaces the old one
     ME, CPUS = o.me or 1, o.cpus or {}
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
     self.explored, self.vis, self.known, self.fogAt = {}, {}, {}, 0
@@ -850,6 +890,7 @@ function P:PickSide(faction)
 end
 
 function P:NewGame(faction, seed)
+    self:EndGame() -- a new game replaces the old one
     ME, CPUS = 1, { 2 }
     local other = faction == "human" and "orc" or "human"
     self.groups, self.lastClick, self.lastGroup = {}, nil, nil
@@ -888,10 +929,7 @@ end
 function P:Quit()
     if ns.Queue.IsQueued(self.kind) then ns.Queue.Leave(self.kind) end
     if self.pvp then return self:LeavePvp() end
-    local demo = self.st and self.st.demo
-    self.st = nil
-    if not demo then Save().game = nil end
-    ns.Solo.SetRunning(self.kind, false)
+    self:EndGame()
     self:ShowMenu()
     ns.Changed()
 end
@@ -2310,7 +2348,7 @@ function P:DrawPanel()
 
     local sel = self:Selected()
     local first = sel[1]
-    for _, t in ipairs(self.groupIcons) do t:Hide() end
+    for _, t in ipairs(self.groupIcons) do t:Hide() t.hp:Hide() t.hpBg:Hide() end
     for _, q in ipairs(self.queueButtons) do q:Hide() end
     self.progress:Hide()
     self.portrait:SetShown(first ~= nil and #sel == 1)
@@ -2320,8 +2358,14 @@ function P:DrawPanel()
     if #sel > 1 then
         for i = 1, math.min(12, #sel) do
             local d = E().Def(sel[i])
-            self.groupIcons[i]:SetTexture(d.icon)
-            self.groupIcons[i]:Show()
+            local t = self.groupIcons[i]
+            t:SetTexture(d.icon)
+            t:Show()
+            local frac = math.max(0, math.min(1, sel[i].hp / sel[i].maxHp))
+            t.hp:SetWidth(math.max(1, 24 * frac))
+            t.hp:SetColorTexture(frac > 0.5 and 0.2 or 1, frac > 0.25 and 1 or 0.2, 0.2, 1)
+            t.hpBg:Show()
+            t.hp:Show()
         end
         self.selStatus:ClearAllPoints()
         self.selStatus:SetPoint("TOPLEFT", 150, -66)
@@ -2625,20 +2669,29 @@ function P:DrawCommands(sel)
             -- Footmen Frenzy: where your barracks sends its soldiers.
             if E().Def(b).ffRace then
                 local F = WC().Modes.footmen
-                local t = st.players[ME].ff and st.players[ME].ff.target or 0
+                -- Rally point (or wait at home) > the middle > each enemy > rally point...
+                local t = st.players[ME].ff and st.players[ME].ff.target
                 local s = ns.Session.Get(self.kind)
                 local function Name(q)
+                    if q == nil then return b.rally and "the rally point" or "nowhere (they wait)" end
                     if q == 0 then return "the middle" end
                     local n = s and s.game and s.game.names and s.game.names[q]
                     return n or ("Player " .. q)
                 end
                 list[11] = { icon = IC .. "Ability_Warrior_Charge", key = "Z", title = "Send to: " .. Name(t) .. " (Z)",
-                    tip = "Where your barracks sends its soldiers. Click for the next: the middle, or an enemy's barracks.",
+                    tip = "Where your barracks sends its soldiers: your rally point (Y; without one they wait at home), "
+                        .. "the middle, or an enemy's barracks. Click for the next.",
                     action = function()
                         local q = t
-                        for _ = 1, #st.players + 1 do
-                            q = (q + 1) % (#st.players + 1)
-                            if q == 0 or (E().Foe(st, ME, q) and F.Barracks(st, q)) then break end
+                        if q == nil then q = 0
+                        else
+                            local found
+                            for _ = 1, #st.players do
+                                q = q + 1
+                                if q > #st.players then break end
+                                if E().Foe(st, ME, q) and F.Barracks(st, q) then found = true break end
+                            end
+                            if not found then q = "rally" end
                         end
                         self:Cmd({ type = "sendTo", target = q })
                     end }
@@ -2910,6 +2963,10 @@ end
 
 -- The PvP game starts on this client: same seed and races on both sides.
 function P:StartPvp(s)
+    -- A game with others replaces your own game.
+    if not self.ls then self:EndGame() end
+    if self.ls then ns.Lockstep.Stop(self.ls) self.ls = nil end
+    self:ClearBoard()
     local me = ns.Me()
     local g = s.game
     local seat = self.G.Seat(s, me) or 1
@@ -3012,10 +3069,10 @@ function P:LeavePvp()
     self.ls, self.pvp, self.pvpGame, self.setupOpen = nil, nil, nil, false
     self.surrender:Hide()
     self.claim:Hide()
-    local saved = Save().game
-    self.st = (saved and saved.players and not saved.over) and saved or nil
-    ME, CPUS = self.st and self.st.me or 1, self.st and self.st.cpus or { 2 }
-    if self.st then self:CenterOn(E().Home(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
+    -- Back to the menu with no game (the one before was ended when this began).
+    self.st = nil
+    ME, CPUS = 1, { 2 }
+    self:ClearBoard()
     self.mode = nil
     self:ShowMenu()
 end
@@ -3534,6 +3591,7 @@ local DEMO_HEROES = { "paladin", "archmage", "mountain_king", "blood_mage", "bla
 
 function P:StartDemo()
     if self.pvp or self.ls then return end
+    self:EndGame() -- the Showcase replaces the game you had
     ME, CPUS = 1, {}
     local st = E().New({ factions = { "human", "orc" }, seed = 7, difficulty = "normal" })
     st.demo, st.peace = true, true

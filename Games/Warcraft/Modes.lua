@@ -106,19 +106,22 @@ function F.New(st, opts, map)
         local key = pl.faction == "orc" and "ff_orc_barracks" or "ff_barracks"
         E.SpawnBuilding(st, p, key, s[1], s[2], true)
         pl.gold, pl.lumber = F.START_GOLD, 0
-        pl.ff = { next = 5, target = 0 }
+        pl.ff = { next = 5 } -- target nil: the rally point (or stay home)
     end
     for _, sh in ipairs(map.shops or {}) do E.SpawnBuilding(st, 0, "arcane_vault", sh[1], sh[2], true) end
 end
 
--- Where a player's soldiers go: target 0 is the middle, else that player's barracks.
+-- Where a player's soldiers go: an enemy's barracks (Send to), else the
+-- barracks' rally point; nil: they wait at home.
 local function Goal(st, p)
-    local t = st.players[p].ff.target or 0
-    if t > 0 then
+    local t = st.players[p].ff.target
+    if t == 0 then return st.w / 2, st.h / 2 end
+    if t and t > 0 then
         local b = Barracks(st, t)
         if b and E.Foe(st, p, t) then return E.Center(b) end
     end
-    return st.w / 2, st.h / 2
+    local home = Barracks(st, p)
+    if home and home.rally then return home.rally.x, home.rally.y end
 end
 F.Goal = Goal
 
@@ -152,6 +155,14 @@ function F.Step(st, dt)
                     for _, e in ipairs(left) do E.Remove(st, e) end
                 end
             else
+                -- A fallen hero comes back by itself (free, after a while).
+                for _, ut in ipairs(ffHeroes) do
+                    local f = pl.fallen and pl.fallen[ut]
+                    if f and not f.reviving then
+                        f.reviving = true
+                        table.insert(b.queue, 1, "v:" .. ut)
+                    end
+                end
                 local tier = E.Level(st, p, "ff_tier_" .. E.Def(b).ffRace) + 1
                 local spec = F.TIERS[E.Def(b).ffRace][tier]
                 if st.time >= ff.next then
@@ -161,15 +172,16 @@ function F.Step(st, dt)
                         local x, y = E.NearestFree(st, math.floor(b.x + 1), math.floor(b.y + b.size + 1))
                         local u = E.Spawn(st, p, spec.unit, x + 0.5, y + 0.5)
                         local gx, gy = Goal(st, p)
-                        E.Command(st, p, { type = "attackMove", units = { u.id }, x = gx, y = gy })
+                        if gx then E.Command(st, p, { type = "attackMove", units = { u.id }, x = gx, y = gy }) end
                     end
                 end
+                -- Sent at an enemy: idle soldiers march on (at a rally point they wait).
                 ff.resend = (ff.resend or 0) + dt
-                if ff.resend >= F.RESEND then
+                if ff.resend >= F.RESEND and ff.target then
                     ff.resend = 0
                     local _, idle = Soldiers(st, p)
-                    if #idle > 0 then
-                        local gx, gy = Goal(st, p)
+                    local gx, gy = Goal(st, p)
+                    if #idle > 0 and gx then
                         E.Command(st, p, { type = "attackMove", units = idle, x = gx, y = gy })
                     end
                 end
@@ -196,11 +208,12 @@ function F.OnDeath(st, t)
     end
 end
 
--- "Send to": where your soldiers go (0 = the middle).
+-- "Send to": where your soldiers go: an enemy's seat, 0 the middle,
+-- "rally" (or nothing) the rally point.
 function F.Command(st, p, cmd)
     if cmd.type == "sendTo" then
-        local t = tonumber(cmd.target) or 0
-        if t ~= 0 and not (st.players[t] and E.Foe(st, p, t)) then return false, "not an enemy" end
+        local t = tonumber(cmd.target)
+        if t and t ~= 0 and not (st.players[t] and E.Foe(st, p, t)) then return false, "not an enemy" end
         st.players[p].ff.target = t
         return true
     end
@@ -225,9 +238,7 @@ function F.Think(st, p)
     if not hero then
         local pick = ffHeroes[(p * 3 + #st.players) % #ffHeroes + 1]
         local fallen = pl.fallen and pl.fallen[pick]
-        if fallen then
-            E.Command(st, p, { type = "revive", building = b.id, utype = pick })
-        elseif #b.queue == 0 then
+        if not fallen and #b.queue == 0 then
             E.Command(st, p, { type = "train", building = b.id, utype = pick })
         end
     else
@@ -237,10 +248,7 @@ function F.Think(st, p)
     -- Spend: tier when it can, else weapons and armour in turn, keeping
     -- enough for the hero when it's gone.
     local reserve = 0
-    if not hero and #b.queue == 0 then
-        local pick = ffHeroes[(p * 3 + #st.players) % #ffHeroes + 1]
-        reserve = (pl.fallen and pl.fallen[pick]) and E.ReviveCost(st, p, pick)[1] or F.HERO_COST
-    end
+    if not hero and #b.queue == 0 and not (pl.fallen and next(pl.fallen)) then reserve = F.HERO_COST end
     if #b.queue == 0 and pl.gold > reserve then
         local order = { "ff_tier_" .. race, mem.flip and "ff_armor_" .. race or "ff_weapons_" .. race,
             mem.flip and "ff_weapons_" .. race or "ff_armor_" .. race }
@@ -267,7 +275,8 @@ function F.Think(st, p)
         end
     end
     -- (The first minutes: hold the middle.)
-    if best and pl.ff.target ~= best and st.time > 300 then F.Command(st, p, { type = "sendTo", target = best }) end
+    if best and pl.ff.target ~= best and st.time > 300 then F.Command(st, p, { type = "sendTo", target = best })
+    elseif pl.ff.target == nil and st.time <= 300 then F.Command(st, p, { type = "sendTo", target = 0 }) end
     -- The hero goes with the army (home when hurt).
     if hero and not hero.order then
         local gx, gy = Goal(st, p)

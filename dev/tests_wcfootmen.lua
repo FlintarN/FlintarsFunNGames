@@ -47,8 +47,46 @@ function WcFootmenTests()
     for _ = 1, 40 do E.Step(st, 0.05) end
     check(st.players[1].gold > gold, "ff: gold for the kill (" .. (st.players[1].gold - gold) .. ")")
     -- Send to: an enemy's barracks.
+    -- Soldiers wait at home without a rally point; with one they go there.
+    local function NewOnes(p, utype)
+        local out = {}
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e.owner == p and e.type == utype then table.insert(out, e) end
+        end
+        return out
+    end
+    local waiting = true
+    for _, u in ipairs(NewOnes(1, "footman")) do if u.order then waiting = false end end
+    check(waiting, "ff: without a rally point the soldiers wait at home")
+    E.Command(st, 1, { type = "rally", building = b1.id, x = 20, y = 20 })
+    st.players[1].ff.next = 0
+    E.Step(st, 0.05)
+    local list = NewOnes(1, "footman")
+    local last = list[#list]
+    check(last.order and math.abs(last.order.x - 20) < 1, "ff: with a rally point they go there")
     check(E.Command(st, 1, { type = "sendTo", target = 2 }) and st.players[1].ff.target == 2, "ff: send your soldiers at player 2")
     check(not E.Command(st, 1, { type = "sendTo", target = 1 }), "ff: not at yourself")
+    -- A fallen hero comes back by itself.
+    local hero
+    for _ = 1, 20 * 20 do
+        E.Step(st, 0.05)
+        for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.owner == 1 and E.IsHero(e) then hero = e end end
+        if hero then break end
+    end
+    check(hero ~= nil, "ff: the hero arrives")
+    hero.hp = 1
+    local killer = E.Spawn(st, 2, "grunt", hero.x + 0.6, hero.y)
+    E.Command(st, 2, { type = "attack", units = { killer.id }, target = hero.id })
+    local back
+    for _ = 1, 90 * 20 do
+        E.Step(st, 0.05)
+        local alive
+        for _, id in ipairs(st.list) do local e = st.ents[id] if e and e.owner == 1 and E.IsHero(e) then alive = e end end
+        if st.players[1].fallen and st.players[1].fallen.ff_paladin and not alive then back = "dead" end
+        if back == "dead" and alive then back = "back" break end
+    end
+    check(back == "back", "ff: the fallen hero comes back by itself (" .. tostring(back) .. ")")
 
     -- Four computers play it out: they hire heroes, tier up, and someone wins.
     local g = E.New({ factions = { "human", "orc", "human", "orc" }, seed = 8, map = "frenzy_fields", mode = "footmen" })
@@ -93,7 +131,7 @@ function WcFootmenTests()
     for _, c in ipairs(view.cmds) do if c:IsShown() then titles[#titles + 1] = c.title end end
     local all = table.concat(titles, " | ")
     check(all:find("Hire a Hero", 1, true) and all:find("Weapons 1", 1, true) and all:find("Armor 1", 1, true)
-        and all:find("Train Riflemen", 1, true) and all:find("Send to: the middle", 1, true),
+        and all:find("Train Riflemen", 1, true) and all:find("Send to: nowhere (they wait)", 1, true),
         "ff card: a hero, weapons, armour, the next tier, send to (" .. all .. ")")
     for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Hire a Hero (H)" then c.action() end end
     view:Draw()
