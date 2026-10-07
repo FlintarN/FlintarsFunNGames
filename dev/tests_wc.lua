@@ -489,3 +489,11 @@ function WcDifficultyGames()
         check(st.over, "wc: an AI game on " .. key .. " ends (" .. math.floor(st.time / 60) .. " min)")
     end
 end
+
+function WcGalleryTests()
+    SlashCmdList.FNGWCGALLERY("")
+    local g = ns.WarcraftPage.galleryFrame
+    check(g and g:IsShown() and g.cells[1].num:GetText() == "1", "wc gallery: opens on page 1")
+    g.next._scripts.OnClick()
+    check(g.page == 2 and g.cells[1].num:GetText() == "19", "wc gallery: next page")
+end

@@ -1562,6 +1562,101 @@ end
 
 function P:FlashRoll() end
 
+-- A gallery of candidate world models (/wcgallery), numbered, to pick
+-- which one each building should use.
+local GALLERY = {
+    { 189620, "goldmine" }, { 189629, "humanguardtower" }, { 189632, "humanwatchtower" },
+    { 189288, "abandonedhumanguardtower" }, { 189601, "blacksmith" }, { 189611, "distillery" },
+    { 189445, "barnduskwood" }, { 190505, "westfallchurch" }, { 190508, "westfallgrainsilo01" },
+    { 190517, "westfallshed" }, { 190519, "westfallwindmill" }, { 197108, "humantentlarge" },
+    { 197109, "humantentmedium" }, { 194961, "hu_tent01" }, { 242691, "duskwood_human_farm_closed" },
+    { 242696, "redridge_human_farm_closed" }, { 190060, "karazahn_rrh_house" }, { 189375, "gypsywagon" },
+    { 190599, "westfallhaywagon" }, { 189810, "haystack01" }, { 189200, "orctent (burning steppes)" },
+    { 199384, "durotarorctent01" }, { 199385, "durotarorctent02" }, { 199387, "orctent01" },
+    { 199389, "orctent02" }, { 353154, "orctent03" }, { 353155, "orctent04" },
+    { 190175, "trollwatchtower" }, { 189359, "gnolltent02" }, { 189361, "gnolltent03" },
+    { 190408, "losttreehuts01" }, { 190430, "waterhut01" }, { 191492, "ogrila_hut" },
+    { 192682, "om_tent_01 (ogre)" }, { 192683, "om_tent_02 (ogre)" }, { 192684, "om_tent_03 (ogre)" },
+    { 191824, "ao_windmill (ancient orc)" }, { 199134, "orcpvpbonfirelarge" }, { 189118, "orcbonfire" },
+    { 192542, "dr_tent_01 (draenei)" }, { 192252, "be_tent01 (blood elf)" }, { 189923, "elwynnfirtree01" },
+}
+local COLS, ROWS = 6, 3
+
+function P.Gallery()
+    local g = P.galleryFrame
+    if not g then
+        g = W.TryCreate("Frame", "FunNGamesWcGallery", UIParent, "ButtonFrameTemplate", "BasicFrameTemplateWithInset")
+        g:SetSize(780, 560)
+        g:SetPoint("CENTER")
+        g:SetFrameStrata("DIALOG")
+        g:SetMovable(true)
+        g:EnableMouse(true)
+        g:RegisterForDrag("LeftButton")
+        g:SetScript("OnDragStart", g.StartMoving)
+        g:SetScript("OnDragStop", g.StopMovingOrSizing)
+        W.SetTitle(g, "Warcraft III: building models")
+        if W.SetPortrait then W.SetPortrait(g, ns.ICON) end
+        tinsert(UISpecialFrames, "FunNGamesWcGallery")
+        g.cells = {}
+        for i = 1, COLS * ROWS do
+            local c = CreateFrame("Frame", nil, g)
+            c:SetSize(118, 140)
+            c:SetPoint("TOPLEFT", 18 + ((i - 1) % COLS) * 124, -70 - math.floor((i - 1) / COLS) * 148)
+            local bg = c:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            bg:SetColorTexture(0.18, 0.28, 0.12, 1)
+            c.scene = MakeDoodad(c)
+            if c.scene then
+                c.scene:SetPoint("TOPLEFT", 2, -2)
+                c.scene:SetPoint("BOTTOMRIGHT", -2, 30)
+            end
+            c.num = W.BigLabel(c, 18, "GameFontNormalHuge")
+            c.num:SetPoint("BOTTOMLEFT", 4, 12)
+            c.name = W.Label(c, "", "GameFontHighlightSmall")
+            c.name:SetPoint("BOTTOMLEFT", 4, 2)
+            c.name:SetPoint("RIGHT", -2, 0)
+            c.name:SetJustifyH("LEFT")
+            c.name:SetWordWrap(false)
+            g.cells[i] = c
+        end
+        g.pageText = W.Label(g, "", "GameFontHighlight")
+        g.pageText:SetPoint("BOTTOM", 0, 14)
+        g.prev = W.Button(g, "< Prev", 80, function() g.page = g.page - 1 P.GalleryDraw() end, 22)
+        g.prev:SetPoint("RIGHT", g.pageText, "LEFT", -12, 0)
+        g.next = W.Button(g, "Next >", 80, function() g.page = g.page + 1 P.GalleryDraw() end, 22)
+        g.next:SetPoint("LEFT", g.pageText, "RIGHT", 12, 0)
+        g.hint = W.Label(g, "Tell which number to use for each building.", "GameFontDisableSmall")
+        g.hint:SetPoint("TOPLEFT", 70, -38)
+        g.page = 1
+        P.galleryFrame = g
+    end
+    g:Show()
+    P.GalleryDraw()
+end
+
+function P.GalleryDraw()
+    local g = P.galleryFrame
+    local per = COLS * ROWS
+    local pages = math.ceil(#GALLERY / per)
+    g.page = math.max(1, math.min(g.page, pages))
+    for i, c in ipairs(g.cells) do
+        local n = (g.page - 1) * per + i
+        local item = GALLERY[n]
+        c:SetShown(item ~= nil)
+        if item then
+            c.num:SetText(tostring(n))
+            c.name:SetText(item[2])
+            if c.scene then c.scene:Use(item[1], 0.5) end
+        end
+    end
+    g.pageText:SetText("Page " .. g.page .. " / " .. pages)
+    g.prev:SetEnabled(g.page > 1)
+    g.next:SetEnabled(g.page < pages)
+end
+
+SLASH_FNGWCGALLERY1 = "/wcgallery"
+SlashCmdList.FNGWCGALLERY = function() P.Gallery() end
+
 -- Tuning the world-model camera live: /wcview pitch 0.9 (or yaw, fov, margin).
 SLASH_FNGWCVIEW1 = "/wcview"
 SlashCmdList.FNGWCVIEW = function(msg)
