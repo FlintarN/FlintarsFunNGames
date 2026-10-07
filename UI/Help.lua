@@ -206,6 +206,21 @@ H.RULES = {
         { "Scores", "500 per murloc, 50 per wood block, 100 per stone block. Clearing a level gives 300 for "
             .. "every boulder you didn't need. Five levels are hand-built; after that they're random." },
     },
+    warcraft = {
+        { "The idea", "A small real-time strategy game against the computer. You start with a hall, five "
+            .. "workers and a gold mine. Gather gold and lumber, build farms (for food) and barracks, train an "
+            .. "army and destroy every enemy building. Lose all of yours and it's over." },
+        { "Mouse", "Left-click a unit or building to select it; drag a box to select several of your units "
+            .. "(Shift adds). Right-click the ground to move, an enemy to attack, the gold mine or a tree to "
+            .. "gather (workers). With a building selected, right-click sets where new units go." },
+        { "Keys", "A then click: attack a target or attack-move to a spot (fighting anything on the way). "
+            .. "S stops. With a worker: F builds a farm or burrow, B a barracks. With a hall or barracks: T and "
+            .. "R train. Arrow keys or the screen edges scroll; click the minimap to jump there." },
+        { "Economy", "Workers carry 10 gold or lumber at a time back to the hall. Every unit needs food: "
+            .. "a hall gives 12, each farm 6. Costs show on each button." },
+        { "Sides", "Human: Peasant, Footman, Rifleman. Orc: Peon, Grunt, Troll Headhunter. The computer "
+            .. "attacks in growing waves and defends its base." },
+    },
     hearthstone = {
         { "The idea", "Two heroes with 30 Health each. Bring the enemy hero to 0. You play minions (they fight "
             .. "on the board) and spells, paid for with mana: one crystal on your first turn, one more every "

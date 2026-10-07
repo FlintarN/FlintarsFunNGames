@@ -9,7 +9,7 @@ ns.ICON = "Interface\\Icons\\INV_Misc_Dice_01"
 
 -- The games (Games\*.lua fill ns.Games), in the order the window shows them.
 ns.Games = {}
-ns.GAME_ORDER = { "deathroll", "highlow", "poker", "blackjack", "slots", "roulette", "raffle", "tictactoe", "battleship", "agario", "snake", "g2048", "mines", "tetris", "flappy", "wordle", "shooter", "candycrush", "angrybirds", "hearthstone" }
+ns.GAME_ORDER = { "deathroll", "highlow", "poker", "blackjack", "slots", "roulette", "raffle", "tictactoe", "battleship", "agario", "snake", "g2048", "mines", "tetris", "flappy", "wordle", "shooter", "candycrush", "angrybirds", "hearthstone", "warcraft" }
 ns.CustomPages = {} -- games with their own page (UI\PokerPage.lua)
 
 function ns.Print(msg)

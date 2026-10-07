@@ -35,7 +35,11 @@ One thing at a time, top to bottom. Move an item to Done when it is built and te
 
 - [ ] Hearthstone next steps: PvP (host runs the engine, players get `E.View`; hidden hands go by whisper like poker), mulligan, weapons, secrets, deathrattle cards, Classic-set class cards (secrets, combo, stealth, enrage), a card choice for Tracking.
 
+- [ ] Warcraft III next: fog of war, more units and buildings (towers, casters, heroes), upgrades, WoW creature models for units, PvP (lockstep: both clients run the engine with the same commands), difficulty levels.
+
 ## Done
+
+- [x] Warcraft III: RTS vs the computer (Human/Orc, economy, buildings, combat, AI waves) (2026-10-07)
 
 - [x] Hearthstone vs the computer: engine (pure state, seeded RNG), data-driven cards/heroes/decks, AI by lookahead, animated board (2026-10-06)
 

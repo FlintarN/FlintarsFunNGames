@@ -34,6 +34,10 @@ The card game, in WoW, against the computer.
 - **Build your own decks**: class and neutral cards, two copies each, 30 cards.
 - A Hearthstone-style board: tavern table, hero portraits in gold frames, the oval End Turn button. Drag cards onto the board, watch spells fly and minions lunge.
 
+### Warcraft III
+
+A small real-time strategy game against the computer: Human or Orc, workers gathering gold and lumber, farms and barracks, an army of Footmen and Riflemen (or Grunts and Troll Headhunters). Select with a box, right-click to command, attack-move with A, and watch the minimap: the computer attacks in growing waves.
+
 ### Play together
 
 - **Tic-Tac-Toe**: X against O, rematches keep the score.

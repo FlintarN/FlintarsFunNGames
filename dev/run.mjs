@@ -544,6 +544,14 @@ await Section('Hearthstone engine and AI', async () => {
   await p.run('HsPreloadTests()');
 });
 
+await Section('Warcraft III engine and AI', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wc.lua'), 'utf8'));
+  await p.run('WcEngineTests()');
+  await p.run('WcAIGames()');
+  await p.run('WcPageTests()');
+});
+
 // The three TOC files (base, Forever, Retail) list the same files and version.
 {
   const body = n => readFileSync(join(addon, n), 'utf8').split(/\r?\n/).filter(l => !l.startsWith('## Interface'));

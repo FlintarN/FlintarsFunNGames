@@ -1271,3 +1271,146 @@ hs_board()
 hs_hero_frame()
 hs_end_turn()
 print('hearthstone board written')
+
+
+# ---------------------------------------------------------------- warcraft (rts)
+def wc_grass():
+    import random
+    rnd = random.Random(11)
+    n = 256
+    img = Image.new('RGBA', (n, n), (70, 110, 45, 255))
+    px = img.load()
+    for y in range(n):
+        for x in range(n):
+            c = rnd.randint(-10, 10)
+            px[x, y] = (70 + c, 112 + c, 44 + c // 2, 255)
+    d = ImageDraw.Draw(img)
+    for _ in range(260):
+        x, y = rnd.randint(0, n - 1), rnd.randint(0, n - 1)
+        col = (rnd.randint(50, 70), rnd.randint(95, 130), rnd.randint(30, 45), 255)
+        for k in range(3):
+            d.line([(x + k - 1, y), (x + k - 2 + rnd.randint(0, 2), y - rnd.randint(2, 5))], fill=col)
+    for _ in range(40):
+        x, y = rnd.randint(0, n - 1), rnd.randint(0, n - 1)
+        r = rnd.randint(6, 14)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=(80, 118, 50, 70))
+    img.save(os.path.join(OUT, 'WcGrass.tga'))
+
+
+def wc_tree():
+    n = 64 * SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    s = SS
+    d.ellipse([10 * s, 40 * s, 58 * s, 60 * s], fill=(0, 0, 0, 90))  # shadow
+    d.rectangle([29 * s, 40 * s, 35 * s, 56 * s], fill=(80, 50, 25, 255))
+    for (y, w, col) in ((30, 26, (20, 70, 30)), (20, 21, (28, 88, 38)), (10, 15, (36, 104, 46))):
+        d.polygon([(32 * s, (y - 14) * s), ((32 + w) * s, (y + 16) * s), ((32 - w) * s, (y + 16) * s)], fill=col + (255,))
+    save(img, 'WcTree', (64, 64))
+
+
+def wc_mine():
+    n = 128 * SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    s = SS
+    d.ellipse([6 * s, 30 * s, 122 * s, 124 * s], fill=(0, 0, 0, 90))
+    d.ellipse([4 * s, 18 * s, 124 * s, 118 * s], fill=(105, 95, 85, 255))
+    d.ellipse([14 * s, 22 * s, 114 * s, 100 * s], fill=(135, 125, 110, 255))
+    d.chord([40 * s, 50 * s, 88 * s, 110 * s], 180, 360, fill=(30, 22, 15, 255))
+    d.rectangle([40 * s, 80 * s, 88 * s, 106 * s], fill=(30, 22, 15, 255))
+    d.rectangle([36 * s, 74 * s, 42 * s, 108 * s], fill=(110, 75, 40, 255))
+    d.rectangle([86 * s, 74 * s, 92 * s, 108 * s], fill=(110, 75, 40, 255))
+    d.rectangle([34 * s, 70 * s, 94 * s, 78 * s], fill=(110, 75, 40, 255))
+    for x, y in ((24, 44), (96, 40), (70, 30), (20, 80), (104, 78), (52, 34)):
+        d.ellipse([x * s, y * s, (x + 10) * s, (y + 8) * s], fill=(240, 200, 60, 255))
+        d.ellipse([(x + 2) * s, (y + 1) * s, (x + 6) * s, (y + 4) * s], fill=(255, 240, 160, 255))
+    save(img, 'WcMine', (128, 128))
+
+
+def wc_building(name, size_px, base, roof, trim, kind):
+    n = 128 * SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    s = SS
+    d.rectangle([8 * s, 16 * s, 124 * s, 124 * s], fill=(0, 0, 0, 80))
+    if kind == 'human':
+        d.rectangle([6 * s, 40 * s, 120 * s, 118 * s], fill=base + (255,))
+        for yy in range(48, 118, 12):
+            d.line([(6 * s, yy * s), (120 * s, yy * s)], fill=tuple(max(0, c - 30) for c in base) + (255,), width=s)
+        d.polygon([(0, 46 * s), (64 * s, 4 * s), (126 * s, 46 * s)], fill=roof + (255,))
+        d.polygon([(10 * s, 46 * s), (64 * s, 12 * s), (116 * s, 46 * s)], fill=tuple(min(255, c + 30) for c in roof) + (255,))
+        d.rectangle([52 * s, 86 * s, 76 * s, 118 * s], fill=(70, 45, 25, 255))
+        d.rectangle([0, 44 * s, 126 * s, 50 * s], fill=trim + (255,))
+    else:
+        d.ellipse([4 * s, 30 * s, 122 * s, 122 * s], fill=base + (255,))
+        d.ellipse([16 * s, 40 * s, 110 * s, 112 * s], fill=tuple(min(255, c + 25) for c in base) + (255,))
+        for x0, y0 in ((10, 40), (40, 18), (88, 18), (118, 40), (64, 6)):
+            d.polygon([(x0 * s, (y0 + 30) * s), ((x0 - 6) * s, (y0 + 30) * s), ((x0 - 3) * s, y0 * s)], fill=(235, 225, 200, 255))
+        d.chord([46 * s, 74 * s, 82 * s, 122 * s], 180, 360, fill=(40, 25, 15, 255))
+        d.rectangle([46 * s, 98 * s, 82 * s, 116 * s], fill=(40, 25, 15, 255))
+        d.rectangle([60 * s, 30 * s, 68 * s, 64 * s], fill=trim + (255,))
+    save(img, name, (size_px, size_px))
+
+
+def wc_ring(name, color, width):
+    n = 64 * SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    s = SS
+    d.ellipse([2 * s, 2 * s, 62 * s, 62 * s], outline=color, width=width * s)
+    save(img, name, (64, 64))
+
+
+def wc_res_icons():
+    n = 32 * SS
+    s = SS
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for x, y in ((4, 14), (14, 8), (14, 18)):
+        d.ellipse([x * s, y * s, (x + 14) * s, (y + 10) * s], fill=(200, 150, 30, 255))
+        d.ellipse([(x + 2) * s, (y + 1) * s, (x + 12) * s, (y + 7) * s], fill=(250, 210, 70, 255))
+    save(img, 'WcGold', (32, 32))
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for y in (8, 15, 22):
+        d.rounded_rectangle([3 * s, y * s, 29 * s, (y + 6) * s], radius=3 * s, fill=(130, 85, 40, 255))
+        d.ellipse([24 * s, y * s, 30 * s, (y + 6) * s], fill=(200, 160, 100, 255))
+    save(img, 'WcLumber', (32, 32))
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse([6 * s, 6 * s, 26 * s, 24 * s], fill=(200, 90, 50, 255))
+    d.rectangle([14 * s, 20 * s, 18 * s, 30 * s], fill=(230, 220, 200, 255))
+    d.ellipse([10 * s, 10 * s, 16 * s, 15 * s], fill=(240, 150, 110, 255))
+    save(img, 'WcFood', (32, 32))
+
+
+def wc_icon():
+    n = 64 * SS
+    img = Image.new('RGBA', (n, n), (70, 110, 45, 255))
+    d = ImageDraw.Draw(img)
+    s = SS
+    th = Image.open(os.path.join(OUT, 'WcTownHall.tga')).resize((30 * s, 30 * s), Image.LANCZOS)
+    gh = Image.open(os.path.join(OUT, 'WcGreatHall.tga')).resize((30 * s, 30 * s), Image.LANCZOS)
+    img.paste(th, (2 * s, 2 * s), th)
+    img.paste(gh, (32 * s, 32 * s), gh)
+    for x, y, c in ((40, 14, (60, 120, 230)), (48, 20, (60, 120, 230)), (16, 44, (220, 50, 40)), (24, 50, (220, 50, 40))):
+        d.ellipse([x * s, y * s, (x + 8) * s, (y + 8) * s], fill=c + (255,), outline=(255, 255, 255, 255), width=s)
+    d.line([(36 * s, 30 * s), (28 * s, 38 * s)], fill=(255, 230, 120, 255), width=2 * s)
+    save(img, 'IconWarcraft', (64, 64))
+
+
+wc_grass()
+wc_tree()
+wc_mine()
+wc_building('WcTownHall', 128, (150, 140, 125), (50, 90, 170), (200, 170, 70), 'human')
+wc_building('WcFarm', 64, (170, 130, 80), (160, 60, 40), (200, 170, 70), 'human')
+wc_building('WcBarracks', 128, (130, 120, 110), (60, 70, 140), (180, 40, 40), 'human')
+wc_building('WcGreatHall', 128, (120, 80, 45), (0, 0, 0), (170, 30, 30), 'orc')
+wc_building('WcBurrow', 64, (105, 75, 45), (0, 0, 0), (170, 30, 30), 'orc')
+wc_building('WcOrcBarracks', 128, (95, 65, 40), (0, 0, 0), (170, 30, 30), 'orc')
+wc_ring('WcRing', (255, 255, 255, 255), 5)
+wc_ring('WcSelect', (80, 255, 80, 255), 3)
+wc_res_icons()
+wc_icon()
+print('warcraft art written')
