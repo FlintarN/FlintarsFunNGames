@@ -44,6 +44,7 @@ function E.InitHero(st, u, saved)
     u.level, u.xp, u.skills, u.points, u.cds = 1, 0, {}, 1, {}
     if saved then
         u.level, u.xp, u.skills, u.points = saved.level, saved.xp, Copy(saved.skills), saved.points
+        u.items = Copy(saved.items)
     end
     u.maxHp = HeroMaxHp(u)
     u.hp = u.maxHp
@@ -54,11 +55,16 @@ end
 function E.HeroDamage(st, u)
     if u.illusion then return 0 end
     local d = U[u.type]
-    return d.baseDamage + E.Stat(u, d.primary) + (u.buffs and u.buffs.avatar and 20 or 0)
+    local items = E.ItemBonus and E.ItemBonus(u, "damage") or 0
+    local dmg = d.baseDamage + E.Stat(u, d.primary) + (u.buffs and u.buffs.avatar and 20 or 0) + items
+    if E.Drums then dmg = dmg * (1 + E.Drums(st, u)) end
+    if u.buffs and u.buffs.innerFire then dmg = dmg * 1.1 end
+    return dmg
 end
 
 function E.HeroArmor(u)
-    return U[u.type].baseArmor + E.Stat(u, "agi") * 0.3 + (u.buffs and u.buffs.avatar and 5 or 0)
+    local items = E.ItemBonus and E.ItemBonus(u, "armor") or 0
+    return U[u.type].baseArmor + E.Stat(u, "agi") * 0.3 + (u.buffs and u.buffs.avatar and 5 or 0) + items
 end
 
 -- Heroes of player p (not copies), cached for one step.
@@ -100,16 +106,23 @@ function E.Speed(st, u)
     if b then
         if b.slow or b.hex then s = s * 0.5 end
         if b.windwalk then s = s * (1 + b.windwalk.speed) end
+        if b.bloodlust then s = s * 1.25 end
     end
+    if u.items and E.ItemBonus then s = s * (1 + E.ItemBonus(u, "speed")) end
     return s * (1 + E.Aura(st, u, "endurance"))
 end
 
 function E.Cooldown(st, u)
-    return U[u.type].cooldown / (1 + E.Aura(st, u, "endurance", "attack"))
+    local cd = U[u.type].cooldown / (1 + E.Aura(st, u, "endurance", "attack"))
+    local b = u.buffs
+    if b and b.bloodlust then cd = cd / 1.4 end
+    if b and b.slow then cd = cd * 1.25 end
+    return cd
 end
 
 -- Can't fight right now (hexed, banished, spinning, stunned)?
 function E.CantAttack(u)
+    if U[u.type] and U[u.type].noAttack then return true end
     local b = u.buffs
     return b ~= nil and (b.noAttack ~= nil or b.hex ~= nil or b.bladestorm ~= nil or b.reinc ~= nil or b.stun ~= nil)
 end
@@ -208,7 +221,7 @@ function E.OnDeath(st, t)
     if d.hero then
         local pl = st.players[t.owner]
         pl.fallen = pl.fallen or {}
-        pl.fallen[t.type] = { level = t.level, xp = t.xp, skills = Copy(t.skills), points = t.points }
+        pl.fallen[t.type] = { level = t.level, xp = t.xp, skills = Copy(t.skills), points = t.points, items = Copy(t.items) }
         E.Emit("heroDied", { id = t.id, owner = t.owner, type = t.type })
     else
         st.corpses = st.corpses or {}
@@ -283,6 +296,7 @@ function E.UnitTick(st, u, dt)
         end
         if b.reinc or b.stun then return true end
     end
+    if E.ArmyTick and E.ArmyTick(st, u, dt) then return true end
     return false
 end
 

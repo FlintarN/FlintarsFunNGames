@@ -277,6 +277,8 @@ function E.Damage(st, u)
         dmg = dmg * (1 + Bonus(st, u.owner, d.range > 1.5 and "ranged" or "melee"))
         if u.type == "grunt" then dmg = dmg + Bonus(st, u.owner, "gruntDamage") end
     end
+    if E.Drums then dmg = dmg * (1 + E.Drums(st, u)) end
+    if u.buffs and u.buffs.innerFire then dmg = dmg * 1.1 end
     return dmg
 end
 
@@ -287,6 +289,7 @@ function E.ArmorOf(st, e)
         if d.hero and E.HeroArmor then a = E.HeroArmor(e) end
         if not d.worker then a = a + Bonus(st, e.owner, "armor") end
         if E.Aura then a = a + E.Aura(st, e, "devotion") end
+        if e.buffs and e.buffs.innerFire then a = a + 5 end
     elseif e.kind == "building" then
         a = a + Bonus(st, e.owner, "buildingArmor")
     end
@@ -336,7 +339,12 @@ local function NewUnit(st, owner, utype, x, y, saved)
     local hp = E.MaxHp(st, owner, utype)
     local u = Add(st, { kind = "unit", type = utype, owner = owner, x = x, y = y, hp = hp, maxHp = hp,
         cd = 0, facing = 0 })
-    if D().Units[utype].hero and E.InitHero then E.InitHero(st, u, saved) end
+    local d = D().Units[utype]
+    if d.hero and E.InitHero then
+        E.InitHero(st, u, saved)
+    elseif d.mana then
+        u.mana, u.maxMana = d.mana, d.mana
+    end
     return u
 end
 
@@ -680,6 +688,13 @@ end
 
 -- Path a unit towards a point or an entity.
 local function PathTo(st, u, tx, ty, ent, adjacentTree)
+    local ud = D().Units[u.type]
+    if ud and ud.air then
+        local gx, gy = tx, ty
+        if ent then gx, gy = Center(ent) end
+        u.path, u.pathi = { { gx, gy } }, 1
+        return
+    end
     local sx, sy = math.floor(u.x), math.floor(u.y)
     local goal, hx, hy
     if ent then
@@ -769,12 +784,30 @@ local function Hit(st, u, t)
     local d = D().Units[u.type]
     local dmg = E.Damage(st, u)
     if E.OnHit then dmg = E.OnHit(st, u, t, dmg) end
+    local tx, ty = Center(t)
     Strike(st, u, t, dmg, d.range > 1.5, d.attackType)
+    if d.splash then
+        -- Splash: half damage to the other side's ground things around the target.
+        local near = {}
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e and e ~= t and not e.dead and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine"
+                and not (e.kind == "unit" and D().Units[e.type].air) then
+                local ex, ey = Center(e)
+                local r = d.splash + (e.size or 0) / 2
+                if (ex - tx) ^ 2 + (ey - ty) ^ 2 <= r * r then table.insert(near, e) end
+            end
+        end
+        for _, e in ipairs(near) do
+            if not e.dead then Strike(st, u, e, dmg * 0.5, true, d.attackType) end
+        end
+    end
 end
 
 -- Chase and hit a target. False when it's gone.
 local function Fight(st, u, t, dt)
     if not t or t.dead or t.hp <= 0 then return false end
+    if E.CanHit and not E.CanHit(st, u, t) then return false end
     local d = D().Units[u.type]
     local gap = Gap(u, t)
     if gap <= E.Range(st, u) then
@@ -802,7 +835,8 @@ local function Nearest(st, u, range)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         if e and e.owner > 0 and e.owner ~= u.owner and e.kind ~= "mine"
-            and not (E.Untouchable and (E.Untouchable(e) or E.Hidden(e))) then
+            and not (E.Untouchable and (E.Untouchable(e) or E.Hidden(e)))
+            and not (E.CanHit and not E.CanHit(st, u, e)) then
             local g = Gap(u, e)
             if g <= range then
                 if e.kind == "unit" then
@@ -820,7 +854,8 @@ E.Nearest = Nearest
 local function Deposit(st, u)
     local pl = st.players[u.owner]
     if u.carry and u.carry.n > 0 then
-        local n = math.floor(u.carry.n * (pl.income or 1) + 0.5)
+        local upkeep = (u.carry.res == "gold" and E.Upkeep) and E.Upkeep(st, u.owner) or 1
+        local n = math.floor(u.carry.n * (pl.income or 1) * upkeep + 0.5)
         if u.carry.res == "gold" then pl.gold = pl.gold + n else pl.lumber = pl.lumber + n end
         Emit("deposit", { id = u.id, owner = u.owner, res = u.carry.res, n = u.carry.n })
     end
@@ -1427,6 +1462,8 @@ function E.Command(st, p, cmd)
         table.insert(b.queue, cmd.utype)
         E.Food(st)
         return true
+    elseif t == "buy" or t == "useItem" then
+        return E.ArmyCommand(st, p, cmd)
     elseif t == "learn" or t == "cast" or t == "revive" then
         return E.HeroCommand(st, p, cmd, mode)
     elseif t == "research" then
@@ -1516,7 +1553,7 @@ function E.Step(st, dt)
     for _, id in ipairs(st.list) do
         local e = st.ents[id]
         local walking = e and e.path and e.path[e.pathi or 1]
-        if e and e.kind == "unit" and not e.inside and not e.insideBuild and not walking
+        if e and e.kind == "unit" and not e.inside and not e.insideBuild and not walking and not D().Units[e.type].air
             and not (e.order and e.order.type == "gather") then
             table.insert(movers, e)
         end

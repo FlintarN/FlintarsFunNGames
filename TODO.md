@@ -79,12 +79,8 @@ comes with engine tests, the AI using it, the Rules text and docs. Models come f
 - [ ] Items and a 6-slot inventory come with shops (step 3) and creeps (step 6).
 
 ### 3. The rest of the Human and Orc armies
-- [ ] Human: Knight (Barracks with Castle, Blacksmith, Lumber Mill), Priest and Sorceress (Arcane Sanctum), Spell Breaker, Flying Machine and Siege Engine (Workshop), Gryphon Rider and Dragonhawk Rider (Gryphon Aviary), Mortar Team.
-- [ ] Orc: Catapult (Barracks), Shaman, Witch Doctor and Spirit Walker (Spirit Lodge), Raider, Kodo Beast, Wind Rider and Troll Batrider (Beastiary), Tauren (Tauren Totem).
-- [ ] Shops: Arcane Vault / Voodoo Lounge with items (potions, scrolls); a 6-slot hero inventory.
-- [ ] Caster abilities with mana: Heal, Inner Fire, Dispel, Slow, Invisibility, Polymorph, Bloodlust, Purge, Lightning Shield, Healing Ward, Sentry Ward, Stasis Trap, Ensnare...
-- [ ] Air units and what can hit them (air vs ground attacks).
-- [ ] Upkeep: less gold per trip above 50 and 80 food, shown in the resource bar.
+- [ ] Caster abilities you click (Dispel, Invisibility, Polymorph, Purge, Lightning Shield, Ensnare, Sentry Ward, Stasis Trap...), Spell Breaker, Spirit Walker, Flak/bombs upgrades.
+- [ ] Pick models for the new buildings in /wcgallery.
 
 ### 6. The map and the match
 - [ ] Shared sight for allies (fog of war itself is done).

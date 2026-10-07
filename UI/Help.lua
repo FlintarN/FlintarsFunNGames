@@ -234,6 +234,14 @@ H.RULES = {
             .. "Abilities (O) to learn or improve one of four abilities (the last one from level 6). Abilities cost "
             .. "mana and have a cooldown; click one, then a target or a spot. A fallen hero can be revived at the "
             .. "altar with its level and skills." },
+        { "Armies", "More buildings bring more units: Arcane Sanctum (Priest, Sorceress), Workshop (Siege Engine, "
+            .. "Flying Machine, Mortar Team), Gryphon Aviary (Gryphon and Dragonhawk Riders); Spirit Lodge (Shaman, "
+            .. "Witch Doctor), Beastiary (Raider, Kodo, Wind Rider, Batrider), Tauren Totem (Tauren). Flyers can only "
+            .. "be hit by ranged attacks and towers. Casters cast by themselves (Heal, Inner Fire, Slow, Bloodlust, "
+            .. "Healing Ward). Siege Engines only attack buildings; Mortars and Catapults hit an area." },
+        { "Shops and upkeep", "The Arcane Vault / Voodoo Lounge sells items to a hero standing next to it: "
+            .. "potions, Town Portal, Boots of Speed, Claws of Attack, a Ring of Protection. Six fit in a hero's bag "
+            .. "(click one to use it). Upkeep: above 50 food your workers bring 70% of the gold, above 80 only 40%." },
         { "Tech", "Upgrade your hall (U): Town Hall > Keep > Castle, Great Hall > Stronghold > Fortress. Some "
             .. "things need other buildings first (a greyed-out button says what): Riflemen a Blacksmith, "
             .. "Headhunters a War Mill, a Castle an Altar. Research in buildings like training: weapons and armour "

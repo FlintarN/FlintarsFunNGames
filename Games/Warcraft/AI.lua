@@ -158,6 +158,9 @@ function AI.HeroCast(st, p, h)
     end
 end
 
+-- Buildings for more kinds of units, in order.
+AI.TECH = { human = { "arcane_sanctum", "workshop", "gryphon_aviary" }, orc = { "beastiary", "spirit_lodge", "tauren_totem" } }
+
 -- What the computer researches, in order of preference.
 AI.RESEARCH = { "keep", "stronghold", "guard_tower", "swords", "melee_o", "gunpowder", "ranged_o", "plating",
     "armor_o", "harvest", "long_rifles", "berserker", "regeneration", "masonry", "defenses", "castle", "fortress" }
@@ -259,6 +262,16 @@ function AI.Think(st, p)
             if Build(f.mill) then return end
         end
     end
+    -- Later buildings for more kinds of units, as the hall's tier allows.
+    if diff.research ~= false and pl.gold > 320 then
+        for _, bt in ipairs(AI.TECH[pl.faction] or {}) do
+            local have = (count.buildings[bt] or 0) + (count.building[bt] or 0)
+            if have == 0 and not E_.Missing(st, p, D().Buildings[bt].requires) then
+                if Build(bt) then return end
+                break
+            end
+        end
+    end
     -- An altar, heroes (revived when they fall), skills and spells.
     if f.altar then
         local altars = (count.buildings[f.altar] or 0) + (count.building[f.altar] or 0)
@@ -291,9 +304,9 @@ function AI.Think(st, p)
                     if E_.CanTrainHero(st, p, ut) then
                         if E_.Command(st, p, { type = "train", building = altar.id, utype = ut }) then
                             mem.save = nil
-                        elseif not mem.save then
-                            -- Save up for the hero: soldiers wait a little.
-                            mem.save = { gold = D().Units[ut].cost[1], since = st.time }
+                        elseif not (mem.save and mem.save.hero) then
+                            -- Save up for the hero (before research): soldiers wait a little.
+                            mem.save = { gold = D().Units[ut].cost[1], since = st.time, hero = true }
                         end
                         break
                     end
@@ -303,14 +316,14 @@ function AI.Think(st, p)
     end
     -- Research (not on Easy): the hall's next tier after a while, then
     -- upgrades, one at a time, keeping gold for the army.
-    if diff.research ~= false and st.time > 240 then
+    if diff.research ~= false and st.time > 240 and not (mem.save and mem.save.hero) then
         for _, id in ipairs(st.list) do
             local b = st.ents[id]
             if b and b.owner == p and b.kind == "building" and b.progress >= 1 and #b.queue == 0 then
                 for _, key in ipairs(AI.RESEARCH) do
                     local r = D().Research[key]
                     if r.building == b.type and E_.CanResearch(st, p, key, b) and (not r.upgrade or not D().Buildings[r.upgrade].hall
-                        or st.time > 420) then
+                        or st.time > 360) then
                         local cost = r.cost[E_.Level(st, p, key) + 1]
                         if pl.gold >= cost[1] and pl.lumber >= cost[2] then
                             E_.Command(st, p, { type = "research", building = b.id, key = key })
@@ -332,15 +345,19 @@ function AI.Think(st, p)
         if Build(f.tower) then return end
     end
     -- Soldiers: melee and ranged in turn (unless saving up for research).
-    if mem.save and (pl.gold >= mem.save.gold or st.time - mem.save.since > 25) then mem.save = nil end
+    if mem.save and (pl.gold >= mem.save.gold + 50 or st.time - mem.save.since > 45) then mem.save = nil end
     local saving = mem.save ~= nil
     for _, id in ipairs(saving and {} or st.list) do
         local b = st.ents[id]
-        if b and b.owner == p and b.type == f.barracks and b.progress >= 1 and #b.queue < 2 then
-            mem.flip = not mem.flip
-            local ut = mem.flip and f.melee or f.ranged
-            if not E_.Command(st, p, { type = "train", building = b.id, utype = ut }) then
-                E_.Command(st, p, { type = "train", building = b.id, utype = mem.flip and f.ranged or f.melee })
+        local bd = b and b.kind == "building" and E_.Def(b)
+        if b and b.owner == p and bd and bd.trains and not bd.hall and b.progress >= 1 and #b.queue < 2
+            and not D().Units[bd.trains[1]].hero then
+            -- Each building trains its units in turn (what it can afford and has the tech for).
+            mem.rot = (mem.rot or 0) + 1
+            local n = #bd.trains
+            for k = 0, n - 1 do
+                local ut = bd.trains[(mem.rot + k) % n + 1]
+                if E_.Command(st, p, { type = "train", building = b.id, utype = ut }) then break end
             end
         end
     end

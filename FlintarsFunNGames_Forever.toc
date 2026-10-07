@@ -41,6 +41,7 @@ Games\Warcraft\Data.lua
 Games\Warcraft\Engine.lua
 Games\Warcraft\Heroes.lua
 Games\Warcraft\HeroRules.lua
+Games\Warcraft\Army.lua
 Games\Warcraft\AI.lua
 Games\Warcraft.lua
 Core\Session.lua

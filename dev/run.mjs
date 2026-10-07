@@ -605,6 +605,14 @@ await Section('Warcraft III heroes', async () => {
   await p.run('WcHeroPage()');
 });
 
+await Section('Warcraft III armies', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wcarmy.lua'), 'utf8'));
+  await p.run('WcArmyTests()');
+  await p.run('WcArmyAI()');
+  await p.run('WcArmyPage()');
+});
+
 await Section('Warcraft III lockstep', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));

@@ -393,7 +393,7 @@ function P.New(parent, kind)
     view:SetScript("OnMouseUp", function(_, button) self:MouseUp(button) end)
     self.keys = K.Keys(view, { UP = true, DOWN = true, LEFT = true, RIGHT = true, A = true, B = true, F = true,
         C = true, G = true, H = true, M = true, O = true, P = true, R = true, S = true, T = true, W = true, Y = true,
-        D = true, E = true, U = true, N = true, V = true, X = true,
+        D = true, E = true, U = true, N = true, V = true, X = true, K = true,
         L = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true, ["6"] = true, ["7"] = true,
         ["8"] = true, ["9"] = true, ["0"] = true },
         function(key) self:Key(key) end)
@@ -475,12 +475,43 @@ function P.New(parent, kind)
     self.progress:SetHeight(4)
     self.progress:Hide()
 
-    -- Command card: 4 x 2 buttons.
+    -- A hero's bag: six items (click to use).
+    self.itemButtons = {}
+    for i = 1, 6 do
+        local b = CreateFrame("Button", nil, hud)
+        b:SetSize(24, 24)
+        b:SetPoint("TOPLEFT", 500 + ((i - 1) % 2) * 28, -6 - math.floor((i - 1) / 2) * 28)
+        local bg = b:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0, 0, 0, 0.7)
+        b.icon = b:CreateTexture(nil, "ARTWORK")
+        b.icon:SetAllPoints()
+        b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        local hl = b:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.15)
+        b:SetScript("OnClick", function()
+            if b.hero and b.item then self:Cmd({ type = "useItem", unit = b.hero, slot = i }) end
+        end)
+        b:SetScript("OnEnter", function()
+            local it = b.item and WC().Items[b.item]
+            if not it then return end
+            GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            GameTooltip:SetText(it.name, 1, 0.82, 0)
+            GameTooltip:AddLine(it.text .. (it.use and " Click to use." or ""), 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        b:Hide()
+        self.itemButtons[i] = b
+    end
+
+    -- Command card: 4 x 3 buttons.
     self.cmds = {}
-    for i = 1, 8 do
+    for i = 1, 12 do
         local c = CreateFrame("Button", nil, hud)
-        c:SetSize(46, 38)
-        c:SetPoint("TOPLEFT", 520 + ((i - 1) % 4) * 52, -8 - math.floor((i - 1) / 4) * 42)
+        c:SetSize(38, 28)
+        c:SetPoint("TOPLEFT", 566 + ((i - 1) % 4) * 41, -4 - math.floor((i - 1) / 4) * 30)
         local cb = c:CreateTexture(nil, "BACKGROUND")
         cb:SetAllPoints()
         cb:SetColorTexture(0, 0, 0, 1)
@@ -1931,7 +1962,8 @@ function P:Draw()
                     f.carry:Hide()
                 end
                 f:ClearAllPoints()
-                f:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
+                local lift = WC().Units[e.type] and WC().Units[e.type].air and 18 or 0
+                f:SetPoint("CENTER", self.view, "TOPLEFT", px, -(py - lift))
                 local lv = self:Depth(e.y)
                 if f.depth ~= lv then
                     f.depth = lv
@@ -2045,7 +2077,9 @@ function P:DrawPanel()
     local pl = st.players[ME]
     self.goldText:SetText(tostring(pl.gold))
     self.lumberText:SetText(tostring(pl.lumber))
-    self.foodText:SetText(pl.food .. "/" .. pl.foodCap)
+    local _, upkeep = E().Upkeep(self.st, ME)
+    self.foodText:SetText(pl.food .. "/" .. pl.foodCap .. (upkeep and ("  |cffffd100" .. (upkeep == "high" and "High" or "Low")
+        .. " upkeep|r") or ""))
     if pl.food >= pl.foodCap then self.foodText:SetTextColor(1, 0.3, 0.3) else self.foodText:SetTextColor(1, 1, 1) end
     self.clock:SetText(string.format("%d:%02d", math.floor(st.time / 60), math.floor(st.time % 60)))
     local rec = Save()
@@ -2138,6 +2172,13 @@ function P:DrawPanel()
         if first.owner ~= ME and first.owner > 0 then status = "Enemy" end
         self.selStatus:SetText(status)
     end
+    local bagHero = sel[1] and sel[1].owner == ME and E().IsHero(sel[1]) and not sel[1].illusion and sel[1]
+    for i, b in ipairs(self.itemButtons) do
+        local key = bagHero and bagHero.items and bagHero.items[i]
+        b:SetShown(bagHero ~= nil and bagHero ~= false)
+        b.hero, b.item = bagHero and bagHero.id, key
+        b.icon:SetTexture(key and WC().Items[key].icon or nil)
+    end
     self:DrawCommands(sel)
 end
 
@@ -2189,7 +2230,7 @@ function P:DrawCommands(sel)
                     if (hero.points or 0) <= 1 then self.menu = nil end
                 end })
         end
-        list[8] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands.",
+        list[12] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands.",
             action = function() self.menu = nil end }
     elseif hasWorker and self.menu == "build" then
         -- The worker's build menu.
@@ -2207,27 +2248,26 @@ function P:DrawCommands(sel)
             Add({ icon = bd.icon, key = bd.hotkey, title = "Build " .. bd.name .. " (" .. bd.hotkey .. ")", tip = tip,
                 cost = bd.cost, enabled = miss == nil, action = function() self.menu = nil self:StartPlace(bt) end })
         end
-        list[8] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands (or right-click).",
+        list[12] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands (or right-click).",
             action = function() self.menu = nil end }
     elseif hasUnit then
         Add({ icon = IC .. "Ability_Rogue_Sprint", key = "M", title = "Move (M)", tip = "Then click where to go.",
             action = function() self:Target("move", "Click where to move") end })
         Add({ icon = IC .. "Spell_Nature_TimeStop", key = "S", title = "Stop (S)", tip = "Stop what they're doing.",
             action = function() self:Stop() end })
-        if hero and (hero.points or 0) > 0 then
-            -- Like Warcraft III's "+": skill points to spend.
-            Add({ icon = IC .. "Spell_Holy_Heal02", key = "O", title = "Hero Abilities (O)",
-                tip = "|cff40ff40" .. hero.points .. " skill point" .. (hero.points > 1 and "s" or "") .. " to spend.|r Learn or improve an ability.",
-                action = function() self.menu = "learn" end })
-        else
-            Add({ icon = IC .. "Ability_Defend", key = "H", title = "Hold Position (H)",
-                tip = "Stand still and only fight what comes in range.", action = function() self:Hold() end })
-        end
+        Add({ icon = IC .. "Ability_Defend", key = "H", title = "Hold Position (H)",
+            tip = "Stand still and only fight what comes in range.", action = function() self:Hold() end })
         Add({ icon = IC .. "Ability_SteelMelee", key = "A", title = "Attack (A)",
             tip = "Then click: an enemy to attack it, or the ground to attack-move there.",
             action = function() self:Target("attack", "Click a target or a spot") end })
+        if hero and (hero.points or 0) > 0 then
+            -- Like Warcraft III's "+": skill points to spend.
+            list[5] = { icon = IC .. "Spell_Holy_Heal02", key = "O", title = "Hero Abilities (O)",
+                tip = "|cff40ff40" .. hero.points .. " skill point" .. (hero.points > 1 and "s" or "") .. " to spend.|r Learn or improve an ability.",
+                action = function() self.menu = "learn" end }
+        end
         if hero then
-            for _, key in ipairs(WC().Units[hero.type].abilities) do
+            for slot, key in ipairs(WC().Units[hero.type].abilities) do
                 local a = A[key]
                 local lv = E().Skill(hero, key)
                 local mana = a.mana and (a.mana[lv] or a.mana[#a.mana]) or 0
@@ -2248,12 +2288,13 @@ function P:DrawCommands(sel)
                     end
                 end
                 local ready = lv > 0 and not a.passive and not (hero.cds and hero.cds[key]) and (hero.mana or 0) >= mana
-                Add({ icon = a.icon, key = (not a.passive and lv > 0) and a.hotkey or nil,
+                list[8 + slot] = { icon = a.icon, key = (not a.passive and lv > 0) and a.hotkey or nil,
                     title = a.name .. ((not a.passive and lv > 0) and (" (" .. a.hotkey .. ")") or ""), tip = tip,
-                    enabled = ready, action = function() self:CastAbility(hero, key) end })
+                    enabled = ready, action = function() self:CastAbility(hero, key) end }
             end
         end
         if hasWorker then
+            while #list < 4 do table.insert(list, false) end
             Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
                 action = function() self:Target("gather", "Click the gold mine or a tree") end })
             Add({ icon = IC .. "INV_Misc_Bag_10", key = "R", title = "Return Resources (R)",
@@ -2291,6 +2332,27 @@ function P:DrawCommands(sel)
                 tip = tip, enabled = miss == nil, action = function() self:Train(ut) end })
             end
         end
+        -- A shop: items for the hero standing next to it.
+        if E().Def(b).sells then
+            local cx, cy = E().Center(b)
+            local buyer
+            for _, id in ipairs(st.list) do
+                local e = st.ents[id]
+                if e and e.owner == ME and E().IsHero(e) and not e.illusion
+                    and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then buyer = e break end
+            end
+            for _, key in ipairs(E().Def(b).sells) do
+                local it = WC().Items[key]
+                local hk = WC().ITEM_KEYS[key]
+                local tip = it.cost .. " gold. " .. it.text
+                if not buyer then tip = "|cffff6060Bring a hero next to the shop.|r " .. tip end
+                Add({ icon = it.icon, key = hk, title = "Buy " .. it.name .. " (" .. hk .. ")", cost = { it.cost, 0 }, tip = tip,
+                    enabled = buyer ~= nil, action = function()
+                        local ok, why = self:Cmd({ type = "buy", building = b.id, unit = buyer.id, item = key })
+                        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                    end })
+            end
+        end
         -- Research and upgrades done here.
         for _, key in ipairs(WC().AI.RESEARCH) do
             local r = WC().Research[key]
@@ -2308,27 +2370,27 @@ function P:DrawCommands(sel)
         local fac = WC().Factions[st.players[ME].faction]
         if E().Def(b).hall or (E().Def(b).garrison and fac.alarm == "battleStations") then
             if fac.alarm == "callToArms" then
-                list[6] = { icon = IC .. "Ability_Warrior_BattleShout", key = "C", title = "Call to Arms (C)",
+                list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "C", title = "Call to Arms (C)",
                     tip = "Ring the alarm: peasants nearby run to the hall and fight as Militia for 45 seconds.",
                     action = function() self:Alarm() end }
             else
-                list[6] = { icon = IC .. "Ability_Warrior_BattleShout", key = "B", title = "Battle Stations (B)",
+                list[9] = { icon = IC .. "Ability_Warrior_BattleShout", key = "B", title = "Battle Stations (B)",
                     tip = "Peons nearby run into the burrows (4 each); burrows with peons attack enemies.",
                     action = function() self:Alarm() end }
             end
-            list[7] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
+            list[10] = { icon = IC .. "INV_Pick_02", key = "W", title = "Back to Work (W)",
                 tip = "Everyone called to arms goes back to work.", action = function()
                     self:Cmd({ type = "backToWork" })
                 end }
         end
         if E().Def(b).trains then
-            list[8] = { icon = IC .. "INV_BannerPVP_02", key = "Y", title = "Set Rally Point (Y)",
+            list[12] = { icon = IC .. "INV_BannerPVP_02", key = "Y", title = "Set Rally Point (Y)",
                 tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
                 action = function() self:Target("rally", "Click where new units should go") end }
         end
     end
     for i, c in ipairs(self.cmds) do
-        local item = list[i]
+        local item = list[i] or nil
         c:SetShown(item ~= nil)
         if item then
             c.icon:SetTexture(item.icon)
