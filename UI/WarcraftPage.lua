@@ -52,6 +52,13 @@ end
 -- per creature with a hidden model frame, then saved: see P:Probe).
 ---------------------------------------------------------------------------
 local MODEL_W, MODEL_H = 40, 48
+-- A unit's model frame is this much bigger than the unit itself (and the
+-- camera that much further away), so heads, weapons and wings aren't cut off.
+local MODEL_PAD = 1.8
+-- How tall a unit stands next to the buildings (1 = the old, too-big size).
+local UNIT_SIZE = 0.7
+-- A unit's height on screen in pixels, and where its feet are (below the frame's centre).
+local UNIT_PX, UNIT_FEET = MODEL_H / 1.1 * UNIT_SIZE, -6
 local ANIM = { stand = 0, death = 1, walk = 4, attack = 17, dead = 6 }
 
 local function Looks()
@@ -207,7 +214,7 @@ local function MakeUnitModel(parent)
     if not ok or not sc or not sc.CreateActor then return nil end
     local actor = sc:CreateActor()
     if not actor or not actor.SetModelByCreatureDisplayID then return nil end
-    sc:SetSize(MODEL_W, MODEL_H)
+    sc:SetSize(MODEL_W * MODEL_PAD, MODEL_H * MODEL_PAD)
     sc.actor = actor
     local view = ns.WC.ART.view
     function sc:SetDepth(d)
@@ -228,7 +235,7 @@ local function MakeUnitModel(parent)
         self.rr = math.sqrt(((x2 - x1) / 2) ^ 2 + ((y2 - y1) / 2) ^ 2 + (h / 2) ^ 2)
         RADIUS["unit"] = math.max(RADIUS["unit"] or 0, self.rr)
         -- Its height fills most of the frame.
-        Camera(self, (x1 + x2) / 2, (y1 + y2) / 2, z1 + h / 2, (h * 0.55) / math.tan(view.fov / 2), view.bpitch)
+        Camera(self, (x1 + x2) / 2, (y1 + y2) / 2, z1 + h / 2, (h * 0.55 * MODEL_PAD / UNIT_SIZE) / math.tan(view.fov / 2), view.bpitch)
         return true
     end
     sc:SetScript("OnUpdate", function(self, elapsed)
@@ -283,7 +290,7 @@ function P.New(parent, kind)
     self.setup:Hide()
     local back = W.Button(self.setup, "Back", 90, function()
         self.setupOpen = false
-        self:ShowStart()
+        self:ShowMenu()
         self:Refresh()
     end, 22)
     back:SetPoint("BOTTOMLEFT", 10, 10)
@@ -331,7 +338,7 @@ function P.New(parent, kind)
     self.clock:SetPoint("TOPRIGHT", -8, -5)
     self.statsText = W.Label(barFrame, "", "GameFontDisableSmall")
     self.statsText:SetPoint("TOPLEFT", 8, -5)
-    self.newButton = W.Button(barFrame, "New game", 80, function() self:ShowStart() end, 18)
+    self.newButton = W.Button(barFrame, "Menu", 80, function() self:ShowMenu() end, 18)
     self.newButton:SetPoint("TOPLEFT", 160, -2)
     local idle = CreateFrame("Button", nil, barFrame)
     idle:SetSize(70, 18)
@@ -525,6 +532,7 @@ function P.New(parent, kind)
         hl:SetAllPoints()
         hl:SetColorTexture(1, 1, 1, 0.15)
         c:SetScript("OnClick", function() if c.action then c.action() end end)
+        if c.SetMotionScriptsWhileDisabled then c:SetMotionScriptsWhileDisabled(true) end
         c:SetScript("OnEnter", function()
             if not c.title then return end
             GameTooltip:SetOwner(c, "ANCHOR_TOP")
@@ -584,23 +592,46 @@ function P.New(parent, kind)
         btn.key = key
         self.diffButtons[i] = btn
     end
-    self.againButton = W.Button(o, "Play again", 110, function() self:ShowStart() end, 26)
+    self.againButton = W.Button(o, "Main menu", 110, function() self:ShowMenu() end, 26)
     self.againButton:SetPoint("TOP", self.overSub, "BOTTOM", 0, -20)
     self.resumeButton = W.Button(o, "Back to the game", 140, function() self:Resume() end, 22)
     self.resumeButton:SetPoint("BOTTOM", 0, 30)
-    -- PvP: play a friend (lobbies) or find an opponent on the realm (queue).
-    self.queueButton = W.Button(o, "Find an opponent", 150, function()
+    self.backButton = W.Button(o, "Back", 100, function() self:ShowMenu() end, 24)
+    self.backButton:SetPoint("BOTTOMLEFT", 16, 16)
+
+    -- The main menu, like Warcraft III's: Single Player, Find an Opponent, Play a Friend.
+    local menu = CreateFrame("Frame", nil, o)
+    menu:SetAllPoints()
+    menu:SetFrameLevel(o:GetFrameLevel() + 4)
+    menu.logo = W.BigLabel(menu, 38, "GameFontNormalHuge")
+    menu.logo:SetPoint("TOP", 0, -26)
+    menu.logo:SetText("WARCRAFT III")
+    menu.logo:SetTextColor(1, 0.8, 0.25)
+    menu.sub = W.Label(menu, "Reign of Chaos", "GameFontNormal")
+    menu.sub:SetPoint("TOP", menu.logo, "BOTTOM", 0, -2)
+    menu.sub:SetTextColor(0.85, 0.75, 0.55)
+    local box = W.MenuFrame(menu)
+    box:SetSize(340, 268)
+    box:SetPoint("TOP", 0, -92)
+    self.soloButton = W.MenuButton(box, "Single Player", "Play against the computer", 290, 62, function()
+        self.mode = "solo"
+        self:ShowStart()
+    end)
+    self.soloButton:SetPoint("TOP", 0, -22)
+    self.queueButton = W.MenuButton(box, "Find an Opponent", "Anyone on your realm who wants a game", 290, 62, function()
         self.mode = "queue"
         self:ShowStart()
-    end, 24)
-    self.queueButton:SetPoint("BOTTOMRIGHT", o, "BOTTOM", -6, 64)
-    W.Tooltip(self.queueButton, "Find an opponent", "Pick your race, then we look for someone on your realm who wants a game.")
-    self.friendButton = W.Button(o, "Play a friend", 150, function()
+    end)
+    self.queueButton:SetPoint("TOP", self.soloButton, "BOTTOM", 0, -12)
+    self.friendButton = W.MenuButton(box, "Play a Friend", "Your group, guild, realm or a private code", 290, 62, function()
         self.setupOpen = true
         self:Refresh()
-    end, 24)
-    self.friendButton:SetPoint("BOTTOMLEFT", o, "BOTTOM", 6, 64)
-    W.Tooltip(self.friendButton, "Play a friend", "Open a lobby for your group, guild, realm or a private code.")
+    end)
+    self.friendButton:SetPoint("TOP", self.queueButton, "BOTTOM", 0, -12)
+    self.menuResume = W.MenuButton(menu, "Back to the game", nil, 180, 36, function() self:Resume() end)
+    self.menuResume:SetPoint("TOP", box, "BOTTOM", 0, -14)
+    menu:Hide()
+    self.mainMenu = menu
     self.lobbyText = W.Label(o, "", "GameFontHighlight")
     self.lobbyText:SetPoint("TOP", self.overSub, "BOTTOM", 0, -18)
     self.lobbyText:SetWidth(BW - 140)
@@ -642,7 +673,7 @@ function P.New(parent, kind)
         self:Resume()
         ns.Solo.SetRunning(kind, true)
     else
-        self:ShowStart()
+        self:ShowMenu()
     end
     self:Refresh()
     return self
@@ -651,10 +682,35 @@ end
 ---------------------------------------------------------------------------
 -- Games
 ---------------------------------------------------------------------------
+-- The main menu.
+function P:ShowMenu()
+    if not self.ls then self:Pause() end
+    self.mode = nil
+    self.overlay:Show()
+    self:HideScreens()
+    self.mainMenu:Show()
+    self.overTitle:SetText("")
+    self.overSub:SetText("")
+    self.menuResume:SetShown(not self.pvp and self.st ~= nil and not self.st.over)
+end
+
+-- Everything the overlay can show, off.
+function P:HideScreens()
+    self.mainMenu:Hide()
+    for _, p in ipairs(self.picks) do p:Hide() end
+    self.diffLabel:Hide()
+    for _, b in ipairs(self.diffButtons) do b:Hide() end
+    for _, b in ipairs({ self.againButton, self.resumeButton, self.backButton }) do b:Hide() end
+    self.lobbyText:SetText("")
+    self:PvpButtons({})
+end
+
+-- Pick a race: for a game against the computer, the queue, or a PvP lobby.
 function P:ShowStart()
     if not self.ls then self:Pause() end
     self.overlay:Show()
-    self.overTitle:SetText("Choose your side")
+    self:HideScreens()
+    self.overTitle:SetText(self.pvp and "Choose your race" or self.mode == "queue" and "Find an Opponent" or "Single Player")
     self.overTitle:SetTextColor(1, 0.82, 0)
     local solo = not self.pvp and self.mode ~= "queue"
     self.overSub:SetText(self.pvp and "Pick your race. Your opponent picks theirs."
@@ -667,12 +723,7 @@ function P:ShowStart()
         b:SetShown(solo)
         b:SetEnabled(b.key ~= chosen) -- the chosen one is greyed out
     end
-    self.againButton:Hide()
-    self.lobbyText:SetText("")
-    self:PvpButtons(self.mode == "queue" and not self.pvp and { "done" } or {})
-    self.queueButton:SetShown(solo)
-    self.friendButton:SetShown(solo)
-    self.resumeButton:SetShown(solo and self.st ~= nil and not self.st.over)
+    self.backButton:SetShown(not self.pvp)
 end
 
 function P:PickSide(faction)
@@ -748,10 +799,7 @@ function P:GameOver()
     ns.Solo.SetRunning(self.kind, false)
     self:Pause()
     self.overlay:Show()
-    for _, p in ipairs(self.picks) do p:Hide() end
-    self.diffLabel:Hide()
-    for _, b in ipairs(self.diffButtons) do b:Hide() end
-    self.resumeButton:Hide()
+    self:HideScreens()
     self.againButton:Show()
     self.overTitle:SetText(won and "Victory!" or "Defeat")
     self.overTitle:SetTextColor(won and 1 or 0.9, won and 0.82 or 0.3, won and 0 or 0.3)
@@ -1749,7 +1797,7 @@ function P:UnitFrame(id, utype)
         f.ring:SetTexture(ART .. "WcRing")
         f.model = MakeUnitModel(f)
         if f.model then
-            f.model:SetPoint("BOTTOM", f, "CENTER", 0, -8)
+            f.model:SetPoint("CENTER", f, "CENTER", 0, UNIT_FEET + UNIT_PX / 2)
             f.model.npc = WC().Units[utype].npc
             f.model:SetFrameLevel(f:GetFrameLevel() + 1)
         end
@@ -1760,7 +1808,7 @@ function P:UnitFrame(id, utype)
         f.hpBg = top:CreateTexture(nil, "OVERLAY", nil, 1)
         f.hpBg:SetColorTexture(0, 0, 0, 0.8)
         f.hpBg:SetSize(20, 3)
-        f.hpBg:SetPoint("BOTTOM", f, "CENTER", 0, MODEL_H - 12)
+        f.hpBg:SetPoint("BOTTOM", f, "CENTER", 0, UNIT_FEET + UNIT_PX + 3)
         f.hp = top:CreateTexture(nil, "OVERLAY", nil, 2)
         f.hp:SetColorTexture(0.2, 1, 0.2, 1)
         f.hp:SetHeight(3)
@@ -2454,7 +2502,8 @@ function P:PvpScreen(title, sub, lobby, keys)
     for _, p in ipairs(self.picks) do p:Hide() end
     self.diffLabel:Hide()
     for _, b in ipairs(self.diffButtons) do b:Hide() end
-    for _, b in ipairs({ self.againButton, self.resumeButton, self.queueButton, self.friendButton }) do b:Hide() end
+    for _, b in ipairs({ self.againButton, self.resumeButton, self.backButton }) do b:Hide() end
+    self.mainMenu:Hide()
     self.overTitle:SetText(title)
     self.overTitle:SetTextColor(1, 0.82, 0)
     self.overSub:SetText(sub or "")
@@ -2487,7 +2536,7 @@ end
 function P:CancelQueue()
     ns.Queue.Leave(self.kind)
     self.queueRace, self.mode = nil, nil
-    self:ShowStart()
+    self:ShowMenu()
 end
 
 -- The PvP game starts on this client: same seed and races on both sides.
@@ -2586,7 +2635,7 @@ function P:LeavePvp()
     self.st = (saved and saved.players and not saved.over) and saved or nil
     if self.st then self:CenterOn(E().Hall(self.st, ME)) self.treeDirty = true self:BuildMinimapTrees() end
     self.mode = nil
-    self:ShowStart()
+    self:ShowMenu()
 end
 
 function P:RefreshPvp(s)

@@ -872,50 +872,7 @@ function P.New(parent, kind)
     self.boardPanel = bp
 
     -- The main menu, like Hearthstone's: a framed box of big stone buttons.
-    local BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
-    local function Frame(parent, edge)
-        local f = CreateFrame("Frame", nil, parent, BACKDROP)
-        if f.SetBackdrop then
-            f:SetBackdrop({ bgFile = "Interface\\FrameGeneral\\UI-Background-Rock", edgeFile =
-                "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", tile = true, tileSize = 128, edgeSize = edge or 32,
-                insets = { left = 10, right = 10, top = 10, bottom = 10 } })
-        end
-        return f
-    end
-    local function MenuButton(parent, text, sub, w, h, fn)
-        local btn = CreateFrame("Button", nil, parent, BACKDROP)
-        btn:SetSize(w, h)
-        if btn.SetBackdrop then
-            btn:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile =
-                "Interface\\DialogFrame\\UI-DialogBox-Gold-Border", edgeSize = 16,
-                insets = { left = 4, right = 4, top = 4, bottom = 4 } })
-            btn:SetBackdropColor(0.24, 0.17, 0.1, 1)
-        end
-        local shine = btn:CreateTexture(nil, "ARTWORK")
-        shine:SetPoint("TOPLEFT", 5, -5)
-        shine:SetPoint("BOTTOMRIGHT", -5, 5)
-        shine:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
-        shine:SetVertexColor(0.55, 0.45, 0.32)
-        shine:SetAlpha(0.5)
-        btn.label = W.BigLabel(btn, h >= 50 and 22 or 15, "GameFontNormalHuge")
-        btn.label:SetPoint("CENTER", 0, sub and 7 or 0)
-        btn.label:SetText(text)
-        btn.label:SetTextColor(1, 0.86, 0.4)
-        if sub then
-            btn.sub = W.Label(btn, sub, "GameFontHighlightSmall")
-            btn.sub:SetPoint("TOP", btn.label, "BOTTOM", 0, -3)
-            btn.sub:SetTextColor(0.85, 0.8, 0.7)
-        end
-        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetPoint("TOPLEFT", 5, -5)
-        hl:SetPoint("BOTTOMRIGHT", -5, 5)
-        hl:SetColorTexture(1, 0.8, 0.3, 0.14)
-        btn:SetScript("OnClick", function()
-            W.PlaySound("IG_MAINMENU_OPTION")
-            fn()
-        end)
-        return btn
-    end
+    local Frame, MenuButton = W.MenuFrame, W.MenuButton
     local menu = CreateFrame("Frame", nil, o)
     menu:SetAllPoints()
     menu:SetFrameLevel(o:GetFrameLevel() + 4)

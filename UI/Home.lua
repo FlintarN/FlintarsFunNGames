@@ -111,8 +111,6 @@ function Home:Build(page)
         b.key = sec.key
         self.sectionButtons[i] = b
     end
-    self.sectionHint = W.Label(page, "", "GameFontDisableSmall")
-    self.sectionHint:SetPoint("TOPRIGHT", -4, -8)
 
     -- Who owes whom, at a glance (details on the Settle up tab).
     self.tabLine = W.Label(page, "", "GameFontHighlight")
@@ -160,9 +158,6 @@ function Home:Refresh()
         local on = b.key == section
         b.bar:SetShown(on)
         b.label:SetTextColor(on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6)
-    end
-    for _, sec in ipairs(SECTIONS) do
-        if sec.key == section then self.sectionHint:SetText(sec.hint) end
     end
     local count = 0
     for _, c in ipairs(self.cards) do
