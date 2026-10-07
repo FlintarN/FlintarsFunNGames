@@ -18,7 +18,7 @@ local TILE = 20                 -- pixels per tile
 local STEP = 0.05               -- engine step
 local ME, CPU = 1, 2
 local MM_SCALE = 2              -- minimap pixels per tile
-local EDGE, SCROLL = 10, 650    -- edge scrolling
+local EDGE, SCROLL = 28, 650    -- edge scrolling: pixels from the map's edge, speed
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 } }
 local BUILDING_ART = {
     town_hall = "WcTownHall", farm = "WcFarm", barracks = "WcBarracks", lumber_mill = "WcBarracks", guard_tower = "WcFarm", altar_kings = "WcFarm",
@@ -714,6 +714,14 @@ function P:Scroll(dt)
         local sx, sy = self:Cursor()
         if sx < EDGE then dx = dx - 1 elseif sx > BW - EDGE then dx = dx + 1 end
         if sy < EDGE then dy = dy - 1 elseif sy > VIEW_H - EDGE then dy = dy + 1 end
+    elseif ns.UI.full and not self.drag and GetCursorPosition and UIParent:IsMouseOver() then
+        -- Fullscreen: the mouse at the edge of the screen scrolls too (like Warcraft III).
+        local s = UIParent:GetEffectiveScale()
+        local mx, my = GetCursorPosition()
+        mx, my = mx / s, my / s
+        local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+        if mx < 6 then dx = dx - 1 elseif mx > w - 6 then dx = dx + 1 end
+        if my > h - 6 then dy = dy - 1 elseif my < 6 then dy = dy + 1 end
     end
     if dx ~= 0 or dy ~= 0 then
         self.camX = self.camX + dx * SCROLL * dt
