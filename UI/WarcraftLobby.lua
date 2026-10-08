@@ -68,6 +68,7 @@ function L.CanStart(lobby)
     -- (Tower Defense can be played alone: hold out as long as you can.)
     local mode = WC().Modes[lobby.mode or "melee"]
     if #players == 1 and mode and mode.solo then return true end
+    if mode and mode.coop and #players >= 1 then return true end -- (Hero Defense: everyone together)
     if #players < 2 then return false, "Add a computer or another player." end
     local teams, n = {}, 0
     for _, p in ipairs(players) do
@@ -102,6 +103,11 @@ end
 -- The screen
 ---------------------------------------------------------------------------
 -- view: the Warcraft page. Builds into its overlay.
+-- (Defined further down; the Ready button below calls it, so it's declared
+-- here: a local made later is invisible to code above it, and the button
+-- failed on every click.)
+local Lobby
+
 function L.Build(view, o)
     local f = CreateFrame("Frame", nil, o)
     f:SetAllPoints()
@@ -220,7 +226,7 @@ end
 
 -- The lobby on screen now: Single Player's saved one, or the session's
 -- (seen from my seat: my seat is kind "me").
-local function Lobby(view)
+function Lobby(view) -- (the local declared above L.Build)
     local s = Online(view)
     if s then return ns.Games.warcraft.LobbyView(s, ns.Me()) end
     local rec = ns.db.warcraft

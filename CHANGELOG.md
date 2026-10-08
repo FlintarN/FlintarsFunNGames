@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.4 (2026-10-08)
+
+### New
+- **Warcraft 4: Hero Defense**, as Hero Siege: 1 to 8 players together (computers fill seats). A castle in the middle of the map and four lanes into it; you start with the west lane, and anyone can open the north, east or south lane at the castle: more creeps in all for more gold and experience, but fewer in each lane, so hold one lane together like a dungeon or split up. One hero each (all eight, free at your altar), items at the Goblin Merchant, a healing fountain at the castle, heroes come back by themselves. Waves every 40 seconds, a boss every 5th, the Ogre Warlord on the 20th; lose the castle and it's over.
+- **Hero Defense: the WoW classes.** Warrior, Paladin, Hunter, Rogue, Priest, Shaman, Mage, Warlock, Druid and Death Knight, each looking like a WoW class trainer of that class and side, with their own voices. Played as in Classic/Forever (Wrath for the Death Knight): rage that builds as you fight, energy and combo points (Sinister Strike, Eviscerate, Kidney Shot), runic power, a Hunter's wolf and a Warlock's Voidwalker, Bear Form, Stealth, Blink, Charge, Death Grip and more. Up to level 25 with a skill point each level: four spells of four ranks, an ultimate, and Attributes.
+- **Hero Defense: loot and gold.** Creeps drop items in grey, white, green, blue and purple with Classic's suffixes (of the Bear, of the Eagle...); walk over to pick up; six gear slots (a weapon, three armour, two accessories) plus six bag places for potions and spare gear, so potions never cost you gear; right-click to drop (trade with friends), sell at the Merchant, who also has potions, gear and Tomes of Experience. Dungeon bosses every 4th wave - Hogger, Edwin VanCleef, Archmage Arugal, Herod and Onyxia - drop their own items (Cruel Barb, Ravager, Vis'kag the Bloodletter...).
+
+### Fixed
+- **Warcraft 4: creeps gave no experience.** Experience came from a unit's food cost, and creeps cost none; they now count by their level, as in Warcraft III (the creep camps in normal games too).
+- **Warcraft 4 lobby: Ready did nothing** (on Retail and WoW Forever alike). The button's code called a helper that was defined further down the file, so every click failed and the host never saw you ready. Fixed, with a test that clicks the real button.
+
 ## 1.1.3 (2026-10-08)
 
 ### New

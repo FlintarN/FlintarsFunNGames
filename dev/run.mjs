@@ -28,6 +28,16 @@ async function Player(name, group, realm) {
     lua.global.set('__NAME', file);
     await lua.doString(`local fn, err = load(__SRC, "@" .. __NAME) if not fn then error(err) end fn("FlintarsFunNGames", ns)`);
   }
+  if (process.env.NILCHECK) await lua.doString(`
+    local seen = {}
+    setmetatable(_G, { __index = function(_, k)
+      local info = debug.getinfo(2, "Sl")
+      local where = info and (info.short_src .. ":" .. (info.currentline or 0)) or "?"
+      if where:find("^[CGU][oaI]") and not seen[where .. k] then
+        seen[where .. k] = true
+        print("NILGLOBAL " .. tostring(k) .. " " .. where)
+      end
+    end })`);
   lua.global.set('__check', (ok, label) => {
     if (ok) passes++; else { failures++; console.log(`  FAIL [${name}] ${label}`); }
   });
@@ -751,6 +761,25 @@ await Section('Forever names: Ready in the Warcraft 4 lobby', async () => {
   await host.run(`local s = ns.Session.Get("warcraft") check(ns.Session.Game(s):CanStart(s), "forever wc: the host can start")`);
 });
 
+// Retail, players on different realms: the joiner's Ready reaches the host
+// (in a group, and by code).
+for (const group of [true, false]) await Section(`Cross-realm: Ready in the Warcraft 4 lobby (${group ? 'group' : 'code'})`, async () => {
+  const host = await Player('Flintar', group ? ['Bob'] : [], 'Draenor');
+  const bob = await Player('Bob', group ? ['Flintar'] : [], 'Silvermoon');
+  const players = [host, bob];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const code = await Get(host, group ? 'WcPvpHost("group")' : 'WcPvpHost()');
+  await Pump(players, 1);
+  await bob.run(group ? 'WcPvpJoinGroup()' : `WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await host.run(`local s = ns.Session.Get("warcraft") check(s and #s.players == 2, "retail wc: Bob is seated (" .. tostring(s and #s.players) .. ")")`);
+  // Bob clicks the Ready button on his lobby screen.
+  await bob.run(`local v = ns.UI.pages.warcraft.view v:Refresh() check(v.lobbyFrame.ready:IsShown(), "retail wc: Bob sees Ready") v.lobbyFrame.ready._scripts.OnClick()`);
+  await Pump(players, 1);
+  await host.run(`local s = ns.Session.Get("warcraft") check(s.lobby.ready and s.lobby.ready["Bob"], "retail wc: the host sees Bob ready")`);
+  await host.run(`local s = ns.Session.Get("warcraft") check(ns.Session.Game(s):CanStart(s), "retail wc: the host can start")`);
+});
+
 // WoW Forever: one realm, and every name is two words.
 await Section('Forever names: Deathroll in a group', async () => {
   const names = ['Anna Stone', 'Bob Hill'];
@@ -884,6 +913,37 @@ await Section('Warcraft 4: Tower Defense online', async () => {
   await host.run(`check(WcPvpInfo() == "1:nil", "td online: no desync (" .. WcPvpInfo() .. ")")`);
 });
 
+await Section('Warcraft 4: Hero Defense online', async () => {
+  const host = await Player('Flintar', []);
+  const bob = await Player('Bob', []);
+  const players = [host, bob];
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const code = await Get(host, 'WcPvpHost()');
+  await Pump(players, 1);
+  await bob.run(`WcPvpJoin("${code}")`);
+  await Pump(players, 2);
+  await host.run('WcPvpLobby("mode:hd")');
+  await Pump(players, 1);
+  await bob.run('WcPvpLobby("ready:on")');
+  await Pump(players, 1);
+  await host.run('WcPvpStart()');
+  await Pump(players, 1);
+  await host.run('WcPvpHdHero("cls_warrior")');
+  await bob.run('WcPvpHdHero("cls_death_knight_h")');
+  for (let i = 0; i < 40; i++) { for (const q of players) await q.run('WcPvpRun(5)'); await Pump(players, 0.25); }
+  await bob.run(`check(WcPvpHdLane("Open the East lane (E)"), "hd online: Bob has the castle's lane buttons")`);
+  for (let i = 0; i < 360; i++) { for (const q of players) await q.run('WcPvpRun(5)'); await Pump(players, 0.25); }
+  await host.run(`local st = ns.UI.pages.warcraft.view.st check(st.mode == "hd" and st.hd.open.E and st.hd.wave >= 1, "hd online: Bob opened the east lane for both (wave " .. st.hd.wave .. ")")`);
+  await host.run(`local st = ns.UI.pages.warcraft.view.st check(ns.WC.Modes.hd.Hero(st, 1) and ns.WC.Modes.hd.Hero(st, 2), "hd online: both heroes in the game")`);
+  const t1 = await Get(host, 'WcPvpTurn()');
+  const t2 = await Get(bob, 'WcPvpTurn()');
+  const t = Math.floor((Math.min(t1, t2) - 1) / 20) * 20;
+  const h1 = await Get(host, `WcPvpHash(${t})`);
+  const h2 = await Get(bob, `WcPvpHash(${t})`);
+  await host.run(`check("${h1}" ~= "" and "${h1}" == "${h2}", "hd online: both clients have the same game at turn ${t}")`);
+  await host.run(`check(WcPvpInfo() == "1:nil", "hd online: no desync (" .. WcPvpInfo() .. ")")`);
+});
+
 await Section('Warcraft 4: three players and a computer', async () => {
   const host = await Player('Flintar', []);
   const bob = await Player('Bob', []);
@@ -983,6 +1043,22 @@ await Section('Warcraft 4: Tower Defense', async () => {
   await p.run('WcTdSoloTests()');
   await p.run('WcTdAiTests()');
   await p.run('WcTdPageTests()');
+});
+
+await Section('Warcraft 4: the WoW classes and loot', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wcclass.lua'), 'utf8'));
+  await p.run('WcClassTests()');
+  await p.run('WcLootTests()');
+  await p.run('WcClassPageTests()');
+});
+
+await Section('Warcraft 4: Hero Defense', async () => {
+  const p = await Player('Flintar', []);
+  await p.run(readFileSync(join(here, 'tests_wchd.lua'), 'utf8'));
+  await p.run('WcHdTests()');
+  await p.run('WcHdAiTests()');
+  await p.run('WcHdPageTests()');
 });
 
 await Section('Warcraft III engine and AI', async () => {

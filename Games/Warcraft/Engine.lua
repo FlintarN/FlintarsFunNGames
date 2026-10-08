@@ -288,6 +288,7 @@ function E.Damage(st, u)
     end
     if E.Drums then dmg = dmg * (1 + E.Drums(st, u)) end
     if u.buffs and u.buffs.innerFire then dmg = dmg * 1.1 end
+    if u.dmgMul then dmg = dmg * u.dmgMul end -- (a mode's stronger creeps on later waves)
     return dmg
 end
 
@@ -1774,6 +1775,19 @@ function E.Step(st, dt)
     for _, id in ipairs(st.list) do if st.ents[id] then table.insert(keep, id) end end
     st.list = keep
     E.Food(st)
+    -- A mode can say when it's over itself (Hero Defense: the castle falls,
+    -- or the last wave is beaten). winner: a player of the winning side, 0 none.
+    local mode = D().Modes and D().Modes[st.mode]
+    if mode and mode.Over then
+        local over, winner = mode.Over(st)
+        if over then
+            st.over = true
+            st.winner = winner or 0
+            Emit("over", { winner = st.winner })
+        end
+        EV = nil
+        return events
+    end
     -- Whoever has no buildings left is out; the last team standing wins.
     local has, teams, last = {}, {}, nil
     for _, id in ipairs(st.list) do

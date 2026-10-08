@@ -221,3 +221,22 @@ function WcPvpTdOrder(n)
         v:Cmd({ type = "tdSend", unit = "td_kobold" })
     end
 end
+
+-- Hero Defense online: pick a hero at your altar; open a lane at the castle
+-- (it belongs to seat 1, but everyone on its side has the buttons).
+function WcPvpHdHero(utype)
+    local v = View()
+    local st = v.st
+    local altar = WC.Modes.hd.Altar(st, v.ls.seat)
+    v:Cmd({ type = "train", building = altar.id, utype = utype })
+end
+
+function WcPvpHdLane(title)
+    local v = View()
+    v.sel = { v.st.hd.castle }
+    v:Draw()
+    for _, c in ipairs(v.cmds) do
+        if c:IsShown() and c.title == title then c.action() return true end
+    end
+    return false
+end

@@ -16,6 +16,9 @@ local I = "Interface\\Icons\\"
 -- Data
 ---------------------------------------------------------------------------
 WC.XP_LEVELS = { 200, 500, 900, 1400, 2000, 2700, 3500, 4400, 5400 } -- total XP for levels 2 to 10
+-- (Heroes that go further - Hero Defense's classes, maxLevel - go on the
+-- same way: each level 100 more than the one before.)
+for n = 11, 40 do WC.XP_LEVELS[n - 1] = 100 * (n * (n + 1) / 2 - 1) end
 WC.HERO_MAX = 3
 WC.HERO_TIER = { [2] = { human = "keep", orc = "stronghold" }, [3] = { human = "castle", orc = "fortress" } }
 WC.XP_RANGE = 12 -- heroes this close share the experience of a kill

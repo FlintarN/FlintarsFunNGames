@@ -48,6 +48,8 @@ A small real-time strategy game against the computer: Human or Orc, workers gath
 
 **Warcraft 4: Tower Defense**: Line Tower Wars for 2 to 8, free for all or in teams, or alone against the waves. A lane each, a flying builder, Arrow, Cannon and Frost towers in three levels; mazes (but never blocked), waves with flyers and bosses, and sends that push creeps into the next player's lane and raise your income.
 
+**Warcraft 4: Hero Defense**: Hero Siege for 1 to 8 together. A castle in the middle and four lanes; start with one and open more when you're ready. Play a WoW class (Warrior, Paladin, Hunter, Rogue, Priest, Shaman, Mage, Warlock, Druid or Death Knight) up to level 25, with rage, energy and combo points, runic power, pets and forms. Loot drops in grey, green, blue and purple ("of the Bear"); wear six pieces and carry six more things (potions too); drop gear for a friend or sell it. Dungeon bosses from Hogger to Onyxia.
+
 **Warcraft 4 with friends**: up to eight players in teams, with computers in the empty seats.
 
 **Warcraft 4 maps**: pick from five maps, from a quick duel to a four-player map.

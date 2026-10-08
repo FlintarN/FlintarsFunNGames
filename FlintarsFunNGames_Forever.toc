@@ -2,7 +2,7 @@
 ## Title: Flintar's Fun 'n' Games
 ## Notes: Casino and Arcade games for your group, guild or realm: dice, poker, blackjack, slots, roulette, Hearthstone 2, Warcraft 4, Tetris, Battleship, Agar.io and more. /fng to open.
 ## Author: FlintarN
-## Version: 1.1.3
+## Version: 1.1.4
 ## SavedVariables: FlintarsFunNGamesDB
 ## IconTexture: Interface\Icons\INV_Misc_Dice_01
 
@@ -48,8 +48,11 @@ Games\Warcraft\Casters.lua
 Games\Warcraft\Creeps.lua
 Games\Warcraft\Sounds.lua
 Games\Warcraft\AI.lua
+Games\Warcraft\Classes.lua
+Games\Warcraft\Loot.lua
 Games\Warcraft\Modes.lua
 Games\Warcraft\TowerDefense.lua
+Games\Warcraft\HeroDefense.lua
 Games\Warcraft.lua
 Core\Session.lua
 Core\Queue.lua

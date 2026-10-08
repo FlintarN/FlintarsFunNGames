@@ -274,6 +274,27 @@ H.RULES = {
             .. "tower to upgrade it (U, three levels) or sell it (X) for 75%. Your gate sends creeps into the next "
             .. "opponent's lane: each send raises your income, paid every 15 seconds. Every 5th wave flies, every 7th is "
             .. "fast, every 10th is a boss. The last one with lives wins." },
+        { "Hero Defense", "A game mode (Hero Siege), 1 to 8 players all on one side. A castle in the middle, four lanes "
+            .. "into it; only the west lane is open at first. Pick one hero at your altar: a WoW class (free). Waves come "
+            .. "down every open lane every 40 seconds (a dungeon boss every 4th: Hogger, VanCleef, Arugal, Herod, and "
+            .. "Onyxia last) and go for the "
+            .. "castle. Select the castle to open the north, east or south lane: more creeps in all (more gold and "
+            .. "experience), fewer in each - hold one lane together like a dungeon, or split up. Kills pay the killer, "
+            .. "and everyone else a share; buy items at the Goblin Merchant. Next to the castle you heal quickly. "
+            .. "A fallen hero comes back at your altar by itself. Beat the last wave to win; lose the castle and it's over." },
+        { "Classes", "Warrior (rage: it builds as you fight), Paladin, Hunter (a wolf), Rogue (energy and combo points: "
+            .. "build them with Sinister Strike, spend them on Eviscerate or Kidney Shot), Priest, Shaman, Mage, Warlock "
+            .. "(a Voidwalker), Druid (Bear Form) and Death Knight (runic power: strikes build it, Death Coil spends it). "
+            .. "Up to level 25, a skill point each level (O): four spells of four ranks, an ultimate from level 6, and "
+            .. "Attributes (+strength, agility, intellect) for the rest." },
+        { "Loot", "Creeps drop items where they fall, bosses their own: grey, white, green, blue and purple, with "
+            .. "Classic's suffixes (of the Bear: strength and stamina; of the Eagle: intellect and stamina...). Walk over an "
+            .. "item to pick it up. Your hero wears gear in six slots (a weapon, three armour, two accessories: only worn "
+            .. "gear counts; it goes on by itself when a slot is free) and carries six more things in the bag (potions, "
+            .. "tomes, spare gear). Click gear in the bag to wear it (it swaps), right-click worn gear to take it off. "
+            .. "Right-click one in the bag to drop it: anyone can pick it up, so hand "
+            .. "gear to a friend. Shift+right-click next to the Merchant sells it. Gold buys potions, gear and Tomes of "
+            .. "Experience there." },
         { "PvP", "Play a friend opens a lobby (group, guild, realm or a private code); Find an opponent looks for "
             .. "someone on your realm. You each pick a race. Both addons run the same game: your orders reach the "
             .. "other side in a moment, so they take effect about half a second after you click. If the other "

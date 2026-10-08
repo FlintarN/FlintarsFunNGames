@@ -33,24 +33,45 @@ local function Skill(u, key) return E.Skill(u, key) end
 -- A hero's attribute at its level.
 function E.Stat(u, stat)
     local s = U[u.type][stat]
-    return s[1] + s[2] * ((u.level or 1) - 1)
+    local items = ((u.items or u.gear) and E.ItemBonus) and E.ItemBonus(u, stat) or 0 -- (Hero Defense's loot)
+    return s[1] + s[2] * ((u.level or 1) - 1) + items
 end
 
+-- How far a hero can level (the Warcraft III heroes: 10).
+function E.MaxLevel(u) return U[u.type].maxLevel or 10 end
+
 local function HeroMaxHp(u)
-    return math.floor(100 + 25 * E.Stat(u, "str") + (u.buffs and u.buffs.avatar and 500 or 0))
+    local items = ((u.items or u.gear) and E.ItemBonus) and E.ItemBonus(u, "hp") or 0
+    return math.floor(100 + 25 * E.Stat(u, "str") + (u.buffs and u.buffs.avatar and 500 or 0) + items)
 end
-local function HeroMaxMana(u) return math.floor(15 * E.Stat(u, "int")) end
+-- Mana, or a class's other power (rage, energy, runic power: 0 to 100).
+local function HeroMaxMana(u)
+    if U[u.type].power then return 100 end
+    return math.floor(15 * E.Stat(u, "int"))
+end
+
+-- After items change: health and mana follow (keeping the share left).
+function E.RefreshHero(st, u)
+    local hp, mana = u.maxHp, u.maxMana
+    u.maxHp, u.maxMana = HeroMaxHp(u), HeroMaxMana(u)
+    if hp and hp > 0 then u.hp = math.max(1, math.min(u.maxHp, u.hp * u.maxHp / hp)) end
+    if mana and mana > 0 and not U[u.type].power then u.mana = math.min(u.maxMana, u.mana * u.maxMana / mana) end
+end
 
 function E.InitHero(st, u, saved)
     u.level, u.xp, u.skills, u.points, u.cds = 1, 0, {}, 1, {}
     if saved then
         u.level, u.xp, u.skills, u.points = saved.level, saved.xp, Copy(saved.skills), saved.points
         u.items = Copy(saved.items)
+        u.gear = Copy(saved.gear)
     end
     u.maxHp = HeroMaxHp(u)
     u.hp = u.maxHp
     u.maxMana = HeroMaxMana(u)
     u.mana = u.maxMana
+    -- Rage and runic power build up in a fight: they start empty.
+    local power = U[u.type].power
+    if power == "rage" or power == "runic" then u.mana = 0 end
 end
 
 function E.HeroDamage(st, u)
@@ -117,7 +138,7 @@ function E.Speed(st, u)
         if b.windwalk then s = s * (1 + b.windwalk.speed) end
         if b.bloodlust then s = s * 1.25 end
     end
-    if u.items and E.ItemBonus then s = s * (1 + E.ItemBonus(u, "speed")) end
+    if (u.items or u.gear) and E.ItemBonus then s = s * (1 + E.ItemBonus(u, "speed")) end
     if u.defend then s = s * 0.7 end
     return s * (1 + E.Aura(st, u, "endurance"))
 end
@@ -162,7 +183,7 @@ end
 function E.GiveXp(st, u, n)
     u.xp = u.xp + n
     E.Score(st, u.owner, "xp", n)
-    while u.level < 10 and u.xp >= WC.XP_LEVELS[u.level] do
+    while u.level < E.MaxLevel(u) and u.xp >= WC.XP_LEVELS[u.level] do
         u.level = u.level + 1
         u.points = u.points + 1
         local hp, mana = u.maxHp, u.maxMana
@@ -223,21 +244,29 @@ end
 function E.OnDeath(st, t)
     if t.kind ~= "unit" or t.summon or t.illusion then return end
     local d = U[t.type]
-    local xp = d.hero and (80 + 60 * (t.level or 1)) or (d.food or 1) * 25
+    -- (Creeps cost no food: they count by their level, as in Warcraft III.
+    -- Before, every creep gave nothing.)
+    local weight = (d.food or 0) > 0 and d.food or (d.creep and (d.level or 2)) or 1
+    local xp = d.hero and (80 + 60 * (t.level or 1)) or weight * 25
     local near = {}
     for p = 1, #st.players do
         if E.Foe(st, p, t.owner) then -- (heroes of the other side learn from it)
             for _, h in ipairs(Heroes(st, p)) do
                 local dx, dy = h.x - t.x, h.y - t.y
-                if h.level < 10 and dx * dx + dy * dy <= WC.XP_RANGE * WC.XP_RANGE then table.insert(near, h) end
+                if h.level < E.MaxLevel(h) and dx * dx + dy * dy <= WC.XP_RANGE * WC.XP_RANGE then table.insert(near, h) end
             end
         end
     end
-    for _, h in ipairs(near) do E.GiveXp(st, h, math.floor(xp / #near)) end
+    -- (Shared out, as in Warcraft III; a mode can give everyone near it all of
+    -- it - Hero Defense, so a group levels as fast as a hero alone.)
+    local M = WC.Modes and WC.Modes[st.mode or "melee"]
+    local split = (M and M.fullXp) and 1 or #near
+    for _, h in ipairs(near) do E.GiveXp(st, h, math.floor(xp / split)) end
     if d.hero then
         local pl = st.players[t.owner]
         pl.fallen = pl.fallen or {}
-        pl.fallen[t.type] = { level = t.level, xp = t.xp, skills = Copy(t.skills), points = t.points, items = Copy(t.items) }
+        pl.fallen[t.type] = { level = t.level, xp = t.xp, skills = Copy(t.skills), points = t.points, items = Copy(t.items),
+            gear = Copy(t.gear) }
         E.Emit("heroDied", { id = t.id, owner = t.owner, type = t.type })
     else
         st.corpses = st.corpses or {}
@@ -293,7 +322,9 @@ function E.UnitTick(st, u, dt)
     end
     if E.IsHero(u) and not u.illusion then
         u.hp = math.min(u.maxHp, u.hp + (0.25 + 0.05 * E.Stat(u, "str")) * dt)
-        u.mana = math.min(u.maxMana, u.mana + (0.05 * E.Stat(u, "int") + E.Aura(st, u, "brilliance")) * dt)
+        if not U[u.type].power then
+            u.mana = math.min(u.maxMana, u.mana + (0.05 * E.Stat(u, "int") + E.Aura(st, u, "brilliance")) * dt)
+        end
         if u.cds then
             local done = {}
             for k, v in pairs(u.cds) do
@@ -669,7 +700,10 @@ function E.HeroCommand(st, p, cmd, mode)
         if not a or not mine then return false, "not this hero's" end
         if (u.points or 0) < 1 then return false, "no skill points" end
         local lv = Skill(u, cmd.ability) + 1
-        if a.ult then
+        if a.needs then -- (the classes: rank n opens at hero level needs[n])
+            if lv > #a.needs then return false, "already at the top level" end
+            if u.level < a.needs[lv] then return false, "needs hero level " .. a.needs[lv] end
+        elseif a.ult then
             if lv > 1 then return false, "already learned" end
             if u.level < 6 then return false, "needs hero level 6" end
         else

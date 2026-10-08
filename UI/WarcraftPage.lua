@@ -568,7 +568,7 @@ function P.New(parent, kind)
     self.selHp:SetPoint("TOPLEFT", self.selName, "BOTTOMLEFT", 0, -3)
     self.selStatus = W.Label(hud, "", "GameFontDisableSmall")
     self.selStatus:SetPoint("TOPLEFT", self.selHp, "BOTTOMLEFT", 0, -3)
-    self.selStatus:SetWidth(260)
+    self.selStatus:SetWidth(228) -- (room for a class hero's gear at 440)
     self.selStatus:SetJustifyH("LEFT")
     -- The group: an icon per unit. Click one: its kind gets the command card
     -- (a subgroup, like Warcraft III; Tab moves on); double-click: just that unit.
@@ -638,26 +638,111 @@ function P.New(parent, kind)
         local bg = b:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
         bg:SetColorTexture(0, 0, 0, 0.7)
+        -- (a frame in the item's quality colour: green, blue, purple loot)
+        b.edge = b:CreateTexture(nil, "BACKGROUND", nil, 1)
+        b.edge:SetPoint("TOPLEFT", -2, 2)
+        b.edge:SetPoint("BOTTOMRIGHT", 2, -2)
+        b.edge:Hide()
         b.icon = b:CreateTexture(nil, "ARTWORK")
         b.icon:SetAllPoints()
         b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         local hl = b:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetColorTexture(1, 1, 1, 0.15)
-        b:SetScript("OnClick", function()
-            if b.hero and b.item then self:Cmd({ type = "useItem", unit = b.hero, slot = i }) end
+        b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        b:SetScript("OnClick", function(_, button)
+            if not (b.hero and b.item) then return end
+            if button == "RightButton" then
+                -- Shift: sell it at a merchant nearby; else put it on the ground
+                -- (anyone can pick it up: hand it to a friend).
+                if IsShiftKeyDown and IsShiftKeyDown() then
+                    local shop = self:NearShop(b.hero)
+                    if not shop then return self:Say("Bring your hero to a merchant to sell") end
+                    local ok, why = self:Cmd({ type = "sellItem", unit = b.hero, slot = i, building = shop.id })
+                    if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                else
+                    self:Cmd({ type = "dropItem", unit = b.hero, slot = i })
+                end
+                return
+            end
+            local it = WC().Items[b.item]
+            local hero = self.st and self.st.ents[b.hero]
+            if it and it.slot and hero and WC().Loot.Wears(hero) then
+                local ok, why = self:Cmd({ type = "equip", unit = b.hero, slot = i })
+                if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                return
+            end
+            self:Cmd({ type = "useItem", unit = b.hero, slot = i })
         end)
         b:SetScript("OnEnter", function()
             local it = b.item and WC().Items[b.item]
             if not it then return end
             GameTooltip:SetOwner(b, "ANCHOR_TOP")
-            GameTooltip:SetText(it.name, 1, 0.82, 0)
-            GameTooltip:AddLine(it.text .. (it.use and " Click to use." or ""), 1, 1, 1, true)
+            GameTooltip:SetText(it.color and ("|c" .. it.color .. it.name .. "|r") or it.name, 1, 0.82, 0)
+            local hero = self.st and self.st.ents[b.hero or 0]
+            local wear = it.slot and hero and WC().Loot.Wears(hero)
+            GameTooltip:AddLine(it.text .. (wear and (" " .. WC().Loot.GEAR_NAMES[it.slot] .. ": click to wear it.")
+                or it.use and " Click to use." or ""), 1, 1, 1, true)
+            GameTooltip:AddLine("Right-click: drop it (a friend can pick it up)."
+                .. ((it.cost or 0) > 0 and string.format(" Shift+right-click at a merchant: sell for %d gold.", math.floor(it.cost * 0.5)) or ""),
+                0.6, 0.6, 0.6, true)
             GameTooltip:Show()
         end)
         b:SetScript("OnLeave", function() GameTooltip:Hide() end)
         b:Hide()
         self.itemButtons[i] = b
+    end
+
+    -- A class hero's gear (Hero Defense): a weapon, three armour, two
+    -- accessories. Right-click one to take it off (into the bag).
+    self.gearButtons = {}
+    local EMPTY_ICON = { weapon = "INV_Sword_04", armor = "INV_Chest_Chain_05", jewel = "INV_Jewelry_Ring_05" }
+    for i = 1, 6 do
+        local b = CreateFrame("Button", nil, hud)
+        b:SetSize(24, 24)
+        b:SetPoint("TOPLEFT", 440 + ((i - 1) % 2) * 28, -6 - math.floor((i - 1) / 2) * 28)
+        local bg = b:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.05, 0.04, 0.03, 0.85)
+        b.edge = b:CreateTexture(nil, "BACKGROUND", nil, 1)
+        b.edge:SetPoint("TOPLEFT", -2, 2)
+        b.edge:SetPoint("BOTTOMRIGHT", 2, -2)
+        b.edge:Hide()
+        b.empty = b:CreateTexture(nil, "ARTWORK")
+        b.empty:SetAllPoints()
+        b.empty:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        b.empty:SetTexture("Interface\\Icons\\" .. EMPTY_ICON[WC().Loot.GEAR[i]])
+        b.empty:SetDesaturated(true)
+        b.empty:SetAlpha(0.25)
+        b.icon = b:CreateTexture(nil, "ARTWORK", nil, 1)
+        b.icon:SetAllPoints()
+        b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        local hl = b:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.15)
+        b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        b:SetScript("OnClick", function(_, button)
+            if button == "RightButton" and b.hero and b.item then
+                local ok, why = self:Cmd({ type = "unequip", unit = b.hero, gear = i })
+                if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+            end
+        end)
+        b:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            local it = b.item and WC().Items[b.item]
+            if not it then
+                GameTooltip:SetText(WC().Loot.GEAR_NAMES[WC().Loot.GEAR[i]] .. " (empty)", 0.7, 0.7, 0.7)
+                GameTooltip:AddLine("Pick up or buy something to wear here.", 1, 1, 1, true)
+            else
+                GameTooltip:SetText(it.color and ("|c" .. it.color .. it.name .. "|r") or it.name, 1, 0.82, 0)
+                GameTooltip:AddLine(it.text, 1, 1, 1, true)
+                GameTooltip:AddLine("Worn. Right-click: take it off (into the bag).", 0.6, 0.6, 0.6, true)
+            end
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        b:Hide()
+        self.gearButtons[i] = b
     end
 
     -- Command card: 4 x 3 buttons.
@@ -1382,6 +1467,20 @@ function P:Events(events)
             if self.vis and self.vis[math.floor(ev.y) * self.st.w + math.floor(ev.x)] then self:Say(WC().Items[ev.item].name .. " dropped") end
         elseif ev.kind == "cantBuild" and ev.owner == ME then
             self:Say("Can't build there")
+        elseif ev.kind == "hdWave" then
+            local last = ev.wave >= WC().Modes.hd.WAVES
+            self:Say((last and "The last wave" or ("Wave " .. ev.wave)) .. (ev.boss and (": " .. ev.boss .. " is coming!") or ""))
+        elseif ev.kind == "hdLane" then
+            local s = ns.Session.Get(self.kind)
+            local who = ev.owner == ME and "You" or (s and s.game and s.game.names and s.game.names[ev.owner] or ("Player " .. ev.owner))
+            self:Say(who .. " opened the " .. WC().Modes.hd.LANE_NAMES[ev.lane] .. " lane!")
+        elseif ev.kind == "hdBoss" then
+            self:Say(ev.name .. " is down! Its loot is on the ground.")
+        elseif ev.kind == "pickup" and ev.owner == ME and WC().Items[ev.item] and WC().Items[ev.item].loot then
+            local it = WC().Items[ev.item]
+            self:Say("You pick up |c" .. it.color .. it.name .. "|r")
+        elseif ev.kind == "sellItem" and ev.owner == ME then
+            self:Say(string.format("Sold for %d gold", ev.gold))
         elseif ev.kind == "tdWave" then
             self:Say("Wave " .. ev.wave .. (ev.wave % 10 == 0 and ": a boss!" or ev.wave % 10 == 5 and ": flyers!"
                 or ev.wave % 10 == 7 and ": fast ones!" or ""))
@@ -2801,7 +2900,14 @@ function P:DrawPanel()
         else
             local text = string.format("%d / %d", math.max(0, math.floor(first.hp)), first.maxHp)
             if first.maxMana and first.maxMana > 0 then
-                text = text .. string.format("   |cff6fa8ffMana %d / %d|r", math.floor(first.mana), first.maxMana)
+                -- (the WoW classes: rage, energy, runic power in WoW's colours)
+                local power = first.kind == "unit" and WC().Units[first.type] and WC().Units[first.type].power
+                local label, color = "Mana", "6fa8ff"
+                if power == "rage" then label, color = "Rage", "ff4040"
+                elseif power == "energy" then label, color = "Energy", "ffe040"
+                elseif power == "runic" then label, color = "Runic Power", "40c8ff" end
+                text = text .. string.format("   |cff%s%s %d / %d|r", color, label, math.floor(first.mana), first.maxMana)
+                if (first.combo or 0) > 0 then text = text .. string.format("   |cffffd100%d combo|r", first.combo) end
             end
             self.selHp:SetText(text)
         end
@@ -2820,7 +2926,7 @@ function P:DrawPanel()
             if first.militia then status = string.format("Militia: %d s left. %s", math.ceil(first.militia.t), status) end
             if o and o.type == "cast" then status = "Casting " .. WC().Abilities[o.ability].name end
             if first.level and not first.illusion then
-                local need = WC().XP_LEVELS[first.level]
+                local need = first.level < E().MaxLevel(first) and WC().XP_LEVELS[first.level]
                 status = (need and string.format("XP %d / %d. ", first.xp, need) or "Top level. ")
                     .. ((first.points or 0) > 0 and ("|cff40ff40" .. first.points .. " skill point" .. (first.points > 1 and "s" or "") .. " (O)|r. ") or "")
                     .. status
@@ -2866,9 +2972,45 @@ function P:DrawPanel()
         local key = bagHero and bagHero.items and bagHero.items[i]
         b:SetShown(bagHero ~= nil and bagHero ~= false)
         b.hero, b.item = bagHero and bagHero.id, key
-        b.icon:SetTexture(key and WC().Items[key].icon or nil)
+        local it = key and WC().Items[key]
+        b.icon:SetTexture(it and it.icon or nil)
+        -- (and its gear, when it's a class hero)
+        local gb = self.gearButtons[i]
+        local wears = bagHero and WC().Loot.Wears(bagHero)
+        local gkey = wears and bagHero.gear and bagHero.gear[i]
+        local git = gkey and WC().Items[gkey]
+        gb:SetShown(wears and true or false)
+        gb.hero, gb.item = wears and bagHero.id, gkey
+        gb.icon:SetTexture(git and git.icon or nil)
+        gb.empty:SetShown(git == nil)
+        local gq = git and git.quality and git.quality >= 2 and WC().Loot.QUALITY[git.quality]
+        gb.edge:SetShown(gq and true or false)
+        if gq then
+            local c = gq.color
+            gb.edge:SetColorTexture(tonumber(c:sub(3, 4), 16) / 255, tonumber(c:sub(5, 6), 16) / 255, tonumber(c:sub(7, 8), 16) / 255, 1)
+        end
+        local q = it and it.quality and it.quality >= 2 and WC().Loot.QUALITY[it.quality]
+        b.edge:SetShown(q ~= nil and q ~= false)
+        if q then
+            local c = q.color
+            b.edge:SetColorTexture(tonumber(c:sub(3, 4), 16) / 255, tonumber(c:sub(5, 6), 16) / 255, tonumber(c:sub(7, 8), 16) / 255, 1)
+        end
     end
     self:DrawCommands(cmdSel)
+end
+
+-- The merchant next to a hero, if any (to sell loot).
+function P:NearShop(heroId)
+    local st = self.st
+    local h = st and st.ents[heroId]
+    if not h then return nil end
+    for _, id in ipairs(st.list) do
+        local e = st.ents[id]
+        if e and e.kind == "building" and E().Def(e).sells then
+            local cx, cy = E().Center(e)
+            if (h.x - cx) ^ 2 + (h.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then return e end
+        end
+    end
 end
 
 -- Subgroups: the kind of unit the command card is for, in a group of mixed
@@ -2927,6 +3069,35 @@ end
 
 local IC = "Interface\\Icons\\"
 
+-- The number in a spell's description at rank lv (the Warcraft III heroes'
+-- fields, or the WoW classes' effects: Classes.lua).
+local function SpellAmount(a, lv)
+    local function At(t) if type(t) ~= "table" then return t end return t[math.min(lv, #t)] end
+    if a.classSpell or a.fx or a.aura or a.onhit then
+        if a.aura then local _, v = next(a.aura) return At(v) or 0 end
+        if a.onhit then return At(a.onhit.chance) or 0 end
+        if a.amount then return At(a.amount) or 0 end
+        for _, f in ipairs(a.fx or {}) do
+            local k = f[1]
+            local v
+            if k == "dot" or k == "hot" then v = f[3]
+            elseif k == "buff" then v = f.dmg or f.haste or f[3]
+            elseif k == "form" then v = f.armor
+            elseif k == "summon" then v = f[3]
+            else v = f[2] end
+            if type(v) == "table" or type(v) == "number" then
+                local n = At(v)
+                if k == "buff" and (f.dmg or f.haste) then n = math.floor(n * 100 + 0.5) end
+                return n
+            end
+        end
+        return 0
+    end
+    return a.amount and (a.amount[math.min(lv, #a.amount)]) or (a.duration and a.duration[math.min(lv, #a.duration)])
+        or (a.count and a.count[math.min(lv, #a.count)]) or (a.mult and a.mult[math.min(lv, #a.mult)])
+        or (a.chance and a.chance[math.min(lv, #a.chance)]) or (a.radius and type(a.radius) == "table" and a.radius[1]) or 0
+end
+
 function P:DrawCommands(sel)
     local st = self.st
     local list = {}
@@ -2958,13 +3129,11 @@ function P:DrawCommands(sel)
         for _, key in ipairs(WC().Units[hero.type].abilities) do
             local a = A[key]
             local lv = E().Skill(hero, key) + 1
-            local top = a.ult and 1 or 3
-            local need = a.ult and 6 or (lv * 2 - 1)
+            -- (the WoW classes say which hero level each rank opens at: needs)
+            local top = a.needs and #a.needs or (a.ult and 1 or 3)
+            local need = a.needs and (a.needs[lv] or 99) or (a.ult and 6 or (lv * 2 - 1))
             local can = (hero.points or 0) > 0 and lv <= top and hero.level >= need
-            local amount = a.amount and (a.amount[math.min(lv, #a.amount)]) or (a.duration and a.duration[math.min(lv, #a.duration)])
-                or (a.count and a.count[math.min(lv, #a.count)]) or (a.mult and a.mult[math.min(lv, #a.mult)])
-                or (a.chance and a.chance[math.min(lv, #a.chance)]) or (a.radius and type(a.radius) == "table" and a.radius[1]) or 0
-            local tip = string.format(a.text or "", amount)
+            local tip = string.format(a.text or "", SpellAmount(a, math.min(lv, top)))
             if lv > top then tip = "|cff40ff40Fully learned.|r " .. tip
             elseif hero.level < need then tip = "|cffff6060Needs hero level " .. need .. ".|r " .. tip
             else tip = string.format("Level %d of %d. ", lv, top) .. tip end
@@ -3015,27 +3184,32 @@ function P:DrawCommands(sel)
             for slot, key in ipairs(WC().Units[hero.type].abilities) do
                 local a = A[key]
                 local lv = E().Skill(hero, key)
-                local mana = a.mana and (a.mana[lv] or a.mana[#a.mana]) or 0
+                -- (a cost per rank, or one for all: the WoW classes)
+                local mana = type(a.mana) == "table" and (a.mana[lv] or a.mana[#a.mana]) or a.mana or 0
                 local tip
                 if lv == 0 then
                     tip = "|cffaaaaaaNot learned yet.|r"
                 else
-                    local amount = a.amount and (a.amount[math.min(lv, #a.amount)]) or (a.duration and a.duration[math.min(lv, #a.duration)])
-                        or (a.count and a.count[math.min(lv, #a.count)]) or (a.mult and a.mult[math.min(lv, #a.mult)])
-                        or (a.chance and a.chance[math.min(lv, #a.chance)]) or (a.radius and type(a.radius) == "table" and a.radius[lv]) or 0
+                    local amount = SpellAmount(a, lv)
                     tip = string.format("Level %d. ", lv) .. string.format(a.text or "", amount)
                     if a.passive then
                         tip = tip .. " |cffaaaaaa(Works by itself.)|r"
                     else
-                        tip = tip .. string.format(" %d mana.", mana)
+                        local power = WC().Units[hero.type].power
+                        tip = tip .. string.format(" %d %s.", mana, power == "rage" and "rage" or power == "energy" and "energy"
+                            or power == "runic" and "runic power" or "mana")
                         local cd = hero.cds and hero.cds[key]
                         if cd then tip = tip .. string.format(" |cffff6060Ready in %d s.|r", math.ceil(cd)) end
                     end
                 end
                 local ready = lv > 0 and not a.passive and not (hero.cds and hero.cds[key]) and (hero.mana or 0) >= mana
-                list[8 + slot] = { icon = a.icon, key = (not a.passive and lv > 0) and a.hotkey or nil,
+                -- (four spells along the bottom; a WoW class's fifth, its ultimate,
+                -- above them; Attributes only in the skill menu)
+                local at = slot <= 4 and 8 + slot or (slot == 5 and 8) or nil
+                if key == "attributes" then at = nil end
+                if at then list[at] = { icon = a.icon, key = (not a.passive and lv > 0) and a.hotkey or nil,
                     title = a.name .. ((not a.passive and lv > 0) and (" (" .. a.hotkey .. ")") or ""), tip = tip,
-                    enabled = ready, action = function() self:CastAbility(hero, key) end }
+                    enabled = ready, action = function() self:CastAbility(hero, key) end } end
             end
         end
         -- A caster's spells (Casters.lua) on the bottom row; right-click for autocast.
@@ -3296,6 +3470,27 @@ function P:DrawCommands(sel)
                     tip = "Then click: where new units go. On the gold mine or a tree, new workers start gathering.",
                     action = function() self:Target("rally", "Click where new units should go") end }
             end
+        end
+    end
+    -- Hero Defense: the castle's lanes, for everyone on its side (not only
+    -- the player it belongs to). West is open from the start.
+    local castle = #sel == 1 and sel[1].kind == "building" and E().Def(sel[1]).hdCastle and E().Ally(st, sel[1].owner, ME)
+        and st.hd and sel[1]
+    if castle then
+        local HD = WC().Modes.hd
+        for i, key in ipairs(HD.LANES) do
+            local name = HD.LANE_NAMES[key]
+            local open = st.hd.open[key]
+            list[i] = { icon = IC .. (open and "INV_BannerPVP_02" or "INV_BannerPVP_01"), key = key,
+                title = open and (name .. " lane: open") or ("Open the " .. name .. " lane (" .. key .. ")"),
+                enabled = not open,
+                tip = open and "Creeps come down this lane every wave."
+                    or "From the next wave creeps come down this lane too: more creeps in all (more gold and "
+                    .. "experience), fewer in each lane. It stays open for the rest of the game.",
+                action = function()
+                    local ok, why = self:Cmd({ type = "hdLane", lane = key })
+                    if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                end }
         end
     end
     -- Cancel: a building going up, an upgrade, or the last unit in training.

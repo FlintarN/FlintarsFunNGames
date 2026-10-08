@@ -178,7 +178,33 @@ for n, key, name in ((2, 'td_duel', 'Tower Duel'), (4, 'td_four', 'Four Lanes'),
     maps.append(dict(key=key, name=name, players=n, symmetry='none', modes='td', rows=td_map(n),
         text=f'Tower Defense for up to {n}: a lane each. Build a maze of towers; what gets through costs a life.'))
 
+# Hero Defense (Hero Siege): a castle in the middle of a plaza, four lanes
+# (west, north, east, south) through the forest to the map's edges. Eight
+# altars (the starts) round the plaza, a Goblin Merchant. The castle itself
+# (4 x 4 at the middle) is placed by Games/Warcraft/HeroDefense.lua.
+def hd_map():
+    w = h = 64
+    g = [['T'] * w for _ in range(h)]
+    def clear(x0, y0, x1, y1):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1): g[y][x] = '.'
+    clear(18, 18, 45, 45)                       # the plaza
+    clear(2, 29, 17, 34); clear(46, 29, 61, 34)  # west and east lanes
+    clear(29, 2, 34, 17); clear(29, 46, 34, 61)  # north and south lanes
+    # A few trees in the lanes, so they aren't plain corridors.
+    for (x, y) in ((8, 29), (9, 29), (54, 34), (55, 34), (34, 8), (34, 9), (29, 54), (29, 55),
+                   (13, 34), (50, 29), (29, 13), (34, 50)):
+        g[y][x] = 'T'
+    for i, (x, y) in enumerate(((20, 20), (41, 20), (20, 41), (41, 41), (25, 20), (36, 20), (25, 41), (36, 41))):
+        g[y][x] = str(i + 1)
+    g[26][21] = 'S'
+    return [''.join(r) for r in g]
+
+maps.append(dict(key='hd_castle', name='The Last Castle', players=8, symmetry='none', modes='hd', rows=hd_map(),
+    text='Hero Defense for 1 to 8: a castle in the middle, four lanes in. Open more lanes when you are ready for them.'))
+
 def lua_str(s): return '"' + s + '"'
+
 
 out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   .  open ground        T  tree
@@ -187,7 +213,7 @@ out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   S  a shop for everyone (the top-left tile of its 2 x 2 footprint): a Goblin Merchant
 --   X  a Mercenary Camp (2 x 2): hire creeps there
 --   e m h  a creep camp: easy, medium, hard (its middle; Creeps.lua)
--- mode: the game mode the map is for ("melee", "footmen", "td").
+-- mode: the game mode the map is for ("melee", "footmen", "td", "hd").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
 -- (dev/make_maps.py), but fine to edit by hand: keep it symmetric.
