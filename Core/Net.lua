@@ -10,7 +10,11 @@
 -- Messages to one player (private cards, players talking to a host outside
 -- a group) go by whisper.
 --
--- Wire format: "<cmd>:<msgId>:<part>/<parts>:<data>"
+-- Wire format: "<cmd>:<msgId>:<part>/<parts>@<from>:<data>". <from> is the
+-- sender's own name as their game gives it (UnitName), so everyone uses the
+-- same name for them: WoW hands the receiver "Name-Realm" on Retail, and
+-- names on WoW Forever are two words ("First Last"), which the two sides
+-- may not write the same way.
 local ADDON, ns = ...
 
 local Net = {}
@@ -26,12 +30,38 @@ Net.FAST = { "FunNGamesL1", "FunNGamesL2", "FunNGamesL3", "FunNGamesL4", "FunNGa
 local FAST = {}
 for _, p in ipairs(Net.FAST) do FAST[p] = true end
 local fastNext = 0
-local CHUNK = 220
+local MAX = 250 -- bytes in one addon message, with room to spare (WoW allows 255)
 
 local SendAddon = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
 local RegisterPrefix = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or RegisterAddonMessagePrefix
 
 local handlers = {}
+-- Where to whisper everyone we've heard from: their name -> the sender WoW
+-- gave us ("Name-Realm" on Retail; a whisper to another realm needs it, or
+-- WoW sends it to a namesake on ours, or nowhere).
+local address = {}
+local function Squash(s) return ((s or ""):lower():gsub("[%s%-']", "")) end
+local function MyRealm(realm)
+    return Squash(realm) == Squash(GetNormalizedRealmName and GetNormalizedRealmName())
+        or Squash(realm) == Squash(GetRealmName and GetRealmName())
+end
+
+-- The address to whisper a player at.
+function Net.Full(name)
+    if not name then return name end
+    return address[name] or name
+end
+
+-- The name a message is from: the one the sender put in it, when it really is
+-- the player WoW says sent it (same letters, maybe with a realm after);
+-- otherwise WoW's sender without the realm.
+local function From(raw, said)
+    if said and said ~= "" then
+        local a, b = Squash(raw), Squash(said)
+        if a:sub(1, #b) == b then return said end
+    end
+    return ns.Short(raw)
+end
 local partial = {} -- sender .. msgId -> { parts, got, n }
 local nextId = 0
 
@@ -112,10 +142,19 @@ end
 local function SendParts(cmd, data, chatType, target, prefix)
     data = data or ""
     nextId = (nextId % 999) + 1
-    local n = math.max(1, math.ceil(#data / CHUNK))
+    local me = ns.Me() or ""
+    -- (The header: cmd, id up to 3 digits, part/parts up to 3/3, the name.)
+    local chunk = MAX - (#cmd + 12 + #me)
+    local n = math.max(1, math.ceil(#data / chunk))
     for i = 1, n do
-        local part = data:sub((i - 1) * CHUNK + 1, i * CHUNK)
-        SendAddon(prefix or Net.PREFIX, cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. ":" .. part, chatType, target)
+        local part = data:sub((i - 1) * chunk + 1, i * chunk)
+        local r = SendAddon(prefix or Net.PREFIX, cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. "@" .. me .. ":" .. part,
+            chatType, target)
+        if ns.debug then
+            -- (Retail returns a result: 0 or true is sent, anything else was refused.)
+            ns.Print("debug: send " .. cmd .. " " .. i .. "/" .. n .. " on " .. chatType .. " " .. tostring(target or "")
+                .. " -> " .. tostring(r))
+        end
     end
     return true
 end
@@ -130,7 +169,7 @@ end
 function Net.WhisperFast(cmd, data, target)
     if not SendAddon then return false end
     fastNext = fastNext % #Net.FAST + 1
-    return SendParts(cmd, data, "WHISPER", target, Net.FAST[fastNext])
+    return SendParts(cmd, data, "WHISPER", Net.Full(target), Net.FAST[fastNext])
 end
 
 -- To a whole scope (the group) on the fast prefixes: one message for everyone.
@@ -144,12 +183,11 @@ end
 -- To one player only (private cards; a player talking to a host).
 function Net.Whisper(cmd, data, target)
     if not SendAddon then return false end
-    return SendParts(cmd, data, "WHISPER", target)
+    return SendParts(cmd, data, "WHISPER", Net.Full(target))
 end
 
 -- Is this sender me? Channels can give the name with the realm in other
 -- forms ("Name-Realm", "Name Realm"), so compare without them.
-local function Squash(s) return (s or ""):lower():gsub("[%s%-']", "") end
 function Net.IsMe(sender)
     if not sender then return false end
     if ns.Short(sender) == ns.Me() then return true end
@@ -158,14 +196,22 @@ function Net.IsMe(sender)
     return s == Squash(name) or s == Squash(name .. realm)
 end
 
-function Net.Receive(sender, message)
-    if Net.IsMe(sender) then return end
-    sender = ns.Short(sender)
-    local cmd, id, i, n, data = message:match("^(%w+):(%d+):(%d+)/(%d+):(.*)$")
+function Net.Receive(raw, message)
+    if Net.IsMe(raw) then return end
+    local cmd, id, i, n, said, data = message:match("^(%w+):(%d+):(%d+)/(%d+)@([^:]*):(.*)$")
+    local sender = From(raw, said)
+    if ns.debug then
+        ns.Print("debug: got " .. tostring(cmd) .. " " .. tostring(i) .. "/" .. tostring(n) .. " from " .. raw
+            .. " (says " .. tostring(said) .. ") -> " .. sender)
+    end
     if not cmd then return end
+    -- Our own message coming back, in a form IsMe didn't know.
+    local realm = raw:match("%-(.+)$")
+    if sender == ns.Me() and (not realm or MyRealm(realm)) then return end
+    address[sender] = raw
     i, n = tonumber(i), tonumber(n)
     if n > 1 then
-        local key = sender .. ":" .. id
+        local key = raw .. ":" .. id
         local p = partial[key]
         if not p or p.n ~= n then
             p = { n = n, got = 0, parts = {} }

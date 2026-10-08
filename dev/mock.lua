@@ -249,6 +249,8 @@ JoinTemporaryChannel = function(name)
     end
 end
 GetChannelName = function(name) return CHANNELS[name] or 0 end
+GetRealmName = function() return REALM_NAME or "Realm" end
+GetNormalizedRealmName = function() return (GetRealmName():gsub("[%s%-]", "")) end
 LeaveChannelByName = function(name)
     local id = CHANNELS[name]
     if id then CHANNEL_NAMES[id] = nil end

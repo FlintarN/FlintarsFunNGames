@@ -13,7 +13,7 @@ end
 
 function CheckPoppedUp(kind)
     local s = S.Get(kind)
-    check(s and s.phase == "lobby" and s.host == "Flintar", kind .. ": " .. PLAYER_NAME .. " got the game")
+    check(s and s.phase == "lobby" and s.host == (HOST_NAME or "Flintar"), kind .. ": " .. PLAYER_NAME .. " got the game")
     check(ns.UI.frame and ns.UI.frame:IsShown() and ns.UI.tab == kind, kind .. ": window popped up on the game tab")
 end
 

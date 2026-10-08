@@ -414,8 +414,18 @@ function S.JoinCode(code)
     code = (code or ""):upper():gsub("[^%w]", "")
     if #code < 4 then return false, "That code looks too short." end
     S.pendingCode = code
-    ns.Net.JoinChannel(ns.Net.CodeChannel(code))
-    ns.After(1.5, function() ns.Net.Send("Q", "", "code:" .. code) end)
+    -- Joining a channel takes a moment (sometimes several seconds), and a
+    -- message sent before that is lost: ask the host again every two seconds
+    -- until they answer (or a minute has passed).
+    local tries = 0
+    local function Ask()
+        if S.pendingCode ~= code or tries >= 30 then return end
+        tries = tries + 1
+        ns.Net.JoinChannel(ns.Net.CodeChannel(code))
+        ns.Net.Send("Q", "", "code:" .. code)
+        ns.After(2, Ask)
+    end
+    ns.After(1, Ask)
     return true
 end
 

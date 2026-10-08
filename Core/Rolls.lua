@@ -31,18 +31,35 @@ local function Plain(text)
     return text
 end
 
+-- The group member a message starts with (the longest name that fits).
+-- Names aren't always one word: on WoW Forever they're "First Last".
+local function Member(text)
+    local best
+    local function Try(unit)
+        local n = UnitName and UnitName(unit)
+        if n and (text:sub(1, #n) == n or text:sub(1, #n + 2) == "[" .. n .. "]")
+            and (not best or #n > #best) then best = n end
+    end
+    Try("player")
+    local raid = IsInRaid and IsInRaid()
+    for i = 1, raid and 40 or 4 do Try((raid and "raid" or "party") .. i) end
+    return best
+end
+
 function R.Parse(text)
     if type(text) ~= "string" then return end
     text = Plain(text)
     local name, roll, lo, hi = text:match(R.PATTERN)
     if not name then
-        -- Fallback for clients that word it differently: a character name is
-        -- one word, and the roll is the last "N (lo-hi)" in the message.
+        -- Fallback for clients that word it differently: the name is a group
+        -- member's the message starts with (else its first word), and the
+        -- roll is the last "N (lo-hi)" in the message.
         roll, lo, hi = text:match("(%d+) %((%d+)%-(%d+)%)[^%d]*$")
-        name = roll and text:match("^%[?([^%s%]]+)")
+        name = roll and (Member(text) or text:match("^%[?([^%s%]]+)"))
     end
     if not name then return end
-    name = name:gsub("^%[(.*)%]$", "%1"):match("^%S+")
+    -- The whole name, spaces and all ("First Last" on WoW Forever).
+    name = name:gsub("^%[(.*)%]$", "%1"):match("^%s*(.-)%s*$")
     return ns.Short(name), tonumber(roll), tonumber(lo), tonumber(hi)
 end
 

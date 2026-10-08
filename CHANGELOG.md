@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 (2026-10-08)
+
+### Fixed
+- **Games with other players could hang on "searching"**: joining by code (and the realm queue, which uses a code) asked the host only once, often before WoW had finished joining the hidden channel. It now asks again every two seconds until the host answers.
+- **Players on another realm**: whispers to them lost the realm and went nowhere, so joining a lobby left you waiting forever. Replies now go to the exact name and realm WoW gave.
+- **Games didn't pop up, or joins were ignored**: a game was only accepted if the name WoW reported for the sender matched the host's own name letter for letter, and with realms (Retail) or two-word names (WoW Forever) they can be written differently. Every message now carries its sender's own name. (Both players need this version.)
+- **Deathroll and the other roll games on WoW Forever**: two-word names ("First Last") were cut to the first word, so your rolls never counted. Names are now kept whole.
+- `/fng debug` also prints the addon messages sent and received.
+
 ## 1.1.0 (2026-10-08)
 
 ### New

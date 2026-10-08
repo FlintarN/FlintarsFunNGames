@@ -91,7 +91,7 @@ function T.Remind(name)
     if b <= 0 then return end
     local text = "Flintar's Fun 'n' Games: from our games you owe me " .. ns.MoneyPlain(b) .. "."
     local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-    if send then send(text, "WHISPER", nil, name) end
+    if send then send(text, "WHISPER", nil, ns.Net.Full(name)) end
 end
 
 function T.Reset()

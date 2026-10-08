@@ -183,7 +183,7 @@ local HELP = {
     "/fng popup - turn the automatic pop-up on or off",
     "/fng reset - move the window back to the middle of the screen",
     "/fng mute - turn the game sounds off or on (alerts stay)",
-    "/fng debug - print what the addon reads from roll messages",
+    "/fng debug - print roll messages and addon messages sent and received",
     "/fng dc <bot> - practice: make a bot go offline, or come back",
 }
 
@@ -204,7 +204,7 @@ SlashCmdList.FUNNGAMES = function(msg)
         ns.Print(ok and (name .. " is " .. state .. ".") or ("No practice bot called " .. name .. "."))
     elseif cmd == "debug" then
         ns.debug = not ns.debug
-        ns.Print("Debug: " .. (ns.debug and "on (roll messages are printed in chat)" or "off"))
+        ns.Print("Debug: " .. (ns.debug and "on (roll messages and addon messages are printed in chat)" or "off"))
     elseif cmd == "mute" then
         ns.db.sound = ns.db.sound == false
         ns.Print("Sounds: " .. (ns.db.sound and "on" or "off") .. " (more options on the Settings tab)")

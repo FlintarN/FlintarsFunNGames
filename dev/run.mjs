@@ -14,9 +14,12 @@ const factory = new LuaFactory();
 
 let failures = 0, passes = 0;
 
-async function Player(name, group) {
+// realm: as on the real servers, WoW then gives this player's messages to
+// others as "Name-Realm", and a whisper to another realm needs the realm.
+async function Player(name, group, realm) {
   const lua = await factory.createEngine();
   lua.global.set('PLAYER_NAME', name);
+  if (realm) lua.global.set('REALM_NAME', realm);
   await lua.doString(`GROUP = {${group.map(g => `"${g}"`).join(',')}}`);
   await lua.doString(readFileSync(join(here, 'mock.lua'), 'utf8'));
   await lua.doString('ns = {}');
@@ -43,8 +46,11 @@ async function Player(name, group) {
     Fire("ADDON_LOADED", "FlintarsFunNGames")
     Fire("PLAYER_ENTERING_WORLD", true, false)
   `);
-  return { name, lua, run: (code) => lua.doString(code) };
+  return { name, realm, lua, run: (code) => lua.doString(code) };
 }
+
+// The sender WoW reports for a player: with the realm when they have one.
+const Addr = (p) => p.realm ? `${p.name}-${p.realm}` : p.name;
 
 // Deliver everything everyone sent, advance clocks, repeat until quiet.
 async function Pump(players, seconds = 0) {
@@ -61,11 +67,11 @@ async function Pump(players, seconds = 0) {
           for (const q of players) {
             if (q === p) continue;
             // Who hears it: a whisper its target, the guild its members, a channel those in it.
-            if (e[3] === 'WHISPER' && e[4] !== q.name) continue;
+            if (e[3] === 'WHISPER' && e[4] !== Addr(q) && !(e[4] === q.name && (!q.realm || q.realm === p.realm))) continue;
             if (e[3] === 'GUILD' && !(await Get(q, 'IN_GUILD'))) continue;
             if (e[3] === 'CHANNEL' && !(await Get(q, `CHANNELS["${e[4]}"] ~= nil`))) continue;
             q.lua.global.set('__m', e[2]);
-            await q.run(`Fire("CHAT_MSG_ADDON", "${e[1]}", __m, "${e[3]}", "${p.name}")`);
+            await q.run(`Fire("CHAT_MSG_ADDON", "${e[1]}", __m, "${e[3]}", "${Addr(p)}")`);
           }
         } else {
           // The server tells the whole group about a roll, the roller included.
@@ -557,9 +563,7 @@ await Section('Hearthstone PvP', async () => {
   await p.run('HsQueueEcho()');
 });
 
-await Section('Hearthstone PvP over a code lobby', async () => {
-  const host = await Player('Flintar', []);
-  const bob = await Player('Bob', []);
+async function HsCodeLobby(host, bob) {
   const players = [host, bob];
   for (const q of players) await q.run(readFileSync(join(here, 'tests_hspvp.lua'), 'utf8'));
   const code = await Get(host, 'HsPvpHost()');
@@ -579,11 +583,9 @@ await Section('Hearthstone PvP over a code lobby', async () => {
   }
   await Pump(players, 1);
   for (const q of players) await q.run('HsPvpEnd()');
-});
+}
 
-await Section('Hearthstone: the realm queue', async () => {
-  const a = await Player('Flintar', []);
-  const b = await Player('Bob', []);
+async function HsQueue(a, b) {
   const players = [a, b];
   for (const q of players) await q.run(readFileSync(join(here, 'tests_hspvp.lua'), 'utf8'));
   await a.run('HsQueueJoin("jaina")');
@@ -595,6 +597,46 @@ await Section('Hearthstone: the realm queue', async () => {
   await Pump(players, 1);
   await a.run('HsQueueCheck("jaina")');
   await b.run('HsQueueCheck("thrall")');
+}
+
+await Section('Hearthstone PvP over a code lobby', async () => {
+  await HsCodeLobby(await Player('Flintar', []), await Player('Bob', []));
+});
+
+await Section('Hearthstone: the realm queue', async () => {
+  await HsQueue(await Player('Flintar', []), await Player('Bob', []));
+});
+
+// Retail: players on different realms. Joining whispers the host, and that
+// whisper needs the host's realm.
+await Section('Cross-realm: Hearthstone over a code lobby', async () => {
+  await HsCodeLobby(await Player('Flintar', [], 'Draenor'), await Player('Bob', [], 'Silvermoon'));
+});
+
+await Section('Cross-realm: the realm queue', async () => {
+  await HsQueue(await Player('Flintar', [], 'Draenor'), await Player('Bob', [], 'Silvermoon'));
+});
+
+// WoW Forever: one realm, and every name is two words.
+await Section('Forever names: Deathroll in a group', async () => {
+  const names = ['Anna Stone', 'Bob Hill'];
+  const players = [];
+  for (const n of names) players.push(await Player(n, names.filter(x => x !== n), 'Forever'));
+  for (const p of players) await p.run(readFileSync(join(here, 'tests_group.lua'), 'utf8') + ' HOST_NAME = "Anna Stone"');
+  const [host, bob] = players;
+  await Pump(players, 4);
+  await host.run('HostOpen("deathroll")');
+  await Pump(players);
+  await bob.run('CheckPoppedUp("deathroll")');
+  await bob.run('ClickJoin("deathroll")');
+  await Pump(players);
+  await host.run('HostStart("deathroll", 2)');
+  await Pump(players);
+  let phase = 'rolling';
+  for (let i = 0; i < 400 && phase === 'rolling'; i++) {
+    for (const p of players) { phase = await Get(p, 'ClickRollIfMyTurn("deathroll")'); await Pump(players, 1); }
+  }
+  for (const p of players) await p.run('CheckDone("deathroll")');
 });
 
 await Section('Warcraft III heroes', async () => {

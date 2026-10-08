@@ -2,7 +2,7 @@
 ## Title: Flintar's Fun 'n' Games
 ## Notes: Casino and Arcade games for your group, guild or realm: dice, poker, blackjack, slots, roulette, Hearthstone 2, Warcraft 4, Tetris, Battleship, Agar.io and more. /fng to open.
 ## Author: FlintarN
-## Version: 1.1.0
+## Version: 1.1.1
 ## SavedVariables: FlintarsFunNGamesDB
 ## IconTexture: Interface\Icons\INV_Misc_Dice_01
 

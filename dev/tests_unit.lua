@@ -27,6 +27,16 @@ n, r, lo, hi = ns.Rolls.Parse("Bob rolls 37 (1-100).")
 check(n == "Bob" and r == 37, "parse a roll message with trailing text")
 n, r, lo, hi = ns.Rolls.Parse("Bob Arer würfelt. Ergebnis: 37 (1-100)")
 check(n == "Bob" and r == 37 and lo == 1 and hi == 100, "fallback: other wording, name is the first word")
+-- WoW Forever: names are two words, "First Last".
+n, r = ns.Rolls.Parse("Anna Stone rolls 42 (1-100)")
+check(n == "Anna Stone" and r == 42, "a two-word name (Forever) is kept whole")
+n, r = ns.Rolls.Parse("|cffffff00|Hplayer:Anna Stone|h[Anna Stone]|h rolls 7 (1-100)|r")
+check(n == "Anna Stone" and r == 7, "a two-word name in a link is kept whole")
+local partyBefore = UnitName
+UnitName = function(u) if u == "party1" then return "Anna Stone" end return partyBefore(u) end
+n, r = ns.Rolls.Parse("Anna Stone würfelt. Ergebnis: 9 (1-100)")
+check(n == "Anna Stone" and r == 9, "fallback: a two-word group member is found whole")
+UnitName = partyBefore
 
 -- High-Low
 local HL = ns.Games.highlow
