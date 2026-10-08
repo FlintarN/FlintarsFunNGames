@@ -71,7 +71,9 @@ function SlotsCheckSpin()
     local view = ns.UI.pages.slots.view
     Advance(0)
     Finish(view)
-    local spin = s.lastSpin
+    -- (Your machine shows your own spins; bots pull at their own.)
+    local spin
+    for _, p in ipairs(s.players) do if p.name == PLAYER_NAME then spin = p.last end end
     if spin then
         for i = 1, 3 do
             check(view.reels[i].keys[2] == spin.reels[i] or view.pending ~= nil, "slots: reel " .. i .. " stopped on the rolled symbol")

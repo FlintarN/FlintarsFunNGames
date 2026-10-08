@@ -256,9 +256,26 @@ LeaveChannelByName = function(name)
     if id then CHANNEL_NAMES[id] = nil end
     CHANNELS[name] = nil
 end
+-- WoW's send limit, as the real client does it: each prefix gets a burst of
+-- 10 messages, then one a second; anything over is refused (result 3,
+-- AddonMessageThrottle) and never sent.
+SEND_LIMIT = true
+local sendBucket = {}
 C_ChatInfo.SendAddonMessage = function(prefix, msg, channel, target)
+    if SEND_LIMIT then
+        local b = sendBucket[prefix] or { tokens = 10, t = CLOCK }
+        sendBucket[prefix] = b
+        b.tokens = math.min(10, b.tokens + (CLOCK - b.t))
+        b.t = CLOCK
+        if b.tokens < 1 then
+            SENDS_REFUSED = (SENDS_REFUSED or 0) + 1
+            return 3
+        end
+        b.tokens = b.tokens - 1
+    end
     if channel == "CHANNEL" then target = CHANNEL_NAMES[target] end
     table.insert(OUTBOX, { "addon", prefix, msg, channel, target or "" })
+    return 0
 end
 
 -- Mouse and combat

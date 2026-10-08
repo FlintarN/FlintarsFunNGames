@@ -386,14 +386,12 @@ function P.New(parent, kind)
         treeTex = {}, unitFrames = {}, framePool = {}, corpses = {}, buildTex = {}, fxFree = {}, mmTrees = {},
         explored = {}, vis = {}, known = {} }, P)
     -- PvP: the Arcade lobby panel (who can join, create, practice, join by code).
-    A.BuildSetup(self, parent)
-    self.setup:Hide()
-    local back = W.Button(self.setup, "Back", 90, function()
+    A.BuildSetup(self, parent, function()
         self.setupOpen = false
         self:ShowMenu()
         self:Refresh()
-    end, 22)
-    back:SetPoint("BOTTOMLEFT", 10, 10)
+    end)
+    self.setup:Hide()
     -- A PvP game runs even with the tab or window closed (the other player
     -- would wait otherwise): this frame drives it.
     self.driver = CreateFrame("Frame", nil, UIParent)
@@ -846,6 +844,7 @@ function P.New(parent, kind)
     PvpButton("start", "Start", 100, function() S.Start(self.kind) end)
     PvpButton("bot", "Add bot", 100, function() S.AddBot(self.kind) end)
     PvpButton("rematch", "Rematch", 100, function() S.Act(self.kind, "rematch") end)
+    PvpButton("join", "Join", 100, function() S.Join(self.kind) self:Refresh() end)
     PvpButton("leave", "Leave", 100, function() S.Leave(self.kind) S.Dismiss(self.kind) self:Refresh() end)
     PvpButton("close", "Close lobby", 110, function() A.CloseLobby(self) self:Refresh() end)
     PvpButton("done", "Back", 100, function() S.Dismiss(self.kind) self:Refresh() end)
@@ -3687,7 +3686,11 @@ function P:RefreshPvp(s)
         if s.queued and #s.players >= 2 then
             return self:PvpScreen("Opponent found!", "Getting the game ready...", who, {})
         end
-        self:PvpScreen("Warcraft 4: lobby", A.ScopeLine(s), "", host and { "close" } or (seated and { "leave" } or { "done" }))
+        -- (A game that popped up from your group: sit down, or go back.)
+        local keys = host and { "close" } or (seated and { "leave" })
+            or (S.CanJoin(s) and { "join", "done" } or { "done" })
+        self:PvpScreen("Warcraft 4: lobby", A.ScopeLine(s), "", keys)
+        self.pvpButtons.join:SetEnabled(not s._joining and #s.players < S.MaxPlayers(s))
         ns.WarcraftLobby.Show(self, true)
         return
     elseif s.phase == "cancelled" then

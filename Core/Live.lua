@@ -54,7 +54,13 @@ end
 local function Send(rt, cmd, payload)
     local s = rt.s
     if s.test then return end -- practice: nothing leaves this client
-    ns.Net.Send(cmd, rt.id .. "\t" .. payload, ns.Session.Scope(s))
+    if cmd == "LV" then
+        -- Positions, several a second: over the fast prefixes, and only the
+        -- latest one waits if WoW's send limit holds them up.
+        ns.Net.SendFast(cmd, rt.id .. "\t" .. payload, ns.Session.Scope(s), "LV" .. rt.id)
+    else
+        ns.Net.Send(cmd, rt.id .. "\t" .. payload, ns.Session.Scope(s))
+    end
 end
 
 -- Your own state: sent at the runtime's rate by Live.Tick.

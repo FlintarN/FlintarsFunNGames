@@ -187,6 +187,8 @@ function L.Build(view, o)
 
     f.why = W.Label(f, "", "GameFontHighlightSmall")
     f.why:SetPoint("BOTTOMRIGHT", -16, 48)
+    f.why:SetPoint("LEFT", f, "LEFT", 470, 0) -- (the right-hand column only)
+    f.why:SetJustifyH("RIGHT")
     -- Creep camps on the map, or not.
     f.creeps = W.Button(f, "", 120, function() L.ToggleCreeps(view) end, 26)
     f.creeps:SetPoint("BOTTOMRIGHT", -146, 16)
@@ -228,6 +230,20 @@ L.Lobby = Lobby
 function L.Show(view, online)
     view.lobbyOnline = online and true or nil
     view.lobbyFrame:Show()
+    -- The screen's own buttons (Back; online Join, Leave, Close) go on top of
+    -- the lobby, in a row at the bottom left (the lobby covers the screen).
+    local x = 16
+    local level = view.lobbyFrame:GetFrameLevel() + 2
+    local row = { view.backButton }
+    for _, key in ipairs({ "join", "leave", "close", "done" }) do table.insert(row, view.pvpButtons[key]) end
+    for _, b in ipairs(row) do
+        if b and b:IsShown() then
+            b:SetFrameLevel(level)
+            b:ClearAllPoints()
+            b:SetPoint("BOTTOMLEFT", view.overlay, "BOTTOMLEFT", x, 16)
+            x = x + b:GetWidth() + 8
+        end
+    end
     -- The title up top, a header over the seats and maps.
     view.overTitle:ClearAllPoints()
     view.overTitle:SetPoint("TOP", 0, -16)

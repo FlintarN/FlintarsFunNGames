@@ -89,14 +89,24 @@ local function Open()
     Advance(0)
 end
 
-function WcPvpHost()
+function WcPvpHost(scope)
     Open()
     local v = View()
     v.friendButton._scripts.OnClick()
-    ns.db.arcadeScope = "code"
+    ns.db.arcadeScope = scope or "code"
     Advance(0)
     v.createButton._scripts.OnClick()
     return S.Get("warcraft").code
+end
+
+-- A game opened to the group pops up: take a seat with its Join button.
+function WcPvpJoinGroup()
+    local v = View()
+    v:Refresh()
+    local s = S.Get("warcraft")
+    check(s and s.phase == "lobby" and not S.Find(s, PLAYER_NAME), "wc group: " .. PLAYER_NAME .. " got the game, not seated yet")
+    check(v.pvpButtons.join:IsShown() and v.pvpButtons.join._enabled ~= false, "wc group: Join offered")
+    v.pvpButtons.join._scripts.OnClick()
 end
 
 function WcPvpJoin(code)

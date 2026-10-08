@@ -97,7 +97,7 @@ end
 
 local function Broadcast(s)
     if s.test then return end
-    ns.Net.Send("S", ns.Serialize.Encode(s), S.Scope(s))
+    ns.Net.Send("S", ns.Serialize.Encode(s), S.Scope(s), "S" .. s.id)
 end
 
 -- A player's message to the host: over the group in a group game,
@@ -766,7 +766,10 @@ end
 ns.On("GROUP_ROSTER_UPDATE", function() S.CheckConnections() end)
 ns.On("UNIT_CONNECTION", function() S.CheckConnections() end)
 
--- A slow heartbeat: connections, and the Skip buttons after a minute.
+-- A slow heartbeat: connections, and the Skip buttons after a minute. Every
+-- 15 seconds the host also sends its games again: open lobbies for the
+-- browser, and running games so a player who missed an update (lost on
+-- the way) catches up instead of waiting forever.
 local beats = 0
 local function Heartbeat()
     S.CheckConnections()
@@ -774,7 +777,7 @@ local function Heartbeat()
     if beats % 3 == 0 then
         for _, s in pairs(S.sessions) do
             local open = s.phase == "lobby" or (s.phase == "rolling" and S.Game(s).joinAnytime)
-            if S.IsHost(s) and open and not S.InGroupScope(s) then Broadcast(s) end
+            if S.IsHost(s) and ((open and not S.InGroupScope(s)) or s.phase == "rolling") then Broadcast(s) end
         end
     end
     for _, s in pairs(S.sessions) do

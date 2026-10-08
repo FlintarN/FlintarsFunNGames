@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.2 (2026-10-08)
+
+### New
+- **Fullscreen everywhere**: every game (and every other tab) has the Fullscreen button now, not just Hearthstone 2 and Warcraft 4. It stays on as you switch tabs until you click Window.
+
+### Fixed
+- **Back buttons hidden under text** in Hearthstone 2 and Warcraft 4. On "Play a Friend", Back sat under the "just for fun" line and the rules; it now has its own spot at the bottom of the left column, and long rules stop above it. In the Warcraft 4 lobby, Back, Join, Leave and Close were drawn under the lobby's darkened layer; they're on top now, lined up at the bottom left.
+- **Hearthstone 2 and Warcraft 4 in a group: you couldn't join**. The game popped up for the others, but their lobby screen had no Join button, so they were never seated. Players who aren't seated now get **Join** and **Back**.
+- **Hearthstone 2 stuck on the loading screen**: a board update is about a dozen messages, more than WoW lets one channel send at once, so the end of it was thrown away and the other player never got the board. Long messages are now spread over all of the addon's channels and arrive together.
+- **Games could freeze when players clicked fast** (Deathroll stuck after a 24 and a 24): WoW only lets an addon send about one message a second after a short burst, and newer clients throw away the rest. A lost game update left a player's Roll button grey forever. Messages now wait their turn instead of being lost (only the newest game state waits), and the host sends a running game again every 15 seconds, so anyone who missed something catches up.
+- **Agar.io: eaten players weren't eaten**: the "you were eaten" message was one of those lost ones. It now also travels in the eater's position updates for a few seconds, and positions go over their own channels, so they don't crowd out the rest.
+- **Slot Machine with several players**: everyone shared one machine, and each pull showed on everyone's reels. Every player now has their own machine and sees their own spins. Other players' spins are in the list below, and the house still watches them all.
+- **Warcraft 4: a player leaving**: if their last message reached some players and not others, the computer could take over at different moments on different screens. The others now pass on what that player sent before the takeover.
+
 ## 1.1.1 (2026-10-08)
 
 ### Fixed

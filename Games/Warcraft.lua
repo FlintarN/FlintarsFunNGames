@@ -30,7 +30,6 @@ local G = {
         .. "Play the computer, or friends from your group, guild or realm: up to eight players, in teams.",
     scoreLabel = "Wins",
     window = { 760, 560 },
-    fullscreen = true, -- offers a Fullscreen button
     fields = {},
     -- Lobbies: the host alone can start against computers; seats come from
     -- the map (see MaxPlayers).

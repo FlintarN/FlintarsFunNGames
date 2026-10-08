@@ -187,6 +187,11 @@ function P:SaveBest()
     ns.db.best.agario = math.max(ns.db.best.agario or 0, math.floor(self.peak))
 end
 
+-- Players I swallowed lately (name -> when): they go in my state for a few
+-- seconds, so a victim who missed the "eat" message still finds out, and
+-- I don't draw them again from a position they sent before they knew.
+local ATE_FOR = 3
+
 function P:OnEvent(sender, kind, data)
     if kind ~= "eat" then return end
     if data == ns.Me() then
@@ -279,6 +284,14 @@ function P:Others()
     if self.rt then
         for name, p in pairs(self.rt.peers) do
             local st = ns.Live.Smooth(self.rt, p)
+            -- Their state says they ate me (the "eat" message may have got lost).
+            if type(p.state.a) == "table" and self.me and self.me.alive then
+                for _, who in ipairs(p.state.a) do
+                    if who == ns.Me() then self:OnEvent(name, "eat", who) end
+                end
+            end
+            local ate = self.ate and self.ate[name]
+            if ate and GetTime() - ate < ATE_FOR then st = nil end
             if st and st.x and st.r then
                 table.insert(list, { name = name, x = st.x, y = st.y, r = st.r, class = st.c, peer = true })
             end
@@ -334,6 +347,8 @@ function P:Move(dt)
             else
                 ns.Live.Event(self.rt, "eat", o.name)
                 self.rt.peers[o.name] = nil
+                self.ate = self.ate or {}
+                self.ate[o.name] = GetTime()
             end
             self:Gulp()
         end
@@ -354,8 +369,18 @@ function P:Step(dt)
     self:Move(dt)
     if s.test then self:StepBots(dt) end
     local me = self.me
+    local ate
+    for name, t in pairs(self.ate or {}) do
+        if GetTime() - t < ATE_FOR then
+            ate = ate or {}
+            table.insert(ate, name)
+        else
+            self.ate[name] = nil
+        end
+    end
     ns.Live.SetMine(self.rt, me.alive and {
         x = math.floor(me.x), y = math.floor(me.y), r = math.floor(me.r * 10) / 10, c = ns.Session.ClassOf(ns.Me()),
+        a = ate,
     } or nil)
     ns.Live.Tick(self.rt)
     self:Draw()

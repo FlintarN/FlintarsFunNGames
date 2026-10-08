@@ -136,6 +136,7 @@ function G:Apply(s, name, roll)
     p.spins = (p.spins or 0) + 1
     s.spins = (s.spins or 0) + 1
     s.lastSpin = { n = s.spins, name = name, roll = roll, reels = reels, mult = mult, win = win }
+    p.last = s.lastSpin -- (each player's machine shows their own spins)
     if mult >= 10 then
         s.banner = (line[3] or "Three of a kind!") .. " " .. name .. " wins " .. ns.Money(win) .. "!"
     elseif mult > 0 then

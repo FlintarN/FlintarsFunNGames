@@ -417,8 +417,13 @@ function P:Refresh()
         return self:RefreshSetup()
     end
 
-    -- A new spin: play it (yours lands on its roll; others' spin and land).
+    -- A new spin on this machine: play it. Everyone has a machine of their
+    -- own, so a player sees only their own spins (others' are in the list
+    -- below); the house, who doesn't pull, watches every spin.
     local spin = s.lastSpin
+    for _, p in ipairs(s.players) do
+        if p.name == ns.Me() and not p.house then spin = p.last end
+    end
     local key = spin and (s.id .. ":" .. spin.n)
     if key ~= self.spinKey then
         local fresh = self.lastId == s.id

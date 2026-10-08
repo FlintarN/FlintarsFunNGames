@@ -29,6 +29,11 @@ Net.FAST = { "FunNGamesL1", "FunNGamesL2", "FunNGamesL3", "FunNGamesL4", "FunNGa
     "FunNGamesL7", "FunNGamesL8" }
 local FAST = {}
 for _, p in ipairs(Net.FAST) do FAST[p] = true end
+-- Every prefix: a long message (a Hearthstone board is a dozen parts) has
+-- its parts dealt over all of them, as each has its own send limit.
+local ALL = { Net.PREFIX }
+for _, p in ipairs(Net.FAST) do ALL[#ALL + 1] = p end
+local spreadNext = 0
 local fastNext = 0
 local MAX = 250 -- bytes in one addon message, with room to spare (WoW allows 255)
 
@@ -137,32 +142,118 @@ function Net.Route(scope)
 end
 
 ---------------------------------------------------------------------------
+-- WoW's limit: each prefix may send a burst of about ten messages, then
+-- about one a second, and newer clients DROP what goes over (a lost game
+-- update left the other player waiting forever). So we keep to it: what
+-- can't go now waits its turn, in order.
+---------------------------------------------------------------------------
+Net.BURST, Net.PER_SECOND = 10, 1
+local buckets = {} -- prefix -> { tokens, t }
+local queue = {}   -- prefix -> { { msg, chatType, target, key }, ... }
+local draining = {}
+local R = Enum and Enum.SendAddonMessageResult
+local THROTTLED = { [R and R.AddonMessageThrottle or 3] = true, [R and R.ChannelThrottle or 8] = true }
+
+local function Clock() return GetTime and GetTime() or ns.Now() end
+
+local function Token(prefix)
+    local now = Clock()
+    local b = buckets[prefix]
+    if not b then
+        b = { tokens = Net.BURST, t = now }
+        buckets[prefix] = b
+    end
+    b.tokens = math.min(Net.BURST, b.tokens + (now - b.t) * Net.PER_SECOND)
+    b.t = now
+    if b.tokens < 1 then return false end
+    b.tokens = b.tokens - 1
+    return true
+end
+
+local function Drain(prefix)
+    local q = queue[prefix]
+    while q[1] and Token(prefix) do
+        local m = q[1]
+        local r = SendAddon(prefix, m.msg, m.chatType, m.target)
+        if ns.debug then
+            -- (Retail returns a result: 0 or true is sent, anything else was refused.)
+            ns.Print("debug: send " .. m.msg:match("^[^:]*:[^:]*:[^@]*") .. " on " .. m.chatType .. " "
+                .. tostring(m.target or "") .. " -> " .. tostring(r) .. (#q > 1 and (", " .. (#q - 1) .. " waiting") or ""))
+        end
+        if THROTTLED[r] then
+            buckets[prefix].tokens = 0 -- WoW says wait: try this one again in a moment
+            break
+        end
+        table.remove(q, 1)
+    end
+    if q[1] and not draining[prefix] then
+        draining[prefix] = true
+        ns.After(0.25, function()
+            draining[prefix] = nil
+            Drain(prefix)
+        end)
+    end
+end
+
+-- How many messages are waiting their turn.
+function Net.Waiting()
+    local n = 0
+    for _, q in pairs(queue) do n = n + #q end
+    return n
+end
+
+---------------------------------------------------------------------------
 -- Sending and receiving
 ---------------------------------------------------------------------------
-local function SendParts(cmd, data, chatType, target, prefix)
+-- `key`: a newer message with the same key replaces one still waiting (a
+-- game's state: only the latest matters).
+local function Queue(prefix)
+    local q = queue[prefix]
+    if not q then
+        q = {}
+        queue[prefix] = q
+    end
+    return q
+end
+
+local function SendParts(cmd, data, chatType, target, prefix, key)
     data = data or ""
+    if key then
+        key = key .. "|" .. chatType .. "|" .. tostring(target)
+        for _, q in pairs(queue) do
+            for j = #q, 1, -1 do
+                if q[j].key == key then table.remove(q, j) end
+            end
+        end
+    end
     nextId = (nextId % 999) + 1
     local me = ns.Me() or ""
     -- (The header: cmd, id up to 3 digits, part/parts up to 3/3, the name.)
     local chunk = MAX - (#cmd + 12 + #me)
     local n = math.max(1, math.ceil(#data / chunk))
+    local used = {}
     for i = 1, n do
         local part = data:sub((i - 1) * chunk + 1, i * chunk)
-        local r = SendAddon(prefix or Net.PREFIX, cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. "@" .. me .. ":" .. part,
-            chatType, target)
-        if ns.debug then
-            -- (Retail returns a result: 0 or true is sent, anything else was refused.)
-            ns.Print("debug: send " .. cmd .. " " .. i .. "/" .. n .. " on " .. chatType .. " " .. tostring(target or "")
-                .. " -> " .. tostring(r))
+        local p = prefix
+        if not p and n > 1 then
+            spreadNext = spreadNext % #ALL + 1
+            p = ALL[spreadNext]
         end
+        p = p or Net.PREFIX
+        local q = Queue(p)
+        q[#q + 1] = { msg = cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. "@" .. me .. ":" .. part,
+            chatType = chatType, target = target, key = key }
+        used[p] = true
     end
+    for p in pairs(used) do Drain(p) end
     return true
 end
 
-function Net.Send(cmd, data, scope)
+-- `key` (optional): see SendParts.
+function Net.Send(cmd, data, scope, key)
     local chatType, target = Net.Route(scope)
     if not (chatType and SendAddon) then return false end
-    return SendParts(cmd, data, chatType, target)
+    return SendParts(cmd, data, chatType, target, nil, key)
 end
 
 -- To one player, on the fast prefixes (real-time games).
@@ -173,11 +264,12 @@ function Net.WhisperFast(cmd, data, target)
 end
 
 -- To a whole scope (the group) on the fast prefixes: one message for everyone.
-function Net.SendFast(cmd, data, scope)
+-- `key` (optional): see SendParts.
+function Net.SendFast(cmd, data, scope, key)
     local chatType, target = Net.Route(scope)
     if not (chatType and SendAddon) then return false end
     fastNext = fastNext % #Net.FAST + 1
-    return SendParts(cmd, data, chatType, target, Net.FAST[fastNext])
+    return SendParts(cmd, data, chatType, target, Net.FAST[fastNext], key)
 end
 
 -- To one player only (private cards; a player talking to a host).

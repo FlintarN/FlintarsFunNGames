@@ -236,14 +236,13 @@ function UI:RefreshModels()
     end
 end
 
--- Fullscreen (games with G.fullscreen): the window is scaled up to fill the
--- screen, centred, over a dark backdrop. Remembered; other tabs go back to
--- the normal window.
+-- Fullscreen (every tab): the window is scaled up to fill the screen,
+-- centred, over a dark backdrop. Remembered for every tab until switched off.
 function UI:ApplyFull()
     local f = self.frame
     if not f then return end
     local G = ns.Games[self.tab or ""]
-    local on = ns.db.fullscreen and G ~= nil and G.fullscreen == true
+    local on = ns.db.fullscreen == true
     if not self.backdrop then
         local bd = CreateFrame("Frame", nil, UIParent)
         bd:SetAllPoints(UIParent)
@@ -262,7 +261,8 @@ function UI:ApplyFull()
     if self.fullButton then self.fullButton:SetText(on and "Window" or "Fullscreen") end
     if on then
         self.sizing = {} -- stop a running grow animation
-        local w, h = G.window[1], G.window[2]
+        local w, h = WIDTH, HEIGHT
+        if G and G.window then w, h = G.window[1], G.window[2] end
         local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
         f:SetSize(w, h)
         f:SetScale(math.min(sw / w, sh / h) * 0.98)
@@ -374,7 +374,7 @@ function UI:Build()
     self.handsButton:SetPoint("RIGHT", self.rulesButton, "LEFT", -4, 0)
     self.fullButton = W.Button(f, "Fullscreen", 90, function() UI:ToggleFull() end, 22)
     self.fullButton:SetPoint("RIGHT", self.rulesButton, "LEFT", -4, 0)
-    W.Tooltip(self.fullButton, "Fullscreen", "Fill the screen with this game (click again for the normal window).")
+    W.Tooltip(self.fullButton, "Fullscreen", "Fill the screen (click again for the normal window).")
     W.Tooltip(self.handsButton, "Hand rankings", "Every poker hand from best to worst, with examples. "
         .. "During a hand, yours is highlighted.")
 
@@ -426,7 +426,17 @@ function UI:Refresh()
     self.subtitle:SetText(G and G.name or SUBTITLES[self.tab] or "")
     self.rulesButton:SetShown(G ~= nil)
     self.handsButton:SetShown(self.tab == "poker")
-    self.fullButton:SetShown(G ~= nil and G.fullscreen == true)
+    -- Fullscreen everywhere: next to whichever header buttons are showing.
+    local fb = self.fullButton
+    fb:ClearAllPoints()
+    if self.handsButton:IsShown() then
+        fb:SetPoint("RIGHT", self.handsButton, "LEFT", -4, 0)
+    elseif self.rulesButton:IsShown() then
+        fb:SetPoint("RIGHT", self.rulesButton, "LEFT", -4, 0)
+    else
+        fb:SetPoint("TOPRIGHT", -14, -32)
+    end
+    fb:Show()
     -- Keep the highlighted hand current while the rankings are open.
     if ns.Help:IsShown() and ns.Help.mode == "hands" then ns.Help:ShowHands(self:MyPokerHand()) end
     if self.tab == "home" then

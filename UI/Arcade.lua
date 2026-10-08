@@ -47,7 +47,9 @@ local function LobbyRow(row)
 end
 
 -- Build on a page object (self.kind, self.G set); fills self.setup.
-function A.BuildSetup(self, parent)
+-- onBack (optional): a Back button at the bottom of the left column (the
+-- games with their own main menu: Hearthstone 2, Warcraft 4).
+function A.BuildSetup(self, parent, onBack)
     local G = self.G
     local v = CreateFrame("Frame", nil, parent)
     v:SetAllPoints()
@@ -64,14 +66,22 @@ function A.BuildSetup(self, parent)
     art:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     local name = W.Label(how, G.name, "GameFontNormalLarge")
     name:SetPoint("TOP", art, "BOTTOM", 0, -8)
+    local note = W.Label(how, "Arcade games are just for fun: no bets, nothing to pay.", "GameFontDisableSmall")
+    note:SetPoint("BOTTOMLEFT", 14, onBack and 46 or 14)
+    note:SetPoint("RIGHT", -14, 0)
+    note:SetJustifyH("LEFT")
+    if onBack then
+        local back = W.Button(how, "Back", 90, onBack, 22)
+        back:SetPoint("BOTTOMLEFT", 12, 12)
+        self.setupBack = back
+    end
+    -- The rules fill the space above the note (cut short rather than run over it).
     local rules = W.Label(how, G.rules, "GameFontHighlight")
     rules:SetPoint("TOPLEFT", 14, -126)
     rules:SetPoint("RIGHT", -14, 0)
+    rules:SetPoint("BOTTOM", note, "TOP", 0, 8)
     rules:SetJustifyH("LEFT")
-    local note = W.Label(how, "Arcade games are just for fun: no bets, nothing to pay.", "GameFontDisableSmall")
-    note:SetPoint("BOTTOMLEFT", 14, 14)
-    note:SetPoint("RIGHT", -14, 0)
-    note:SetJustifyH("LEFT")
+    rules:SetJustifyV("TOP")
 
     local play = W.Panel(v, "Play")
     play:SetPoint("TOPLEFT", how, "TOPRIGHT", 8, 0)

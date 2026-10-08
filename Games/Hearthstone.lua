@@ -24,7 +24,6 @@ local G = {
         .. "Play the computer, or a friend from your group, guild or realm.",
     scoreLabel = "Wins",
     window = { 760, 560 }, -- the main window grows for this game
-    fullscreen = true, -- offers a Fullscreen button
     fields = {},
     -- PvP lobbies
     minPlayers = 2,

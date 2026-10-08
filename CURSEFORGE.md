@@ -68,7 +68,7 @@ A small real-time strategy game against the computer: Human or Orc, workers gath
 
 ## Also
 
-- **Fullscreen** for Warcraft III and Hearthstone.
+- **Fullscreen** for every game: one click fills the screen, another brings the window back.
 - Every game has a **Rules** button explaining it in plain words; poker has **Hand rankings** too.
 - **Practice with bots** in every multiplayer game: they join and play by themselves.
 - Games keep running while you switch tabs or close the window. Right-click a game's tab to close it.

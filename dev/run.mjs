@@ -54,7 +54,8 @@ const Addr = (p) => p.realm ? `${p.name}-${p.realm}` : p.name;
 
 // Deliver everything everyone sent, advance clocks, repeat until quiet.
 async function Pump(players, seconds = 0) {
-  for (let round = 0; round < 50; round++) {
+  let waits = 0;
+  for (let round = 0; round < 50 + waits; round++) {
     let traffic = false;
     for (const p of players) {
       await p.run(`Advance(${round === 0 ? seconds : 0})`);
@@ -70,6 +71,7 @@ async function Pump(players, seconds = 0) {
             if (e[3] === 'WHISPER' && e[4] !== Addr(q) && !(e[4] === q.name && (!q.realm || q.realm === p.realm))) continue;
             if (e[3] === 'GUILD' && !(await Get(q, 'IN_GUILD'))) continue;
             if (e[3] === 'CHANNEL' && !(await Get(q, `CHANNELS["${e[4]}"] ~= nil`))) continue;
+            if (q.lose && q.lose(e[2])) continue; // (a test losing messages on the way)
             q.lua.global.set('__m', e[2]);
             await q.run(`Fire("CHAT_MSG_ADDON", "${e[1]}", __m, "${e[3]}", "${Addr(p)}")`);
           }
@@ -79,7 +81,13 @@ async function Pump(players, seconds = 0) {
         }
       }
     }
-    if (!traffic && round > 0) return;
+    if (!traffic && round > 0) {
+      // Messages waiting for WoW's send limit: let a little time pass, as in the game.
+      let waiting = 0;
+      for (const p of players) waiting += await Get(p, '(ns.Net.Waiting and ns.Net.Waiting() or 0)');
+      if (!waiting || ++waits > 400) return;
+      for (const p of players) await p.run('Advance(0.25)');
+    }
   }
 }
 
@@ -351,6 +359,34 @@ await Section('Agar.io live (realm)', async () => {
   await host.run('AgarRun(0.1) AgarGone("Bob")');
 });
 
+// The "I ate you" message gets lost: the victim still finds out, from the
+// eater's position updates.
+await Section('Agar.io: a lost "eaten" message', async () => {
+  const host = await Player('Flintar', []);
+  const bob = await Player('Bob', []);
+  const players = [host, bob];
+  for (const p of players) await p.run(readFileSync(join(here, 'tests_agar.lua'), 'utf8'));
+  await bob.run('SlashCmdList.FUNNGAMES("") ns.UI:SelectTab("agario") Advance(0)');
+  await host.run('AgarHost()');
+  await Pump(players, 1);
+  await bob.run('AgarJoin()');
+  await Pump(players, 1);
+  for (let i = 0; i < 6; i++) {
+    for (const p of players) await p.run('AgarRun(0.2)');
+    await Pump(players, 0);
+  }
+  await bob.run('AgarPlace(500, 500, 12)');
+  for (let i = 0; i < 3; i++) { await bob.run('AgarRun(0.2)'); await Pump(players, 0); }
+  bob.lose = (m) => m.startsWith('LE:');
+  await host.run('AgarPlace(505, 505, 50) AgarRun(0.4)');
+  await Pump(players, 0);
+  for (let i = 0; i < 4; i++) {
+    for (const p of players) await p.run('AgarRun(0.2)');
+    await Pump(players, 0);
+  }
+  await bob.run(`check(not AgarAlive(), "agar: Bob knows he was eaten, though the message was lost")`);
+});
+
 await Section('Group games (two and three players)', async () => {
   const names = ['Flintar', 'Bob', 'Alice'];
   const players = [];
@@ -415,6 +451,15 @@ await Section('Group games (two and three players)', async () => {
   for (let i = 0; i < 12; i++) {
     for (const p of [bob, alice]) { await p.run('SlotsGroupPull()'); await Pump(players, 1); }
   }
+  // Bob and Alice pull at the same moment: each machine lands on its own spin.
+  for (const p of [bob, alice]) await p.run('SlotsGroupPull()');
+  await Pump(players, 1);
+  for (const p of [bob, alice]) await p.run('Advance(3) ns.UI:SelectTab("slots") Advance(3)');
+  for (const p of [bob, alice]) await p.run(`
+    local s, v = ns.Session.Get("slots"), ns.UI.pages.slots.view
+    local mine
+    for _, q in ipairs(s.players) do if q.name == PLAYER_NAME then mine = q.last end end
+    check(mine and v.spinKey == s.id .. ":" .. mine.n, "slots: " .. PLAYER_NAME .. "'s machine shows their own spin")`);
   for (const p of players) await p.run('SlotsGroupCheck()');
   await host.run(`ns.UI.pages.slots.view.buttons.endTable._scripts.OnClick() AnswerPopup()`);
   await Pump(players);
@@ -563,12 +608,13 @@ await Section('Hearthstone PvP', async () => {
   await p.run('HsQueueEcho()');
 });
 
-async function HsCodeLobby(host, bob) {
+// group: the host opens it to the group, Bob joins from the pop-up.
+async function HsCodeLobby(host, bob, group) {
   const players = [host, bob];
   for (const q of players) await q.run(readFileSync(join(here, 'tests_hspvp.lua'), 'utf8'));
-  const code = await Get(host, 'HsPvpHost()');
+  const code = await Get(host, group ? 'HsPvpHost("group")' : 'HsPvpHost()');
   await Pump(players, 1);
-  await bob.run(`HsPvpJoin("${code}")`);
+  await bob.run(group ? 'HsPvpJoinGroup()' : `HsPvpJoin("${code}")`);
   await Pump(players, 2);
   await host.run('HsPvpStart()');
   await Pump(players, 1);
@@ -607,6 +653,10 @@ await Section('Hearthstone: the realm queue', async () => {
   await HsQueue(await Player('Flintar', []), await Player('Bob', []));
 });
 
+await Section('Hearthstone PvP in a group', async () => {
+  await HsCodeLobby(await Player('Flintar', ['Bob']), await Player('Bob', ['Flintar']), true);
+});
+
 // Retail: players on different realms. Joining whispers the host, and that
 // whisper needs the host's realm.
 await Section('Cross-realm: Hearthstone over a code lobby', async () => {
@@ -615,6 +665,68 @@ await Section('Cross-realm: Hearthstone over a code lobby', async () => {
 
 await Section('Cross-realm: the realm queue', async () => {
   await HsQueue(await Player('Flintar', [], 'Draenor'), await Player('Bob', [], 'Silvermoon'));
+});
+
+// Deathroll where the top of the range comes up (24, then 24 of 1-24), with
+// players clicking Roll again before the last roll got through.
+await Section('Deathroll: the same number twice, clicking fast', async () => {
+  const names = ['Flintar', 'Bob'];
+  const players = [];
+  for (const n of names) players.push(await Player(n, names.filter(x => x !== n)));
+  for (const p of players) await p.run(readFileSync(join(here, 'tests_group.lua'), 'utf8'));
+  const [host, bob] = players;
+  await Pump(players, 4);
+  await host.run('HostOpen("deathroll")');
+  await Pump(players);
+  await bob.run('ClickJoin("deathroll")');
+  await Pump(players);
+  await host.run('HostStart("deathroll", 2)');
+  await Pump(players);
+  // Everyone rolls 24 (or the top, if lower) three times each, then a 1.
+  for (const p of players) await p.run('ROLLS_LEFT = 3 ROLL_SOURCE = function(lo, hi) if ROLLS_LEFT > 0 then ROLLS_LEFT = ROLLS_LEFT - 1 return math.min(24, hi) end return 1 end');
+  let phase = 'rolling';
+  for (let i = 0; i < 40 && phase === 'rolling'; i++) {
+    for (const p of players) {
+      // Two quick clicks: the second before the first roll has come back.
+      phase = await Get(p, 'ClickRollIfMyTurn("deathroll")');
+      await Get(p, 'ClickRollIfMyTurn("deathroll")');
+      await Pump(players, 1);
+    }
+  }
+  await host.run('local s = ns.Session.Get("deathroll") check(s and s.phase == "done", "deathroll with repeated 24s finishes (" .. tostring(s and s.phase) .. ", " .. tostring(s and s.banner) .. ")")');
+});
+
+// A game update gets lost on the way to Bob (WoW drops messages over its
+// limit): the host sends the running game again, so nobody waits forever.
+await Section('Deathroll: a lost update', async () => {
+  const names = ['Flintar', 'Bob'];
+  const players = [];
+  for (const n of names) players.push(await Player(n, names.filter(x => x !== n)));
+  for (const p of players) await p.run(readFileSync(join(here, 'tests_group.lua'), 'utf8'));
+  const [host, bob] = players;
+  await Pump(players, 4);
+  await host.run('HostOpen("deathroll")');
+  await Pump(players);
+  await bob.run('ClickJoin("deathroll")');
+  await Pump(players);
+  await host.run('HostStart("deathroll", 2)');
+  await Pump(players);
+  // The host rolls; the update saying "Bob's turn" never reaches Bob.
+  let lostId = null;
+  bob.lose = (m) => {
+    const id = (m.match(/^S:(\d+):/) || [])[1];
+    if (id && (lostId === null || lostId === id)) { lostId = id; return true; }
+    return false;
+  };
+  await Get(host, 'ClickRollIfMyTurn("deathroll")');
+  await Pump(players, 1);
+  bob.lose = null;
+  await bob.run(`check(not ns.Session.MyTurn(ns.Session.Get("deathroll")), "lost update: Bob missed it at first")`);
+  let phase = 'rolling';
+  for (let i = 0; i < 60 && phase === 'rolling'; i++) {
+    for (const p of players) { phase = await Get(p, 'ClickRollIfMyTurn("deathroll")'); await Pump(players, 1); }
+  }
+  for (const p of players) await p.run('CheckDone("deathroll")');
 });
 
 // WoW Forever: one realm, and every name is two words.
@@ -679,14 +791,14 @@ await Section('Warcraft III lockstep', async () => {
   await p.run('WcLockstepTests()');
 });
 
-await Section('Warcraft III PvP over a code lobby', async () => {
-  const host = await Player('Flintar', []);
-  const bob = await Player('Bob', []);
+for (const group of [false, true]) await Section(group ? 'Warcraft 4 PvP in a group' : 'Warcraft III PvP over a code lobby', async () => {
+  const host = await Player('Flintar', group ? ['Bob'] : []);
+  const bob = await Player('Bob', group ? ['Flintar'] : []);
   const players = [host, bob];
   for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
-  const code = await Get(host, 'WcPvpHost()');
+  const code = await Get(host, group ? 'WcPvpHost("group")' : 'WcPvpHost()');
   await Pump(players, 1);
-  await bob.run(`WcPvpJoin("${code}")`);
+  await bob.run(group ? 'WcPvpJoinGroup()' : `WcPvpJoin("${code}")`);
   await Pump(players, 2);
   await bob.run('WcPvpLobby("race:2:orc")');
   await bob.run('WcPvpLobby("ready:on")');
@@ -702,7 +814,7 @@ await Section('Warcraft III PvP over a code lobby', async () => {
   }
   const t1 = await Get(host, 'WcPvpTurn()');
   const t2 = await Get(bob, 'WcPvpTurn()');
-  const t = Math.floor(Math.min(t1, t2) / 20) * 20;
+  const t = Math.floor((Math.min(t1, t2) - 1) / 20) * 20; // (turn = the next to run: the last that ran is turn - 1)
   const h1 = await Get(host, `WcPvpHash(${t})`);
   const h2 = await Get(bob, `WcPvpHash(${t})`);
   await host.run(`check(${t} >= 100, "wc pvp: the game ran in lockstep (turn ${t1} / ${t2})")`);
@@ -755,7 +867,7 @@ await Section('Warcraft 4: three players and a computer', async () => {
   }
   const ts = [];
   for (const q of players) ts.push(await Get(q, 'WcPvpTurn()'));
-  const t = Math.floor(Math.min(...ts) / 20) * 20;
+  const t = Math.floor((Math.min(...ts) - 1) / 20) * 20; // (the last turn that ran everywhere)
   const hs = [];
   for (const q of players) hs.push(await Get(q, `WcPvpHash(${t})`));
   await host.run(`check(${t} >= 100, "wc 3p: the game ran in lockstep (turns ${ts.join(' / ')})")`);
@@ -802,7 +914,7 @@ await Section('Warcraft 4: a player drops, the computer takes over', async () =>
   }
   const t1 = await Get(host, 'WcPvpTurn()');
   const t2 = await Get(bob, 'WcPvpTurn()');
-  const t = Math.floor(Math.min(t1, t2) / 20) * 20;
+  const t = Math.floor((Math.min(t1, t2) - 1) / 20) * 20; // (turn = the next to run: the last that ran is turn - 1)
   const h1 = await Get(host, `WcPvpHash(${t})`);
   const h2 = await Get(bob, `WcPvpHash(${t})`);
   await host.run(`check(${t} >= 160, "wc drop: after 30 s of silence the game went on without Cara (turns ${t1} / ${t2})")`);

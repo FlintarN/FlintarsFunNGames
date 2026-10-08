@@ -533,14 +533,12 @@ end
 function P.New(parent, kind)
     local self = setmetatable({ kind = kind, G = ns.Games[kind], minions = {}, handCards = {}, free = {} }, P)
     -- PvP: the Arcade lobby panel (who can join, create, practice, join by code).
-    A.BuildSetup(self, parent)
-    self.setup:Hide()
-    local back = W.Button(self.setup, "Back", 90, function()
+    A.BuildSetup(self, parent, function()
         self.setupOpen = false
         self:ShowMenu()
         self:Refresh()
-    end, 22)
-    back:SetPoint("BOTTOMLEFT", 10, 10)
+    end)
+    self.setup:Hide()
     local v = CreateFrame("Frame", nil, parent)
     v:SetAllPoints()
     self.game = v
@@ -964,6 +962,7 @@ function P.New(parent, kind)
     PvpButton("start", "Start", 100, function() S.Start(self.kind) end)
     PvpButton("bot", "Add bot", 100, function() S.AddBot(self.kind) end)
     PvpButton("rematch", "Rematch", 100, function() S.Act(self.kind, "rematch") end, "Play again, same opponent.")
+    PvpButton("join", "Join", 100, function() S.Join(self.kind) self:Refresh() end, "Take a seat at this game.")
     PvpButton("leave", "Leave", 100, function() S.Leave(self.kind) S.Dismiss(self.kind) self:Refresh() end)
     PvpButton("close", "Close lobby", 110, function() A.CloseLobby(self) self:Refresh() end)
     PvpButton("done", "Back", 100, function() S.Dismiss(self.kind) self:Refresh() end)
@@ -2345,11 +2344,17 @@ function P:RefreshPvp(s)
             table.insert(keys, "close")
         elseif seated then
             table.insert(keys, "leave")
+        else
+            -- (A game that popped up from your group: sit down, or go back.)
+            if S.CanJoin(s) then table.insert(keys, "join") end
+            table.insert(keys, "done")
         end
         self:PvpScreen("Hearthstone 2: lobby", A.ScopeLine(s), who .. "\n\n"
-            .. (#s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
+            .. ((not host and not seated) and (s._joining and "Joining..." or "Join to play.")
+                or #s.players < 2 and "Waiting for an opponent..." or (host and "Start when you're ready." or "Waiting for the host to start.")),
             keys)
         self.pvpButtons.start:SetEnabled(#s.players >= 2)
+        self.pvpButtons.join:SetEnabled(not s._joining and #s.players < S.MaxPlayers(s))
         return
     elseif s.phase == "cancelled" then
         self:PvpScreen("The lobby is closed", s.banner or "", "", { "done" })

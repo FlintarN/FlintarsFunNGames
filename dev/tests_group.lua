@@ -185,6 +185,7 @@ function SlotsGroupPull(n)
         Advance(0.05)
         view:Animate(GetTime(), 0.05)
     end
+    Advance(0) -- (a frame: the Spin button catches up after the reels land)
     if S.MyTurn(s) and view.buttons.spin._enabled ~= false then
         view.buttons.spin._scripts.OnClick()
     end

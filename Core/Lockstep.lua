@@ -11,6 +11,10 @@
 -- commands for the turns someone hasn't confirmed yet (c), so a lost message
 -- is simply covered by the next one. Every HASH turns each side sends a
 -- fingerprint of the game; if any differ the games have drifted apart.
+-- When a player goes quiet (RELAY seconds), the others pass on what they
+-- have of that player's commands (r), so everyone ends up knowing the same
+-- before the computer takes the seat over: the player's last message may
+-- have reached some of us and not others.
 -- Messages go once to the whole group when everyone is in it, else by
 -- whisper to each player.
 --
@@ -31,6 +35,7 @@ L.SEND = 0.25  -- at most one message this often
 L.BEAT = 0.5   -- and at least this often (a lost message is covered soon)
 L.HASH = 20    -- turns between fingerprints
 L.HIST = 64    -- turns of everyone's commands kept after they ran (to hand on if a player drops)
+L.RELAY = 5    -- seconds a player is quiet before the others pass on their commands
 
 local games = {} -- id -> game (to deliver messages)
 local G = {}
@@ -57,6 +62,7 @@ function L.New(o)
         hashes = {}, theirHashes = {},
         hist = {},                   -- seat -> turn -> commands that ran (the last HIST turns)
         dropped = {},                -- seat -> the turn from which nobody gives its commands
+        told = {},                   -- seat -> seat -> how far they said they know that seat
     }, G)
     for seat in pairs(peers) do
         g.theirs[seat], g.thru[seat], g.acked[seat], g.theirHashes[seat] = {}, L.DELAY - 1, -1, {}
@@ -106,7 +112,7 @@ function G:Send(now)
     local a = {}
     for seat, thru in pairs(self.thru) do table.insert(a, { seat, thru }) end
     table.sort(a, function(x, y) return x[1] < y[1] end)
-    local msg = { i = self.id, s = self.seat, t = self.myThru, a = a, c = c }
+    local msg = { i = self.id, s = self.seat, t = self.myThru, a = a, c = c, r = self:Relay(now) }
     if self.lastHash then msg.h = self.lastHash end
     local data = ns.Serialize.Encode(msg)
     if self.send then
@@ -119,6 +125,31 @@ function G:Send(now)
         end
     end
     self.lastSend, self.dirty = now, false
+end
+
+-- Commands of quiet players that someone else is missing: { seat, from,
+-- thru, { { turn, cmds }, ... } } per quiet seat.
+function G:Relay(now)
+    local out
+    for k, thru in pairs(self.thru) do
+        local h = self.heard[k]
+        if not self.dropped[k] and h and now - h >= L.RELAY then
+            local low = thru
+            for seat, told in pairs(self.told) do
+                if seat ~= k and self.peers[seat] and told[k] and told[k] < low then low = told[k] end
+            end
+            if low < thru then
+                local c = {}
+                for t = low + 1, thru do
+                    local cmds = (self.hist[k] and self.hist[k][t]) or self.theirs[k][t]
+                    if cmds and #cmds > 0 then table.insert(c, { t, cmds }) end
+                end
+                out = out or {}
+                table.insert(out, { k, low + 1, thru, c })
+            end
+        end
+    end
+    return out
 end
 
 function G:Update(now)
@@ -224,10 +255,28 @@ function G:Receive(msg, now)
     if type(msg.a) == "number" then
         self.acked[seat] = math.max(self.acked[seat], msg.a)
     elseif type(msg.a) == "table" then
+        self.told[seat] = self.told[seat] or {}
         for _, pair in ipairs(msg.a) do
             if type(pair) == "table" and pair[1] == self.seat and type(pair[2]) == "number" then
                 self.acked[seat] = math.max(self.acked[seat], pair[2])
+            elseif type(pair) == "table" and type(pair[1]) == "number" and type(pair[2]) == "number" then
+                self.told[seat][pair[1]] = pair[2]
             end
+        end
+    end
+    -- A quiet player's commands, passed on (see Relay). Only turns we can
+    -- still run, and only when they follow on from what we have.
+    for _, r in ipairs(type(msg.r) == "table" and msg.r or {}) do
+        local k, from, thru, list = tonumber(r[1]), tonumber(r[2]), tonumber(r[3]), r[4]
+        if k and k ~= self.seat and self.thru[k] and not self.dropped[k] and from and thru
+            and from <= self.thru[k] + 1 and thru > self.thru[k] and type(list) == "table" then
+            for _, tc in ipairs(list) do
+                local t, cmds = tc[1], tc[2]
+                if type(t) == "number" and t > self.thru[k] and t >= self.turn and type(cmds) == "table" then
+                    self.theirs[k][t] = cmds
+                end
+            end
+            self.thru[k] = thru
         end
     end
     for _, tc in ipairs(msg.c or {}) do
