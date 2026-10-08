@@ -32,13 +32,19 @@ G.FOOD = 220
 G.START_R, G.MAX_R = 10, 300
 G.SPEED = 150           -- world units per second at the start size
 G.EAT_RATIO = 0.85      -- you swallow blobs under 85% of your size
-G.SHRINK = 0.003        -- share of your mass lost per second above the start size
+G.DOT = 14              -- area one dot adds: one unit of mass
+G.DECAY_FROM = 100      -- mass above which a blob slowly shrinks (as in Agar.io: only big ones)
+G.SHRINK = 0.002        -- share of the mass above that lost per second
 
 -- Growing goes by area, as in the real game: a dot adds the same mass to
 -- everyone (so it matters less the bigger you are), a swallowed blob adds
--- most of its mass.
+-- most of its mass. Mass is what the game shows: every dot is +1.
+function G.Mass(r)
+    return math.floor(r * r / G.DOT + 0.5)
+end
+
 function G.Feed(r)
-    return math.min(G.MAX_R, math.sqrt(r * r + 14))
+    return math.min(G.MAX_R, math.sqrt(r * r + G.DOT))
 end
 
 function G.Swallow(r, other)
@@ -46,8 +52,10 @@ function G.Swallow(r, other)
 end
 
 function G.Decay(r, dt)
-    if r <= G.START_R then return r end
-    return math.max(G.START_R, r * (1 - G.SHRINK * dt))
+    local m = r * r / G.DOT
+    if m <= G.DECAY_FROM then return r end
+    m = math.max(G.DECAY_FROM, m - (m - G.DECAY_FROM) * G.SHRINK * dt)
+    return math.sqrt(m * G.DOT)
 end
 
 -- The camera zooms out as you grow, so big blobs still see around them.

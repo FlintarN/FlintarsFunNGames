@@ -66,7 +66,16 @@ function AgarPractice()
     check(view.center:GetText():find("Jaina", 1, true), "agar: it says who ate you")
     view.canvas._scripts.OnMouseDown(view.canvas, "LeftButton")
     check(view.me.alive and view.me.r == AG.START_R, "agar: click to jump back in")
-    check(ns.db.best and ns.db.best.agario and ns.db.best.agario >= 20, "agar: best size saved")
+    check(ns.db.best and ns.db.best.agarioMass and ns.db.best.agarioMass >= AG.Mass(20), "agar: best mass saved")
+    -- Mass: every dot is +1; small blobs never shrink, big ones slowly do.
+    local r = AG.START_R
+    local m0 = AG.Mass(r)
+    for _ = 1, 50 do r = AG.Feed(r) end
+    check(AG.Mass(r) == m0 + 50, "agar: 50 dots = 50 more mass (" .. m0 .. " -> " .. AG.Mass(r) .. ")")
+    check(AG.Decay(r, 60) == r, "agar: a small blob doesn't shrink")
+    local big = math.sqrt(1000 * AG.DOT)
+    local after = AG.Mass(AG.Decay(big, 1))
+    check(after < 1000 and after >= 998, "agar: a big blob loses a little mass a second (" .. after .. ")")
     check(view.rows[1]:GetText() ~= "", "agar: the leaderboard fills")
 
     -- No cap at 89 any more: big blobs grow on, and the camera zooms out.

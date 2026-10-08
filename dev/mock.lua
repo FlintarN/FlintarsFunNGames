@@ -68,6 +68,8 @@ function methods:GetCenter() return 0, 0 end
 function methods:GetEffectiveScale() return 1 end
 function methods:SetScale(k) self._scale = k end
 -- 3D: model scenes have actors with a bounding box; creatures have a display id.
+function methods:SetLightAmbientColor(r, g, b) self._ambient = { r, g, b } end
+function methods:SetLightDiffuseColor(r, g, b) self._diffuse = { r, g, b } end
 function methods:CreateActor()
     local a = new("Actor", nil, self)
     function a:GetActiveBoundingBox() return -1, -1, 0, 1, 1, 2 end

@@ -5,7 +5,7 @@
 --   S  a shop for everyone (the top-left tile of its 2 x 2 footprint): a Goblin Merchant
 --   X  a Mercenary Camp (2 x 2): hire creeps there
 --   e m h  a creep camp: easy, medium, hard (its middle; Creeps.lua)
--- mode: the game mode the map is for ("melee", "footmen").
+-- mode: the game mode the map is for ("melee", "footmen", "td").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
 -- (dev/make_maps.py), but fine to edit by hand: keep it symmetric.
@@ -371,6 +371,144 @@ WC.Maps.frenzy_fields = { name = "Frenzy Fields", players = 4, symmetry = "rot18
     } }
 table.insert(WC.MAP_ORDER, "frenzy_fields")
 
+WC.Maps.td_duel = { name = "Tower Duel", players = 2, symmetry = "none", mode = "td",
+    text = "Tower Defense for up to 2: a lane each. Build a maze of towers; what gets through costs a life.",
+    grid = {
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTT..........TT..........TTTTTTTTT",
+        "TTTTTTTTTTTT1...TTTTTTTT2...TTTTTTTTTTTT",
+        "TTTTTTTTTTTT....TTTTTTTT....TTTTTTTTTTTT",
+        "TTTTTTTTTTTT....TTTTTTTT....TTTTTTTTTTTT",
+        "TTTTTTTTTTTT....TTTTTTTT....TTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    } }
+table.insert(WC.MAP_ORDER, "td_duel")
+
+WC.Maps.td_four = { name = "Four Lanes", players = 4, symmetry = "none", mode = "td",
+    text = "Tower Defense for up to 4: a lane each. Build a maze of towers; what gets through costs a life.",
+    grid = {
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT",
+        "TTTTT1...TTTTTTTT2...TTTTTTTT3...TTTTTTTT4...TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    } }
+table.insert(WC.MAP_ORDER, "td_four")
+
+WC.Maps.td_eight = { name = "Eight Lanes", players = 8, symmetry = "none", mode = "td",
+    text = "Tower Defense for up to 8: a lane each. Build a maze of towers; what gets through costs a life.",
+    grid = {
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT..........TT",
+        "TTTTT1...TTTTTTTT2...TTTTTTTT3...TTTTTTTT4...TTTTTTTT5...TTTTTTTT6...TTTTTTTT7...TTTTTTTT8...TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTTTTT....TTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+        "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    } }
+table.insert(WC.MAP_ORDER, "td_eight")
+
 -- Read a map's grid once: size, trees, starts, mines.
 function WC.ParseMap(key)
     local m = WC.Maps[key]
@@ -464,7 +602,7 @@ function WC.CheckMap(key)
         end
     end
     local s1 = p.starts[1]
-    if s1 then
+    if s1 and (m.mode or "melee") ~= "td" then -- (Tower Defense lanes are walled off on purpose)
         local q, head = { (s1[2] + 4) * p.w + s1[1] + 4 }, 1
         seen[q[1]] = true
         while head <= #q do

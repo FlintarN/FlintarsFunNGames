@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.3 (2026-10-08)
+
+### New
+- **Warcraft 4: Tower Defense**, as Line Tower Wars: 2 to 8 players (or computers), free for all or in teams, on three lane maps. A flying builder puts down Arrow, Cannon and Frost towers (three levels each) and Maze Walls anywhere in your lane; build a maze, the game won't let you close the path. Waves come every 35 seconds (flyers every 5th, fast ones every 7th, a boss every 10th); each creep that gets out costs lives, and at 0 your gate falls. Sends from your gate push creeps into the next opponent's lane and raise your income. Works online like the other modes; computers build, upgrade and send. You can also play it alone: hold out as long as you can (your best wave is kept).
+- **Warcraft 4: units in team colour**. Each unit is lit in its player's colour (blue, red, teal, purple...), as in Warcraft III, so you can tell sides apart at a glance. Neutral creeps keep their normal look.
+
+### Fixed
+- **Raffle: the winner was given away early**. The ticket list and the banner named the winner while the ticket was still spinning. Now the ticket spins, slows, lands on the number, pauses, and only then the winner, the sound and the coins come together.
+- **Hearthstone 2: 3D models spilled over the card borders**. Models are now cropped to their art window, and the border stays on top of the model when a card moves (hover, drag, attack).
+- **Hearthstone 2 deck builder: the "All" cost filter** hid every card and could never be undone (it filtered on cost -1). It's selected at the start and shows every card again after a cost filter.
+- **Candy Crush**: clicking a selected candy again now lets go of it.
+- **Agar.io's counter**: it showed your blob's radius, which barely moves once you're big and kept ticking down. It now shows **mass** as in the real game: every dot is +1, swallowing a player adds most of their mass, and only blobs above mass 100 slowly shrink (0.2% of the extra a second). The leaderboard and your best use mass too.
+- **WoW Forever: the host never got the other players' moves** (Ready in the Warcraft 4 lobby, Hearthstone 2 plays, Poker bets, Battleship shots...). A game's id starts with the host's name, and a two-word name ("First Last") put a space in it, which cut the move message in the wrong place. Ids no longer have spaces, and moves are read so older ids work too.
+
 ## 1.1.2 (2026-10-08)
 
 ### New

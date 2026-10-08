@@ -185,19 +185,30 @@ function P:StartSpin()
     self.spin = { n = math.max(1, n), next = 0, start = Now() }
 end
 
+-- The drawn ticket arrived: spin on a while, slow down, land on its number,
+-- a short pause, then the winner (nothing else on the page tells before).
+local SPIN_FOR, PAUSE = 3.2, 0.6
+
 function P:Land(draw)
     self.spin = self.spin or { n = draw.tickets, next = 0, start = Now() }
     self.spin.n = draw.tickets
     self.spin.final = draw
-    self.spin.ends = Now() + 2.2
+    self.spin.ends = Now() + SPIN_FOR
 end
 
 function P:Animate(now)
     local sp = self.spin
     if not sp then return end
     if sp.final and now >= sp.ends then
-        self.spin = nil
-        self:ShowWinner(sp.final, true)
+        if not sp.landed then
+            -- On the number: hold it a moment before saying whose it is.
+            sp.landed = now
+            self.number:SetText("#" .. sp.final.ticket)
+            W.PlaySound("U_CHAT_SCROLL_BUTTON")
+        elseif now >= sp.landed + PAUSE then
+            self.spin = nil
+            self:ShowWinner(sp.final, true)
+        end
         return
     end
     if not sp.final and now - sp.start > 8 then -- the roll never came
@@ -209,7 +220,7 @@ function P:Animate(now)
     if now >= sp.next then
         -- Ticks slow down as the end comes near.
         local left = sp.final and math.max(0, sp.ends - now) or 2
-        sp.next = now + 0.04 + (2 - math.min(2, left)) * 0.12
+        sp.next = now + 0.04 + (2 - math.min(2, left)) * 0.14
         self.number:SetText("#" .. math.random(1, sp.n))
         W.PlaySound("U_CHAT_SCROLL_BUTTON")
     end
@@ -217,6 +228,7 @@ end
 
 function P:ShowWinner(draw, animate)
     local s = Session(self)
+    self.revealed = s and (s.id .. ":" .. draw.ticket)
     self.number:SetText("#" .. draw.ticket)
     local _, p = ns.Session.Find(s, draw.winner)
     self.winnerPortrait:SetPlayer(draw.winner, p and p.class)
@@ -228,6 +240,7 @@ function P:ShowWinner(draw, animate)
             C.Coin(self.stage, 0, 40, -60 + math.random(-10, 10), -110, i * 0.05)
         end
         W.PlaySound(draw.winner == ns.Me() and "LEVELUP" or "LOOTWINDOW_COIN_SOUND")
+        ns.Changed() -- the list and the banner may tell now
     end
 end
 
@@ -239,7 +252,7 @@ function P:Refresh()
     self.setup:SetShown(s == nil)
     self.game:SetShown(s ~= nil)
     if not s then
-        self.drawKey, self.lastId, self.spin = nil, nil, nil
+        self.drawKey, self.lastId, self.spin, self.revealed = nil, nil, nil, nil
         return self:RefreshSetup()
     end
 
@@ -268,7 +281,9 @@ function P:Refresh()
     self.pot:SetText("Pot " .. (pot > 0 and ns.Money(pot) or "0"))
     self.sold:SetText(n .. (n == 1 and " ticket" or " tickets") .. " at " .. ns.Money(s.price)
         .. ((s.cut or 0) > 0 and ("  (" .. s.cut .. "% to " .. s.host .. ")") or ""))
-    self.banner:SetText(s.banner or "")
+    -- While the ticket spins, nothing tells who won.
+    local hide = draw ~= nil and self.revealed ~= key
+    self.banner:SetText(hide and "Drawing the winning ticket..." or (s.banner or ""))
 
     -- Everyone's tickets: numbers and chance.
     local ranges = self.G.Ranges(s)
@@ -290,7 +305,7 @@ function P:Refresh()
             row.count:SetText("|cff888888no tickets|r")
             row.chance:SetText("")
         end
-        if draw and draw.winner == p.name then row.chance:SetText("|cffffd100Winner|r") end
+        if draw and not hide and draw.winner == p.name then row.chance:SetText("|cffffd100Winner|r") end
         row.chance:SetShown(not W.UpdateSkip(row.skip, self.kind, s, p.name))
     end
     self.list:SetCount(#s.players)

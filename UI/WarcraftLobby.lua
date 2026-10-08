@@ -65,6 +65,9 @@ end
 
 function L.CanStart(lobby)
     local players = L.Players(lobby)
+    -- (Tower Defense can be played alone: hold out as long as you can.)
+    local mode = WC().Modes[lobby.mode or "melee"]
+    if #players == 1 and mode and mode.solo then return true end
     if #players < 2 then return false, "Add a computer or another player." end
     local teams, n = {}, 0
     for _, p in ipairs(players) do
@@ -143,16 +146,17 @@ function L.Build(view, o)
     f.modes = {}
     for i, key in ipairs(WC().MODE_ORDER) do
         local b = W.Button(f, WC().Modes[key].name, 118, function() L.PickMode(view, key) end, 22)
-        b:SetPoint("TOPLEFT", 470 + (i - 1) * 122, -84)
+        b:SetPoint("TOPLEFT", 470 + ((i - 1) % 2) * 122, -84 - math.floor((i - 1) / 2) * 24) -- (two a row)
         W.Tooltip(b, WC().Modes[key].name, WC().Modes[key].text)
         b.key = key
         f.modes[i] = b
     end
     f.maps = {}
-    for i = 1, 6 do
+    local mapTop = -112 - (math.ceil(#WC().MODE_ORDER / 2) - 1) * 24
+    for i = 1, 5 do -- (the most maps a mode has)
         local b = CreateFrame("Button", nil, f)
         b:SetSize(240, 20)
-        b:SetPoint("TOPLEFT", 470, -112 - (i - 1) * 21)
+        b:SetPoint("TOPLEFT", 470, mapTop - (i - 1) * 21)
         b.bg = b:CreateTexture(nil, "BACKGROUND")
         b.bg:SetAllPoints()
         b.bg:SetColorTexture(1, 0.82, 0, 0.18)

@@ -66,6 +66,14 @@ function RaffleAfterDraw()
     local view = ns.UI.pages.raffle.view
     Advance(0)
     check(s.phase == "done" and s.draw, "raffle: drawn")
+    -- While the ticket spins, nothing on the page gives the winner away.
+    ns.UI:SelectTab("raffle")
+    Advance(0)
+    local told = view.winner:GetText() ~= "" or view.banner:GetText():find(s.draw.winner, 1, true) ~= nil
+    for i = 1, #s.players do
+        if (view.list:Row(i).chance:GetText() or ""):find("Winner", 1, true) then told = true end
+    end
+    check(view.spin ~= nil and not told, "raffle: the winner stays secret while the ticket spins")
     for _ = 1, 100 do
         if not view.spin then break end
         Advance(0.1)
@@ -73,6 +81,8 @@ function RaffleAfterDraw()
     end
     check(view.number:GetText() == "#" .. s.draw.ticket, "raffle: the ticket stops on the drawn number")
     check(view.winner:GetText() == s.draw.winner .. " wins!" and view.winnerPortrait:IsShown(), "raffle: the winner is shown")
+    Advance(0)
+    check(view.banner:GetText():find(s.draw.winner, 1, true) ~= nil, "raffle: then the banner tells")
     check(RF.Owner(s, s.draw.ticket) == s.draw.winner, "raffle: the winner holds the ticket")
     local sum = 0
     for _, p in ipairs(s.players) do sum = sum + p.net end

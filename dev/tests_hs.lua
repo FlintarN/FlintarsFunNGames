@@ -336,6 +336,15 @@ function HsPageTests()
     check(onBoard and view.minions[yeti.id] and view.minions[yeti.id]:IsShown(), "hs page: the Yeti is on the board")
     check(view.minions[yeti.id].model and view.minions[yeti.id].model.npc == 7458, "hs page: the Yeti shows its WoW creature")
     check(view.heroes[1].model and view.heroes[1].model.npc == 4968, "hs page: Jaina shows Jaina")
+    -- The 3D model is cropped to its window and the border stays above it,
+    -- also after the card moves up (an attack) and back down.
+    local mf = view.minions[yeti.id]
+    check(mf.model.clip and mf.model:GetParent() == mf.model.clip, "hs page: the model sits in a cropping frame")
+    for _, level in ipairs({ 40, 10 }) do
+        view.Lift(mf, level)
+        check(mf.top:GetFrameLevel() > mf.model:GetFrameLevel() and mf.model:GetFrameLevel() > level - 1,
+            "hs page: the border is above the model at level " .. level)
+    end
     view.minions[yeti.id]._scripts.OnClick(view.minions[yeti.id], "LeftButton")
     check(view.sel == nil and view.status:GetText():find("next turn") ~= nil, "hs page: a new minion can't attack yet")
     -- Not enough mana.
@@ -462,6 +471,15 @@ function HsDeckTests()
     local allSeven = true
     for _, c in ipairs(f.cards) do if c:IsShown() and HS.Cards[c.key].cost < 7 then allSeven = false end end
     check(allSeven, "decks: the 7+ filter")
+    -- "All": selected (greyed) at the start; after a filter, it shows every card again.
+    f.costs[1]._scripts.OnClick()
+    ns.HearthstoneDecks.Refresh(f)
+    check(f.filterCost == nil and f.costs[1]._enabled == false, "decks: All is the selected filter")
+    local shownAll = #ns.HearthstoneDecks.Shown(f)
+    f.costs[9]._scripts.OnClick()
+    check(#ns.HearthstoneDecks.Shown(f) < shownAll and f.costs[1]._enabled ~= false, "decks: a cost filter, All clickable again")
+    f.costs[1]._scripts.OnClick()
+    check(#ns.HearthstoneDecks.Shown(f) == shownAll and shownAll > 0, "decks: All shows every card again")
     f.tabs[2]._scripts.OnClick()
     check(HS.Cards[f.cards[1].key].class == "neutral", "decks: the neutral tab")
     f.fill._scripts.OnClick()

@@ -27,6 +27,7 @@ local EDGE, SCROLL = 28, 650    -- edge scrolling: pixels from the map's edge, s
 -- Creeps (the neutral side): a sandy brown.
 local CREEP_COLOR = { 0.85, 0.65, 0.35 }
 -- Player colours (Warcraft III's, blue and red first as before).
+local TEAM_TINT = 0.45 -- how much of the team colour goes into a unit's light (0 none, 1 all)
 local TEAM = { { 0.25, 0.55, 1 }, { 1, 0.25, 0.2 }, { 0.1, 0.9, 0.75 }, { 0.6, 0.3, 0.9 }, { 1, 0.95, 0.2 },
     { 1, 0.55, 0.1 }, { 0.2, 0.8, 0.2 }, { 1, 0.5, 0.8 }, { 0.6, 0.6, 0.6 }, { 0.6, 0.85, 1 } }
 local BUILDING_ART = {
@@ -349,6 +350,20 @@ local function MakeUnitModel(parent)
             if actor.SetDesaturation then actor:SetDesaturation(desat) end
         end
     end
+    -- Team colour: the unit's own light takes on its team's colour (WoW has
+    -- no team-coloured versions of these creatures), mixed with white so the
+    -- model's own colours still show. nil: plain light (neutral creeps).
+    function sc:SetTeam(col)
+        local key = col and (col[1] .. "," .. col[2] .. "," .. col[3]) or "none"
+        if self.teamKey == key or not self.SetLightAmbientColor then return end
+        self.teamKey = key
+        local function Mix(k)
+            if not col then return 1, 1, 1 end
+            return (1 - k) + col[1] * k, (1 - k) + col[2] * k, (1 - k) + col[3] * k
+        end
+        self:SetLightAmbientColor(Mix(TEAM_TINT))
+        if self.SetLightDiffuseColor then self:SetLightDiffuseColor(Mix(TEAM_TINT * 0.6)) end
+    end
     function sc:HasAnimation(anim)
         if actor.HasAnimation then return actor:HasAnimation(anim) end
         return false
@@ -427,6 +442,7 @@ function P.New(parent, kind)
         t:SetPoint("TOPLEFT", x, -3)
         local l = W.Label(barFrame, "", "GameFontHighlight")
         l:SetPoint("LEFT", t, "RIGHT", 4, 0)
+        l.icon = t
         return l
     end
     self.goldText = Res("WcGold", 300)
@@ -1366,6 +1382,23 @@ function P:Events(events)
             if self.vis and self.vis[math.floor(ev.y) * self.st.w + math.floor(ev.x)] then self:Say(WC().Items[ev.item].name .. " dropped") end
         elseif ev.kind == "cantBuild" and ev.owner == ME then
             self:Say("Can't build there")
+        elseif ev.kind == "tdWave" then
+            self:Say("Wave " .. ev.wave .. (ev.wave % 10 == 0 and ": a boss!" or ev.wave % 10 == 5 and ": flyers!"
+                or ev.wave % 10 == 7 and ": fast ones!" or ""))
+        elseif ev.kind == "tdOut" and ev.owner == ME then
+            -- Your best: the wave you held out to (alone or not).
+            local db = ns.db.warcraft
+            local best = db.tdBest or 0
+            if ev.wave > best then db.tdBest = ev.wave end
+            self:Say("Out of lives at wave " .. ev.wave .. (ev.wave > best and best > 0 and " - your best yet!" or
+                (best > 0 and (" (your best: wave " .. best .. ")") or "") .. "."))
+        elseif ev.kind == "tdLeak" and ev.owner == ME then
+            self:Say("A creep got through! " .. ev.lives .. (ev.lives == 1 and " life" or " lives") .. " left.")
+            W.PlaySound("RAID_WARNING") -- (a game sound: the Game sounds switch)
+        elseif ev.kind == "tdSent" and ev.target == ME then
+            local s = ns.Session.Get(self.kind)
+            local name = s and s.game and s.game.names and s.game.names[ev.owner] or ("Player " .. ev.owner)
+            self:Say(name .. " sends a " .. WC().Units[ev.unit].name .. " your way!")
         elseif ev.kind == "treeDown" then
             self.treeDirty = true
             local px = self.mmTrees[ev.tree]
@@ -1932,7 +1965,7 @@ end
 
 function P:UpdateFog()
     local st = self.st
-    if st.demo then
+    if st.demo or WC().Mode(st).noFog then -- (the Showcase; Tower Defense shows every lane)
         local vis = {}
         for i = 0, st.w * st.h - 1 do vis[i], self.explored[i] = true, true end
         self.vis = vis
@@ -2514,6 +2547,7 @@ function P:Draw()
                 f:SetAlpha((e.illusion or (e.buffs and e.buffs.windwalk)) and 0.55 or 1)
                 f.team:SetVertexColor(col[1], col[2], col[3])
                 f.ring:SetVertexColor(col[1], col[2], col[3])
+                if f.model and f.model.SetTeam then f.model:SetTeam(col ~= CREEP_COLOR and col or nil) end
                 f.sel:SetShown(selected[id] == true)
                 f.sel:SetVertexColor(0.3, 1, 0.3)
                 local hurt = e.hp < e.maxHp
@@ -2643,7 +2677,7 @@ function P:Draw()
         self.ghost:SetSize(size * TILE, size * TILE)
         self.ghost:ClearAllPoints()
         self.ghost:SetPoint("TOPLEFT", self.view, "TOPLEFT", bx * TILE - cx, -(by * TILE - cy))
-        local ok = E().CanPlace(st, bx, by, size)
+        local ok = E().CanBuildAt(st, ME, self.place.btype, bx, by)
         self.ghost:SetVertexColor(ok and 0.5 or 1, ok and 1 or 0.3, ok and 0.5 or 0.3)
     else
         self.ghost:Hide()
@@ -2708,6 +2742,16 @@ function P:DrawPanel()
     self.foodText:SetText(pl.food .. "/" .. pl.foodCap .. (upkeep and ("  |cffffd100" .. (upkeep == "high" and "High" or "Low")
         .. " upkeep|r") or ""))
     if pl.food >= pl.foodCap then self.foodText:SetTextColor(1, 0.3, 0.3) else self.foodText:SetTextColor(1, 1, 1) end
+    local M = WC().Mode(st)
+    if M.Panel then
+        local a, b, warn = M.Panel(st, ME)
+        self.lumberText:SetText(a)
+        self.lumberText:SetTextColor(1, warn and 0.3 or 1, warn and 0.3 or 1)
+        self.foodText:SetText(b)
+        self.foodText:SetTextColor(1, 1, 1)
+    end
+    self.lumberText.icon:SetShown(not M.Panel)
+    self.foodText.icon:SetShown(not M.Panel)
     -- The game time, and the time of day (night: darker).
     local hour = E().Hour(st)
     self.clock:SetText(string.format("%s %d:%02d   %d:%02d", E().IsNight(st) and "|cff8899ffNight|r" or "|cffffd100Day|r",
@@ -2933,10 +2977,11 @@ function P:DrawCommands(sel)
         list[12] = { icon = IC .. "Spell_ChargeNegative", key = nil, title = "Back", tip = "Back to the commands.",
             action = function() self.menu = nil end }
     elseif hasWorker and self.menu == "build" then
-        -- The worker's build menu.
-        for _, bt in ipairs(f.builds) do
+        -- The worker's build menu (Tower Defense: the builder's towers).
+        for _, bt in ipairs(WC().Mode(st).BUILDS or f.builds) do
             local bd = WC().Buildings[bt]
             local tip = Cost(bd.cost)
+            if bd.tdText then tip = tip .. ". " .. bd.tdText end
             if bd.food and bd.food > 0 then tip = tip .. ". Gives " .. bd.food .. " food." end
             if bd.trains then
                 local names = {}
@@ -3033,11 +3078,14 @@ function P:DrawCommands(sel)
         end
         if hasWorker then
             while #list < 4 do table.insert(list, false) end
-            Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
-                action = function() self:Target("gather", "Click the gold mine or a tree") end })
-            Add({ icon = IC .. "INV_Misc_Bag_10", key = "R", title = "Return Resources (R)",
-                tip = "Bring what they carry back to the hall, then carry on.", enabled = carrying,
-                action = function() self:ReturnRes() end })
+            -- (Tower Defense's builder only builds: nothing to gather.)
+            if not WC().Mode(st).BUILDS then
+                Add({ icon = IC .. "INV_Pick_02", key = "G", title = "Gather (G)", tip = "Then click the gold mine or a tree.",
+                    action = function() self:Target("gather", "Click the gold mine or a tree") end })
+                Add({ icon = IC .. "INV_Misc_Bag_10", key = "R", title = "Return Resources (R)",
+                    tip = "Bring what they carry back to the hall, then carry on.", enabled = carrying,
+                    action = function() self:ReturnRes() end })
+            end
             Add({ icon = IC .. "INV_Hammer_20", key = "B", title = "Build (B)", tip = "Open the build menu.",
                 action = function() self.menu = "build" end })
         end
@@ -3213,6 +3261,34 @@ function P:DrawCommands(sel)
                             if not found then q = "rally" end
                         end
                         self:Cmd({ type = "sendTo", target = q })
+                    end }
+            end
+            -- Tower Defense: sends from your gate; sell a tower.
+            if E().Def(b).tdGate then
+                local TD = WC().Modes.td
+                local q = TD.Target(st, ME)
+                local s = ns.Session.Get(self.kind)
+                local who = q and (s and s.game and s.game.names and s.game.names[q] or ("Player " .. q)) or "nobody"
+                for i, x in ipairs(TD.SENDS) do
+                    local ud = WC().Units[x.unit]
+                    list[i] = { icon = ud.icon, key = x.hotkey, title = "Send " .. ud.name .. " (" .. x.hotkey .. ")",
+                        cost = { x.cost, 0 }, enabled = q ~= nil,
+                        tip = string.format("%d gold: a %s runs down %s's lane%s. Your income goes up by %d for good.",
+                            x.cost, ud.name, who, (x.lives or 1) > 1 and (" (costs them " .. x.lives .. " lives if it gets out)") or "",
+                            x.income),
+                        action = function()
+                            local ok, why = self:Cmd({ type = "tdSend", unit = x.unit })
+                            if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                        end }
+                end
+            end
+            if E().Def(b).tdTower then
+                local back = math.floor((WC().Modes.td.VALUE[b.type] or 0) * 0.75)
+                list[11] = { icon = IC .. "INV_Misc_Coin_02", key = "X", title = "Sell (X)",
+                    tip = string.format("Take it down for %d gold (three quarters of what it cost).", back),
+                    action = function()
+                        local ok, why = self:Cmd({ type = "tdSell", building = b.id })
+                        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
                     end }
             end
             if E().Def(b).trains then

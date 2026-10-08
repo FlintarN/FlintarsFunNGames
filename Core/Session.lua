@@ -205,7 +205,8 @@ function S.Open(kind, settings, test, scope)
     local G = ns.Games[kind]
     local me = ns.Me()
     local s = {
-        id = me .. "-" .. ns.Now() .. "-" .. math.random(1000, 9999),
+        -- (No spaces: WoW Forever names are two words, "First Last".)
+        id = me:gsub("%s", "") .. "-" .. ns.Now() .. "-" .. math.random(1000, 9999),
         kind = kind,
         host = me,
         phase = "lobby",
@@ -595,7 +596,9 @@ ns.Net.On("L", function(sender, id)
 end)
 
 ns.Net.On("A", function(sender, data)
-    local id, action = data:match("^(%S+) (%S+)$")
+    -- "<game id> <move>", split at the LAST space: a game made by an older
+    -- version can have a space in its id (a two-word name on WoW Forever).
+    local id, action = data:match("^(.+) (%S+)$")
     local s = id and Hosted(sender, id)
     if not s or not (s.phase == "rolling" or s.phase == "done" or (s.phase == "lobby" and S.Game(s).lobbyActs)) then return end
     HostAct(s, sender, action)

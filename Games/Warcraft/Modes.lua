@@ -335,4 +335,25 @@ do
         if M.Think then return M.Think(st, p) end
         return Think(st, p)
     end
+    -- A unit's step (true: the mode moved it itself), who can hit whom,
+    -- where a building can go.
+    local Tick = E.UnitTick
+    function E.UnitTick(st, u, dt)
+        if Tick and Tick(st, u, dt) then return true end
+        local M = WC.Mode(st)
+        if M.UnitTick then return M.UnitTick(st, u, dt) end
+    end
+    local CanHit = E.CanHit
+    function E.CanHit(st, a, t)
+        if CanHit and not CanHit(st, a, t) then return false end
+        local M = WC.Mode(st)
+        if M.CanHit then return M.CanHit(st, a, t) end
+        return true
+    end
+    local CanBuildAt = E.CanBuildAt
+    function E.CanBuildAt(st, p, btype, x, y)
+        local M = WC.Mode(st)
+        if M.CanBuildAt then return M.CanBuildAt(st, p, btype, x, y) end
+        return CanBuildAt(st, p, btype, x, y)
+    end
 end

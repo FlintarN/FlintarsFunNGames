@@ -204,3 +204,20 @@ function WcPvpEnd(expectWin)
         "wc pvp: " .. PLAYER_NAME .. " sees " .. (expectWin and "Victory" or "Defeat") .. " (" .. tostring(v.overTitle:GetText()) .. ")")
     check(v.ls == nil, "wc pvp: the lockstep stops")
 end
+
+-- Tower Defense online: each side builds a tower in its lane and sends a
+-- creep at the other, through the lockstep like any other command.
+function WcPvpTdOrder(n)
+    local v = View()
+    local st = v.st
+    if not st or not v.ls or not st.td then return end
+    local seat = v.ls.seat
+    local pl = st.players[seat]
+    local L = WC.Modes.td.Lane(st, seat)
+    if n % 3 == 0 then
+        local k = math.floor(n / 3)
+        v:Cmd({ type = "build", unit = pl.td.builder, btype = "td_arrow", x = L.x0 + (k % 4) * 2, y = 7 + math.floor(k / 4) * 5 })
+    elseif n % 3 == 1 and pl.gold >= 15 then
+        v:Cmd({ type = "tdSend", unit = "td_kobold" })
+    end
+end

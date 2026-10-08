@@ -346,6 +346,13 @@ function WcDemo()
     view.camX, view.camY = 0, mk.y * 20 - 150
     view:Draw()
     local m = view.unitFrames[mk.id].model
+    -- Team colour in the unit's light: player 1 blue, player 2 red.
+    local a = m._ambient
+    if mk.owner == 1 then
+        check(a and a[3] > a[1], "wc looks: player 1's units are lit blue")
+    else
+        check(a and a[1] > a[3], "wc looks: player 2's units are lit red")
+    end
     local before = m.k
     E.AddBuff(mk, "avatar", 10)
     view:Draw()

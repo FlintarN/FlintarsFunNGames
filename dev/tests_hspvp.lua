@@ -206,7 +206,7 @@ function HsPvpCheck()
     local v = View()
     v:Refresh()
     check(s and s.stage == "play" or (s and s.phase == "done"), "hs pvp: " .. PLAYER_NAME .. " is in the game")
-    check(v.st and v.st.players[1].heroKey == (PLAYER_NAME == "Flintar" and "jaina" or "thrall"),
+    check(v.st and v.st.players[1].heroKey == (PLAYER_NAME == (HOST_NAME or "Flintar") and "jaina" or "thrall"),
         "hs pvp: " .. PLAYER_NAME .. " sees their own hero at the bottom")
     local hand = v.st and v.st.players[1].hand or {}
     check(#hand > 0 and hand[1].key ~= nil, "hs pvp: " .. PLAYER_NAME .. " sees their own cards")

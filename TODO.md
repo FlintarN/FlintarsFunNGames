@@ -173,6 +173,6 @@ Two switches only: Game sounds (inside the games) and Alerts (your turn, disconn
   1. Maps as data (ASCII grid + legend, symmetry, a validator); our map as "Riverford"; a map picker in the lobby.
   2. More players: seats and teams, one broadcast per turn on the group channel, the AI fills empty seats, bigger maps with a scrolling camera.
   3. Shared building blocks: buildings that spawn units on a timer, income on a timer, sending creeps.
-  4. [x] Footmen Frenzy v1 (4 corners, 2 races x 4 tiers, weapons/armor, one hero, bounty, send to, AI). [x] Give gold, tier 5, casters for hire. Later: counter wheel, more races. Then Hero Defense (co-op 4–5, reuses heroes/items/shops), Tower Defense (free-for-all up to 8, or teams; Line Tower Wars style), then DotA (5v5 on 96x96).
+  4. [x] Footmen Frenzy v1 (4 corners, 2 races x 4 tiers, weapons/armor, one hero, bounty, send to, AI). [x] Give gold, tier 5, casters for hire. Later: counter wheel, more races. Then Hero Defense (co-op 4–5, reuses heroes/items/shops), [x] Tower Defense v1 (Line Tower Wars: 2/4/8 lanes, FFA or teams, builder, 4 towers x 3 levels, sends + income, AI; later: invisible/regen waves, interest, a co-op mode with shared lives, Legion TD), then DotA (5v5 on 96x96).
   5. Later picks from other_customs.md: Castle Fight, Hero Line Wars, Legion TD, Wintermaul Wars, a Risk-style game, Island Defense, Troll and Elves.
 - [x] Custom games researched; order below: Footmen Frenzy, Tower Defense, Hero Defense, DotA, and others from dev/research/other_customs.md.

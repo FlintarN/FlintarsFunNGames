@@ -266,6 +266,14 @@ H.RULES = {
             .. "your soldiers every few seconds: they wait at home, or go to your rally point (Y) or where Send to (Z) "
             .. "says (the middle or an enemy). A fallen hero comes back by itself after a while. Kills give gold: buy the next tier of "
             .. "soldiers (from 3:00), Weapons and Armor levels, and one hero (Hire a Hero, H). The last barracks standing wins." },
+        { "Tower Defense", "A game mode (Line Tower Wars): a lane each, 2 to 8 players, free for all or in teams, or alone (hold out as long "
+            .. "as you can; your best wave is kept). Creeps "
+            .. "come down every lane in waves; each one that gets out costs a life (a boss five), and at 0 your gate falls. "
+            .. "Your flying builder (B) puts towers anywhere in your lane: Arrow (hits flyers), Cannon (groups, ground only), "
+            .. "Frost (slows) and cheap Maze Walls. Build a maze, but never close the path (the ghost turns red). Select a "
+            .. "tower to upgrade it (U, three levels) or sell it (X) for 75%. Your gate sends creeps into the next "
+            .. "opponent's lane: each send raises your income, paid every 15 seconds. Every 5th wave flies, every 7th is "
+            .. "fast, every 10th is a boss. The last one with lives wins." },
         { "PvP", "Play a friend opens a lobby (group, guild, realm or a private code); Find an opponent looks for "
             .. "someone on your realm. You each pick a race. Both addons run the same game: your orders reach the "
             .. "other side in a moment, so they take effect about half a second after you click. If the other "
@@ -319,10 +327,11 @@ H.RULES = {
         { "The idea", "Everyone is a blob in one big arena. Eat the coloured dots to grow. Touch a blob that's "
             .. "clearly smaller than you (under 85% of your size) to swallow it. Bigger blobs can swallow you." },
         { "Moving", "W A S D (or the arrow keys) while the arena is open, or hold the left mouse button: your blob "
-            .. "heads towards the cursor. Big blobs are slower, and slowly shrink, so nobody stays on top forever." },
+            .. "heads towards the cursor. Big blobs are slower, and above mass 100 slowly shrink, so nobody stays on top forever." },
+        { "Mass", "The number is your mass, as in Agar.io: every dot is +1, and swallowing a player adds most of theirs." },
         { "Eaten?", "Click the arena to jump back in at the start size." },
         { "Lobbies", "Open the arena to your group, guild, realm, or friends with a code. Players can drop in while "
-            .. "it's open; only the host closes it. Your best size is saved." },
+            .. "it's open; only the host closes it. Your best mass is saved." },
         { "Practice", "Practice mode fills the arena with bots that chase smaller blobs, run from bigger ones and "
             .. "graze on dots." },
     },

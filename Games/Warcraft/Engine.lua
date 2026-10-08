@@ -85,6 +85,15 @@ function E.CanPlace(st, x, y, size)
     return true
 end
 
+-- Can player p put a building of type btype at (x, y)? (A mode can add its
+-- own rules: Tower Defense keeps you in your lane and never lets you block
+-- the creeps' path. See Modes.lua.) Returns ok, why.
+function E.CanBuildAt(st, p, btype, x, y)
+    local size = D().Buildings[btype].size
+    if not E.CanPlace(st, x, y, size) then return false, "can't build there" end
+    return true
+end
+
 local function Occupy(st, e, on)
     for yy = e.y, e.y + e.size - 1 do
         for xx = e.x, e.x + e.size - 1 do
@@ -1354,6 +1363,8 @@ local function BuildingStep(st, b, dt)
                 end
                 -- An Arcane Tower burns mana.
                 if d.attack.burn and t.mana and t.mana > 0 then t.mana = math.max(0, t.mana - d.attack.burn) end
+                -- A Frost Tower slows what it hits (seconds).
+                if d.attack.slow and E.AddBuff and t.kind == "unit" and not t.dead then E.AddBuff(t, "slow", d.attack.slow) end
                 b.cd = d.attack.cooldown / (gar and #gar or 1) -- more peons, faster spears
             end
         end
@@ -1782,7 +1793,9 @@ function E.Step(st, dt)
             Emit("defeated", { owner = p })
         end
     end
-    if alive <= 1 then
+    -- (A mode played alone - Tower Defense - goes on until you're out.)
+    local solo = D().Modes and D().Modes[st.mode] and D().Modes[st.mode].solo and E.PlayerCount(st) == 1
+    if alive <= 1 and not (solo and alive == 1) then
         st.over = true
         st.winner = last or 0 -- a player of the winning team
         Emit("over", { winner = st.winner })

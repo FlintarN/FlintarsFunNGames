@@ -91,10 +91,18 @@ local function LoadModel(m)
     m.tried = GetTime and GetTime() or 0
 end
 
+-- A model sits in a cropping frame (m.clip, the one to position): a 3D model
+-- isn't held to its own rectangle, and big creatures spilled over the card's
+-- border. The border itself is on a higher level (see Lift).
 local function MakeModel(parent, art, level)
-    local ok, m = pcall(CreateFrame, "PlayerModel", nil, parent)
+    local clip = CreateFrame("Frame", nil, parent)
+    if clip.SetClipsChildren then clip:SetClipsChildren(true) end
+    local ok, m = pcall(CreateFrame, "PlayerModel", nil, clip)
     if not ok or not m or not m.SetCreature then return nil end
-    m:SetFrameLevel(parent:GetFrameLevel() + (level or 1))
+    clip:SetFrameLevel(parent:GetFrameLevel() + (level or 1))
+    m:SetFrameLevel(clip:GetFrameLevel())
+    m:SetAllPoints(clip)
+    m.clip = clip
     m.art = art
     m.waits = pcall(m.SetScript, m, "OnModelLoaded", function(self)
         self.loaded = true
@@ -245,6 +253,33 @@ local function RetryModels()
     end
 end
 
+-- A card's layers (model, border, badges) keep their distance above it when
+-- the card moves up or down (hover, drag, attack): WoW doesn't keep a
+-- frame's children in step, and a model level with the border could be
+-- drawn over it.
+local LAYERS = { "top", "gem", "atk", "hp", "armor" }
+local function Remember(f)
+    local base = f:GetFrameLevel()
+    f.layers = {}
+    if f.model then
+        table.insert(f.layers, { f.model.clip, f.model.clip:GetFrameLevel() - base })
+        table.insert(f.layers, { f.model, f.model:GetFrameLevel() - base })
+    end
+    for _, key in ipairs(LAYERS) do
+        local x = f[key]
+        -- (Not the hero's badges: they sit on a fixed high level, over the hand.)
+        if type(x) == "table" and x.GetFrameLevel and x.SetFrameLevel and x ~= f and x:GetFrameLevel() - base <= 8 then
+            table.insert(f.layers, { x, x:GetFrameLevel() - base })
+        end
+    end
+end
+
+local function Lift(f, level)
+    f:SetFrameLevel(level)
+    for _, l in ipairs(f.layers or {}) do l[1]:SetFrameLevel(level + l[2]) end
+end
+P.Lift = Lift
+
 -- A card face (hand, preview, enemy plays). Works at any size.
 local function MakeCard(parent, w, h)
     local f = CreateFrame("Button", nil, parent)
@@ -254,7 +289,7 @@ local function MakeCard(parent, w, h)
     f.art = f:CreateTexture(nil, "ARTWORK", nil, -1)
     f.artBg:SetAllPoints(f.art)
     f.model = MakeModel(f, f.art, 1)
-    if f.model then f.model:SetAllPoints(f.art) end
+    if f.model then f.model.clip:SetAllPoints(f.art) end
     -- The frame, back and text sit above the model.
     local top = CreateFrame("Frame", nil, f)
     top:SetAllPoints()
@@ -373,6 +408,7 @@ local function MakeCard(parent, w, h)
             if stats then self.atk.text:SetTextColor(atk > c.attack and 0.4 or 1, 1, atk > c.attack and 0.4 or 1) end
         end
     end
+    Remember(f)
     return f
 end
 
@@ -405,8 +441,8 @@ local function MakeMinion(parent)
     f.model = MakeModel(f, f.art, 1)
     if f.model then
         -- A model is a rectangle: keep it inside the oval.
-        f.model:SetSize((MIN_W - 8) * 0.74, (MIN_H - 8) * 0.74)
-        f.model:SetPoint("CENTER", f.art, "CENTER", 0, 1)
+        f.model.clip:SetSize((MIN_W - 8) * 0.74, (MIN_H - 8) * 0.74)
+        f.model.clip:SetPoint("CENTER", f.art, "CENTER", 0, 1)
     end
     local top = CreateFrame("Frame", nil, f)
     top:SetAllPoints()
@@ -436,6 +472,7 @@ local function MakeMinion(parent)
     f.zzz = W.Label(top, "z z", "GameFontHighlightSmall")
     f.zzz:SetPoint("TOP", 0, 6)
     f.zzz:SetTextColor(0.8, 0.85, 1)
+    Remember(f)
     return f
 end
 
@@ -449,8 +486,8 @@ local function MakeHero(parent)
     f.model = MakeModel(f, f.portrait.class, 3)
     if f.model then
         -- Inset so the square model's corners stay under the gold frame.
-        f.model:SetPoint("TOPLEFT", 11, -11)
-        f.model:SetPoint("BOTTOMRIGHT", -11, 11)
+        f.model.clip:SetPoint("TOPLEFT", 11, -11)
+        f.model.clip:SetPoint("BOTTOMRIGHT", -11, 11)
     end
     local top = CreateFrame("Frame", nil, f)
     top:SetAllPoints()
@@ -501,6 +538,7 @@ local function MakeHero(parent)
     wpn:EnableMouse(true)
     wpn:Hide()
     f.weapon = wpn
+    Remember(f)
     return f
 end
 
@@ -751,8 +789,8 @@ function P.New(parent, kind)
         if btn.portrait.ring then btn.portrait.ring:Hide() end
         btn.model = MakeModel(btn.portrait, btn.portrait.class, 3)
         if btn.model then
-            btn.model:SetPoint("TOPLEFT", 9, -9)
-            btn.model:SetPoint("BOTTOMRIGHT", -9, 9)
+            btn.model.clip:SetPoint("TOPLEFT", 9, -9)
+            btn.model.clip:SetPoint("BOTTOMRIGHT", -9, 9)
             SetModel(btn.model, btn.portrait.class, h.npc, 0.95)
         end
         -- The gold frame on top hides the model's square corners.
@@ -1733,12 +1771,12 @@ function P:Animate(events, before)
             local f = ev.attacker <= 2 and self.heroes[ev.attacker] or self.minions[ev.attacker]
             if a and t and f then
                 local fx, fy = a[1], a[2]
-                f:SetFrameLevel(self.board:GetFrameLevel() + 30)
+                Lift(f, self.board:GetFrameLevel() + 30)
                 C.Tween(dur, function(kk)
                     local d = kk < 0.5 and (kk / 0.5) or (1 - (kk - 0.5) / 0.5)
                     d = d * d * (3 - 2 * d) * 0.78
                     K.Place(f, self.board, fx + (t[1] - fx) * d, fy + (t[2] - fy) * d)
-                end, function() f:SetFrameLevel(self.board:GetFrameLevel() + 10) end, lead)
+                end, function() Lift(f, self.board:GetFrameLevel() + 10) end, lead)
                 self:Burst(t[1], t[2], SCHOOL.physical, ctx.start, 40)
             end
             self:AttackSound(ev, lead, ctx.start)
@@ -1857,7 +1895,7 @@ function P:MinionFrame(id)
     local f = self.minions[id]
     if f then return f, false end
     f = table.remove(self.free) or MakeMinion(self.board)
-    f:SetFrameLevel(self.board:GetFrameLevel() + 10)
+    Lift(f, self.board:GetFrameLevel() + 10)
     f:SetScript("OnClick", function(_, button)
         if button == "RightButton" then return self:Cancel() end
         self:ClickEntity(f.id)
@@ -1888,14 +1926,14 @@ function P:HandFrame(id)
     end)
     f:SetScript("OnEnter", function()
         if not f.mine then return end
-        f:SetFrameLevel(self.board:GetFrameLevel() + 68)
+        Lift(f, self.board:GetFrameLevel() + 68)
         K.Place(f, self.board, f.x, f.y - 14)
         self.preview:SetCard(f.key)
         self.preview:Show()
     end)
     f:SetScript("OnLeave", function()
         if self.drag and self.drag.f == f and self.drag.moved then return end
-        f:SetFrameLevel(self.board:GetFrameLevel() + 20 + (f.slot or 0) * 4)
+        Lift(f, self.board:GetFrameLevel() + 20 + (f.slot or 0) * 4)
         K.Place(f, self.board, f.x, f.y)
         self:HoverEnd()
     end)
@@ -2092,7 +2130,7 @@ function P:Draw(animate, before)
             end
             -- Each card gets its own band of 4 levels (card, portrait, frame, gems),
             -- so neighbours lie wholly on top of each other.
-            f:SetFrameLevel(self.board:GetFrameLevel() + 20 + j * 4)
+            Lift(f, self.board:GetFrameLevel() + 20 + j * 4)
             local x = mine and RowX(j, n, w, gap, centre) or RowX(j, n, w, gap, 230)
             local y = mine and Y.hand or Y.enemyHand
             if self.drag and self.drag.f == f and self.drag.moved then

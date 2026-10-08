@@ -46,6 +46,8 @@ A small real-time strategy game against the computer: Human or Orc, workers gath
 
 **Warcraft 4: Footmen Frenzy**: the classic custom game for four, with friends or computers.
 
+**Warcraft 4: Tower Defense**: Line Tower Wars for 2 to 8, free for all or in teams, or alone against the waves. A lane each, a flying builder, Arrow, Cannon and Frost towers in three levels; mazes (but never blocked), waves with flyers and bosses, and sends that push creeps into the next player's lane and raise your income.
+
 **Warcraft 4 with friends**: up to eight players in teams, with computers in the empty seats.
 
 **Warcraft 4 maps**: pick from five maps, from a quick duel to a four-player map.

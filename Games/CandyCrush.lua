@@ -215,7 +215,9 @@ function G:Click(view, x, y)
     if s and math.abs(s[1] - r) + math.abs(s[2] - c) == 1 then
         return self:Swap(view, s[1], s[2], r, c)
     end
-    view.sel = (s and s[1] == r and s[2] == c) and nil or { r, c }
+    -- Clicking the selected candy again lets go of it. (Not `x and nil or y`:
+    -- that's never nil in Lua.)
+    if s and s[1] == r and s[2] == c then view.sel = nil else view.sel = { r, c } end
     W.Sfx("click")
     self:Draw(view)
 end

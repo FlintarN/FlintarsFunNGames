@@ -771,3 +771,44 @@ function WcTechAI()
     end
     check(any > 0, "wc tech: the computer researched something (" .. any .. " levels; " .. table.concat(info, "; ") .. ")")
 end
+
+-- Three computers, each on its own team: they attack each other, not only
+-- one side (a wave goes to the nearest enemy base; never a neutral shop).
+function WcFreeForAll()
+    local st = E.New({ factions = { "human", "orc", "human" }, teams = { 1, 2, 3 }, map = "four_crowns",
+        creeps = true, seed = 11, difficulties = { [1] = "normal", [2] = "normal", [3] = "normal" } })
+    local at = {} -- [p][owner of the building nearest the wave's goal]
+    local base = E.Command
+    E.Command = function(s, p, cmd)
+        if cmd.type == "attackMove" and cmd.x then
+            local best, who
+            for _, id in ipairs(s.list) do
+                local e = s.ents[id]
+                if e and e.kind == "building" then
+                    local cx, cy = E.Center(e)
+                    local d = (cx - cmd.x) ^ 2 + (cy - cmd.y) ^ 2
+                    if not best or d < best then best, who = d, e.owner end
+                end
+            end
+            at[p] = at[p] or {}
+            at[p][who] = (at[p][who] or 0) + 1
+        end
+        return base(s, p, cmd)
+    end
+    local ok, err = pcall(Run, st, 20 * 60, 0.1, { 1, 2, 3 })
+    E.Command = base
+    check(ok, "wc ffa: runs (" .. tostring(err) .. ")")
+    local neutral = 0
+    for p = 1, 3 do
+        local others = 0
+        for owner, n in pairs(at[p] or {}) do
+            if owner ~= p and st.players[owner] and not st.players[owner].neutral then others = others + n end
+            if st.players[owner] and st.players[owner].neutral then neutral = neutral + n end
+        end
+        check(others > 0, "wc ffa: computer " .. p .. " sends waves at another player (" .. others .. ")")
+    end
+    check(neutral == 0, "wc ffa: no waves at neutral shops")
+    local razed = 0
+    for p = 1, 3 do razed = razed + ((st.score and st.score[p] and st.score[p].razed) or 0) end
+    check(razed > 0, "wc ffa: the computers raze each other's buildings (" .. razed .. ")")
+end

@@ -184,7 +184,8 @@ end
 function P:SaveBest()
     if not self.peak then return end
     ns.db.best = ns.db.best or {}
-    ns.db.best.agario = math.max(ns.db.best.agario or 0, math.floor(self.peak))
+    -- (Saved as mass; older versions saved the radius under "agario".)
+    ns.db.best.agarioMass = math.max(ns.db.best.agarioMass or 0, ns.Games.agario.Mass(self.peak))
 end
 
 -- Players I swallowed lately (name -> when): they go in my state for a few
@@ -500,13 +501,13 @@ function P:Draw()
     for i, row in ipairs(self.rows) do
         local o = all[i]
         if o then
-            row:SetText((o.mine and "|cff40ff40" or "|cffdddddd") .. i .. ". " .. o.name .. "  " .. math.floor(o.r) .. "|r")
+            row:SetText((o.mine and "|cff40ff40" or "|cffdddddd") .. i .. ". " .. o.name .. "  " .. ns.Games.agario.Mass(o.r) .. "|r")
         else
             row:SetText("")
         end
     end
-    self.size:SetText(me.alive and ("Size " .. math.floor(me.r)) or "|cffff6060Eaten!|r")
-    self.best:SetText("Best " .. math.max(ns.db.best and ns.db.best.agario or 0, math.floor(self.peak or me.r)))
+    self.size:SetText(me.alive and ("Mass " .. ns.Games.agario.Mass(me.r)) or "|cffff6060Eaten!|r")
+    self.best:SetText("Best " .. math.max(ns.db.best and ns.db.best.agarioMass or 0, ns.Games.agario.Mass(self.peak or me.r)))
     if me.alive then
         self.center:SetText("")
         self.centerSub:SetText("")

@@ -154,7 +154,32 @@ m.mirror4()
 maps.append(dict(key='frenzy_fields', name='Frenzy Fields', players=4, symmetry='rot180', modes='footmen', rows=m.rows(),
     text='Footmen Frenzy for four: a barracks in each corner, paths to both neighbours and the middle, a shop in the centre.'))
 
+# Tower Defense (Line Tower Wars): a lane per player side by side, 10 tiles
+# wide between walls of trees (2 thick). Creeps come in at the top (row 2),
+# towers go in rows 5..32, row 33 is the exit; under it the player's gate
+# (the start, 4 x 4) in a pocket. Games/Warcraft/TowerDefense.lua reads the
+# lanes from the starts (lane x = start x - 3).
+def td_map(n):
+    w = max(12 * n + 2, 40)
+    w += (w - (12 * n - 2)) % 2
+    h = 40
+    margin = (w - (12 * n - 2)) // 2
+    g = [['T'] * w for _ in range(h)]
+    for i in range(n):
+        x0 = margin + i * 12
+        for y in range(2, 34):
+            for x in range(x0, x0 + 10): g[y][x] = '.'
+        for y in range(34, 38):
+            for x in range(x0 + 3, x0 + 7): g[y][x] = '.'
+        g[34][x0 + 3] = str(i + 1)
+    return [''.join(r) for r in g]
+
+for n, key, name in ((2, 'td_duel', 'Tower Duel'), (4, 'td_four', 'Four Lanes'), (8, 'td_eight', 'Eight Lanes')):
+    maps.append(dict(key=key, name=name, players=n, symmetry='none', modes='td', rows=td_map(n),
+        text=f'Tower Defense for up to {n}: a lane each. Build a maze of towers; what gets through costs a life.'))
+
 def lua_str(s): return '"' + s + '"'
+
 out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   .  open ground        T  tree
 --   1..9  a start (the top-left tile of its 4 x 4 hall)
@@ -162,7 +187,7 @@ out = ['''-- Warcraft III maps: a grid of text, one character per tile.
 --   S  a shop for everyone (the top-left tile of its 2 x 2 footprint): a Goblin Merchant
 --   X  a Mercenary Camp (2 x 2): hire creeps there
 --   e m h  a creep camp: easy, medium, hard (its middle; Creeps.lua)
--- mode: the game mode the map is for ("melee", "footmen").
+-- mode: the game mode the map is for ("melee", "footmen", "td").
 -- symmetry "rot180": the map is the same turned round (start 1 <-> 2,
 -- 3 <-> 4), so both sides are fair; the tests check it. Made by a script
 -- (dev/make_maps.py), but fine to edit by hand: keep it symmetric.
@@ -273,7 +298,7 @@ function WC.CheckMap(key)
         end
     end
     local s1 = p.starts[1]
-    if s1 then
+    if s1 and (m.mode or "melee") ~= "td" then -- (Tower Defense lanes are walled off on purpose)
         local q, head = { (s1[2] + 4) * p.w + s1[1] + 4 }, 1
         seen[q[1]] = true
         while head <= #q do

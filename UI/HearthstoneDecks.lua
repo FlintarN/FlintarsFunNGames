@@ -69,13 +69,17 @@ local function Build(page)
     end
     f.costs = {}
     for i, label in ipairs(COSTS) do
+        -- "All" is no cost filter (nil). (Not `i == 1 and nil or ...`: that's
+        -- never nil in Lua, it gave -1 and hid every card.)
+        local cost
+        if i > 1 then cost = i - 2 end
         local btn = W.Button(f, label, i == 1 and 36 or 26, function()
-            f.filterCost = i == 1 and nil or (i - 2)
+            f.filterCost = cost
             f.page = 1
             D.Refresh(f)
         end, 20)
         btn:SetPoint("TOPLEFT", 170 + (i == 1 and 0 or 40 + (i - 2) * 28), -34)
-        btn.cost = i == 1 and nil or (i - 2)
+        btn.cost = cost
         f.costs[i] = btn
     end
 
