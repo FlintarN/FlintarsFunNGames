@@ -64,6 +64,15 @@ TD.TOWERS = {
     { kind = "wall", base = "scout_tower", name = "Maze Wall", hotkey = "W", icon = I .. "INV_Stone_15",
         text = "No attack: a cheap block for your maze.", levels = { { 10 } } },
 }
+-- Their looks: a model of its own for each kind (and a tint for levels 2
+-- and 3: cooler, then golden), so a maze reads at a glance.
+TD.LOOKS = {
+    arrow = { file = 2061081, tall = 2.0 },  -- the orc watch tower (8or_warfronts_magictower)
+    cannon = { file = 198079, tall = 1.2 },  -- generic/human/passive doodads/cannon/cannonlarge
+    frost = { file = 2061082, tall = 2.0 },  -- the human mage tower (8hu_warfronts_magictower)
+    wall = { file = 189580, tall = 1.0 },    -- azeroth/duskwood/passivedoodads/walls/duskwoodrockwall
+}
+TD.LEVEL_TINT = { nil, { 0.75, 0.9, 1.25 }, { 1.3, 1.1, 0.6 } }
 TD.BUILDS = {}  -- what the builder offers (level 1 of each)
 TD.VALUE = {}   -- gold put into a tower of each type (for selling)
 for _, t in ipairs(TD.TOWERS) do
@@ -80,6 +89,8 @@ for _, t in ipairs(TD.TOWERS) do
             icon = t.icon, cost = { l[1], 0 }, time = 0, hp = 400 + lv * 200, armor = 5, food = 0, requires = false,
             attack = attack or false, detects = false, tdTower = true, tdKind = t.kind, tdLevel = lv, tdText = t.text })
         TD.VALUE[key] = spent
+        local look = TD.LOOKS[t.kind]
+        WC.ART.models[key] = { file = look.file, tall = look.tall, tint = TD.LEVEL_TINT[lv] }
         if lv == 1 then table.insert(TD.BUILDS, key) end
         if lv > 1 then
             local from = "td_" .. t.kind .. (lv > 2 and (lv - 1) or "")

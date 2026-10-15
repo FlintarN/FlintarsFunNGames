@@ -218,11 +218,26 @@ end
 
 local function SendParts(cmd, data, chatType, target, prefix, key)
     data = data or ""
+    -- A newer message with the same key takes the waiting one's place in the
+    -- line (not the back of it: replaced again and again, it would never go).
+    -- Only a message none of whose parts has gone out yet: one cut off
+    -- halfway would never arrive, and the next one again, and again.
+    local spot, spotQ
     if key then
         key = key .. "|" .. chatType .. "|" .. tostring(target)
+        local left = {}
         for _, q in pairs(queue) do
+            for _, m in ipairs(q) do
+                if m.key == key then left[m.mid] = (left[m.mid] or 0) + 1 end
+            end
+        end
+        for p, q in pairs(queue) do
             for j = #q, 1, -1 do
-                if q[j].key == key then table.remove(q, j) end
+                local m = q[j]
+                if m.key == key and left[m.mid] == m.parts then
+                    table.remove(q, j)
+                    if not spot or (spotQ == p and j < spot) then spot, spotQ = j, p end
+                end
             end
         end
     end
@@ -240,10 +255,19 @@ local function SendParts(cmd, data, chatType, target, prefix, key)
             p = ALL[spreadNext]
         end
         p = p or Net.PREFIX
-        local q = Queue(p)
-        q[#q + 1] = { msg = cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. "@" .. me .. ":" .. part,
-            chatType = chatType, target = target, key = key }
-        used[p] = true
+        local entry = { msg = cmd .. ":" .. nextId .. ":" .. i .. "/" .. n .. "@" .. me .. ":" .. part,
+            chatType = chatType, target = target, key = key, mid = nextId, parts = n }
+        if spot then
+            -- (into the replaced one's place, on its prefix)
+            local q = Queue(spotQ)
+            table.insert(q, math.min(spot, #q + 1), entry)
+            spot = spot + 1
+            used[spotQ] = true
+        else
+            local q = Queue(p)
+            q[#q + 1] = entry
+            used[p] = true
+        end
     end
     for p in pairs(used) do Drain(p) end
     return true
@@ -256,11 +280,11 @@ function Net.Send(cmd, data, scope, key)
     return SendParts(cmd, data, chatType, target, nil, key)
 end
 
--- To one player, on the fast prefixes (real-time games).
-function Net.WhisperFast(cmd, data, target)
+-- To one player, on the fast prefixes (real-time games). `key`: see SendParts.
+function Net.WhisperFast(cmd, data, target, key)
     if not SendAddon then return false end
     fastNext = fastNext % #Net.FAST + 1
-    return SendParts(cmd, data, "WHISPER", Net.Full(target), Net.FAST[fastNext])
+    return SendParts(cmd, data, "WHISPER", Net.Full(target), Net.FAST[fastNext], key)
 end
 
 -- To a whole scope (the group) on the fast prefixes: one message for everyone.

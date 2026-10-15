@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.5 (2026-10-16)
+
+### Changed
+- **Hero Defense: levels mean something.** About one level a wave (level 25 is the very end, not the middle).
+- **Hero Defense: bosses hold the waves.** The next wave comes the full wait after the boss falls; a boss still standing after two minutes enrages (hits harder every 30 seconds), so a fight always ends. Bosses have less health and hit harder.
+- **Hero Defense: steady loot.** Every wave brings about the same amount (around one item per player, a little extra with a boss) instead of almost nothing early and a flood from VanCleef on. Mostly grey and white, so there's something new to wear often; green and blue stay special. Bosses drop their own item and one more.
+- **Loot is picked up by clicking it** (your hero walks over if it's further off), not by walking over it. Items on the ground have tooltips. The Merchant sells all your grey items at once (Sell Grey Items).
+- **Spells show what they did:** each class spell has its effect, and its damage or healing pops up over the target.
+- **Tower Defense: towers look different.** Arrow Towers are orc watch towers, Frost Towers mage towers, Cannon Towers a big cannon, Maze Walls a stone wall; upgraded towers are tinted (cooler, then golden).
+
+### Fixed
+- **Warcraft 4: lag with several players.** Games with 3-4 players could stutter, or freeze for good, when people clicked a lot or a connection was slow:
+  - A message waiting in WoW's send line was replaced by a newer one halfway through, so the others never got a whole one.
+  - Fast clicks made every message bigger.
+  - Outside a group, each player was sent their own copy.
+  
+  Now a message that has started is never cut off, another order to the same units replaces the last one, and the game's fingerprint is short. Outside a group, a game talks on its own hidden channel. Messages go right after each turn, and each player's command delay follows their own connection: short on a quick one, a little longer on a slow one, instead of everyone waiting.
+- **The merchants never sold anything** (Hero Defense's Merchant, and the Goblin Merchant and Mercenary Camp in normal games): they were made as gold mines, so their buttons never showed. And the Merchant is now a goblin tent instead of an auction house sign.
+
 ## 1.1.4 (2026-10-08)
 
 ### New

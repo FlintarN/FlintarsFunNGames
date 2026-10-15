@@ -98,7 +98,7 @@ end
 function WcHdAiTests()
     local function Game()
         local st = E.New({ factions = { "human", "orc" }, map = "hd_castle", mode = "hd", seed = 5 })
-        Run(st, 1500, { 1, 2 })
+        Run(st, 1800, { 1, 2 })
         return st
     end
     local st = Game()

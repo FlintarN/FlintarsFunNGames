@@ -310,13 +310,19 @@ local function Heal(st, u, t, n)
     if not t or t.dead then return end
     local before = t.hp
     t.hp = math.min(t.maxHp, t.hp + n)
-    if t.hp > before then E.Emit("heal", { id = u.id, target = t.id, amount = math.floor(t.hp - before) }) end
+    if t.hp > before then
+        E.Emit("heal", { id = u.id, target = t.id, amount = math.floor(t.hp - before) })
+        E.Emit("spellNumber", { id = u.id, owner = u.owner, target = t.id, amount = math.floor(t.hp - before), heal = true })
+    end
 end
 C.Heal = Heal
 
 local function Hurt(st, u, t, n, physical)
     if not t or t.dead then return end
+    local before = t.hp
     E.Strike(st, u, t, n, true, physical and "hero" or "spell")
+    -- (for the numbers over the target: what it really took)
+    E.Emit("spellNumber", { id = u.id, owner = u.owner, target = t.id, amount = math.floor(before - math.max(0, t.hp)) })
 end
 
 -- Stat buffs on a unit: buffs named cls_<name> with dmg, haste, armor, speed, taken.

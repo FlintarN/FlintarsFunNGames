@@ -23,7 +23,8 @@ local HD = {
         .. "Start with one lane; open more at the castle when you're ready. Lose the castle and it's over.",
     coop = true, solo = true, fullXp = true, -- (every hero near a kill gets all its experience)
     START_GOLD = 250, FIRST_WAVE = 45, WAVE_EVERY = 40, WAVES = 20, SPACING = 0.6, SHARE = 0.3,
-    HEAL_RANGE = 7, HEAL = 0.03, -- (the castle's fountain: share of health a second, for your units close by)
+    HEAL_RANGE = 7, HEAL = 0.03, ENRAGE = 120, -- (a boss enrages after two minutes)
+    LOOT = 1.3, -- (items a player, each wave) -- (the castle's fountain: share of health a second, for your units close by)
     LANES = { "W", "N", "E", "S" },
     LANE_NAMES = { W = "West", N = "North", E = "East", S = "South" },
 }
@@ -50,28 +51,30 @@ WC.Items.hd_tome = { name = "Tome of Experience", cost = 300, icon = I .. "INV_M
     text = "600 experience for the hero who reads it." }
 WC.Derive("Buildings", "hd_merchant", "goblin_merchant", { name = "Merchant",
     sells = { "healing_potion", "mana_potion", "hd_tome", "claws", "ring", "boots" } })
+WC.ART.models.hd_merchant = WC.ART.models.goblin_merchant
+WC.ITEM_KEYS.hd_tome = "E" -- (the card's hotkey: Experience)
 
 -- The attackers.
 local function Creep(key, base, over)
     over.hdCreep, over.cost, over.food, over.requires = true, { 0, 0 }, 0, false
     WC.Derive("Units", key, base, over)
 end
--- (level: the experience they give - heroes here level fast, to about 20+ by
--- the last wave, as in Hero Siege)
-Creep("hd_kobold", "creep_kobold", { level = 10 })
-Creep("hd_wolf", "creep_wolf", { level = 10 })
-Creep("hd_gnoll", "creep_gnoll", { level = 14 })
-Creep("hd_murloc", "creep_murloc", { level = 14 })
-Creep("hd_thug", "creep_thug", { level = 18 })
-Creep("hd_ogre", "creep_ogre", { level = 25, hp = 650 })
+-- (level: the experience they give - a level every wave or so: level 25 is
+-- the very end, not the middle)
+Creep("hd_kobold", "creep_kobold", { level = 4 })
+Creep("hd_wolf", "creep_wolf", { level = 4 })
+Creep("hd_gnoll", "creep_gnoll", { level = 6 })
+Creep("hd_murloc", "creep_murloc", { level = 6 })
+Creep("hd_thug", "creep_thug", { level = 8 })
+Creep("hd_ogre", "creep_ogre", { level = 11, hp = 650 })
 -- Bosses from WoW's dungeons, every 4th wave; Onyxia last.
-Creep("hd_hogger", "creep_hogger", { name = "Hogger", level = 40 })
-Creep("hd_vancleef", "creep_thug", { name = "Edwin VanCleef", npc = 639, damage = 40, armor = 5, level = 50 })
-Creep("hd_arugal", "creep_gnoll", { name = "Archmage Arugal", npc = 4275, damage = 45, range = 5, armor = 4, level = 55 })
-Creep("hd_herod", "creep_ogre", { name = "Herod", npc = 3975, damage = 60, armor = 7, level = 65 })
-Creep("hd_onyxia", "creep_ogre", { name = "Onyxia", npc = 10184, damage = 85, armor = 9, level = 80 })
-HD.BOSSES = { [4] = { "hd_hogger", 1300 }, [8] = { "hd_vancleef", 2000 }, [12] = { "hd_arugal", 2600 },
-    [16] = { "hd_herod", 3400 }, [20] = { "hd_onyxia", 5000 } }
+Creep("hd_hogger", "creep_hogger", { name = "Hogger", level = 18 })
+Creep("hd_vancleef", "creep_thug", { name = "Edwin VanCleef", npc = 639, damage = 40, armor = 5, level = 22 })
+Creep("hd_arugal", "creep_gnoll", { name = "Archmage Arugal", npc = 4275, damage = 45, range = 5, armor = 4, level = 25 })
+Creep("hd_herod", "creep_ogre", { name = "Herod", npc = 3975, damage = 60, armor = 7, level = 30 })
+Creep("hd_onyxia", "creep_ogre", { name = "Onyxia", npc = 10184, damage = 85, armor = 9, level = 35 })
+HD.BOSSES = { [4] = { "hd_hogger", 1000 }, [8] = { "hd_vancleef", 1500 }, [12] = { "hd_arugal", 1900 },
+    [16] = { "hd_herod", 2400 }, [20] = { "hd_onyxia", 3200 } }
 
 -- What comes down each lane, by wave: soldiers by tier; a boss every 5th
 -- wave; the Ogre Warlord on the last.
@@ -94,8 +97,8 @@ function HD.Wave(w, n, lanes)
     local b = HD.BOSSES[w]
     if b then
         count = math.ceil(count / 2) -- (a boss wave: fewer with it)
-        local hp = 2 * b[2] * (0.6 + 0.4 * n) * (1 + w / 10)
-        boss = { b[1], math.floor(hp), dmgx * 1.2, 60 + 15 * w }
+        local hp = b[2] * (0.6 + 0.4 * n) * (1 + w / 10)
+        boss = { b[1], math.floor(hp), dmgx * 1.4, 60 + 15 * w } -- (short and dangerous, not a long grind)
     end
     local lane = {}
     for i = 1, count do
@@ -161,12 +164,33 @@ function HD.Step(st, dt)
     local hd = st.hd
     if not hd then return end
     local castle = st.ents[hd.castle]
+    -- A boss holds the waves: the next one comes the full wait after it falls.
+    local boss = hd.boss and st.ents[hd.boss]
+    local bossComing = false
+    for _, q in ipairs(hd.queue) do if q.boss then bossComing = true end end
+    if boss or bossComing then hd.nextWave = st.time + HD.WAVE_EVERY end
+    if not boss then hd.boss = nil end
+    -- Enrage (as in WoW): a boss still standing after two minutes hits half
+    -- again as hard every 30 seconds - the waves wait for it, never forever.
+    if boss then
+        boss.hdSince = boss.hdSince or st.time
+        local over = st.time - boss.hdSince - HD.ENRAGE
+        if over >= 0 and over - (boss.hdRage or -1) * 30 >= 30 then
+            boss.hdRage = (boss.hdRage or -1) + 1
+            boss.dmgMul = (boss.dmgMul or 1) * 1.5
+            E.Emit("hdEnrage", { id = boss.id, name = U[boss.type].name })
+        end
+    end
     if castle and st.time >= hd.nextWave and hd.wave < HD.WAVES then
         hd.wave = hd.wave + 1
         hd.nextWave = hd.nextWave + HD.WAVE_EVERY
         local lanes = 0
         for _ in pairs(hd.open) do lanes = lanes + 1 end
         local lane, boss = HD.Wave(hd.wave, hd.players, lanes)
+        -- Loot: the same amount every wave (about HD.LOOT items a player),
+        -- spread over however many creeps it has - not a trickle early and
+        -- a flood late.
+        hd.dropChance = math.max(4, math.min(70, math.floor(100 * HD.LOOT * hd.players / math.max(1, #lane * lanes) + 0.5)))
         local t, first = st.time, nil
         for _, key in ipairs(HD.LANES) do
             if hd.open[key] then
@@ -190,6 +214,7 @@ function HD.Step(st, dt)
             if x then
                 local u = E.Spawn(st, hd.creeps, s.unit, x + 0.5, y + 0.5)
                 u.maxHp, u.hp, u.dmgMul, u.hdBounty, u.hdBoss = s.hp, s.hp, s.dmg, s.bounty, s.boss
+                if s.boss then hd.boss = u.id end
                 local cx, cy = E.Center(castle)
                 E.Order(st, u, { type = "attackMove", x = cx, y = cy })
             end
@@ -263,7 +288,7 @@ function HD.OnDeath(st, t)
     end
     if t.hdBoss then E.Emit("hdBoss", { name = U[t.type].name }) end
     -- Loot, where it fell.
-    local drops = WC.Loot.Roll(st, hd.wave, t.type)
+    local drops = WC.Loot.Roll(st, hd.wave, t.type, hd.dropChance)
     if #drops > 0 then
         WC.Loot.Drop(st, drops, t.x, t.y)
         E.Emit("loot", { x = t.x, y = t.y, n = #drops, boss = t.hdBoss })
@@ -340,6 +365,16 @@ function HD.Think(st, p)
             if better and E.Command(st, p, { type = "equip", unit = hero.id, slot = i }) then break end
         end
     end
+    -- Loot close by: go and pick it up (not in the middle of a fight).
+    if not hero.pickup and not (hero.order and hero.order.type == "attack") then
+        for _, it in ipairs(st.items or {}) do
+            if (it.x - hero.x) ^ 2 + (it.y - hero.y) ^ 2 <= 36 and (#(hero.items or {}) < 6 or Loot.FreeSlot(hero, it.key)) then
+                E.Command(st, p, { type = "pickItem", unit = hero.id, item = it.id })
+                break
+            end
+        end
+    end
+    -- Junk goes when it's at the merchant anyway.
     -- A potion when badly hurt.
     if hero.hp < hero.maxHp * 0.35 then
         for i, key in ipairs(hero.items or {}) do
@@ -397,7 +432,9 @@ function HD.Panel(st, p)
     local hp = castle and math.floor(castle.hp) or 0
     local lanes = 0
     for _ in pairs(hd.open) do lanes = lanes + 1 end
-    local wave = hd.wave >= HD.WAVES and ("Last wave (" .. HD.WAVES .. ")")
+    local boss = hd.boss and st.ents[hd.boss]
+    local wave = boss and ("|cffff6060" .. U[boss.type].name .. "!|r Waves wait for it")
+        or hd.wave >= HD.WAVES and ("Last wave (" .. HD.WAVES .. ")")
         or string.format("Wave %d/%d in %ds", hd.wave + 1, HD.WAVES, math.max(0, math.ceil(hd.nextWave - st.time)))
     return "Castle " .. hp, wave .. "   " .. lanes .. (lanes == 1 and " lane" or " lanes"),
         castle and castle.hp < castle.maxHp * 0.3

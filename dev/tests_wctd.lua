@@ -35,6 +35,12 @@ function WcTdTests()
     local three = WC.MapsFor(3, "td")
     check(#three == 2 and three[1] == "td_four", "td: three players get the 4- and 8-lane maps")
     check(WC.MODE_ORDER[3] == "td", "td: a mode in the lobby")
+    -- Each kind of tower looks different; upgrades are tinted.
+    local M = WC.ART.models
+    check(M.td_arrow.file ~= M.td_frost.file and M.td_arrow.file ~= M.td_cannon.file and M.td_cannon.file ~= M.td_wall.file,
+        "td: arrow, cannon, frost and wall towers look different")
+    check(M.td_arrow.file == M.td_arrow3.file and M.td_arrow2.tint and M.td_arrow3.tint and not M.td_arrow.tint,
+        "td: higher levels are tinted")
 
     -- A game for two.
     local st = E.New({ factions = { "human", "orc" }, map = "td_duel", mode = "td", seed = 4 })

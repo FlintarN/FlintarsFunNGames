@@ -1,7 +1,8 @@
 -- Warcraft 4: WoW loot (Hero Defense). Items drop where creeps die, in WoW's
 -- qualities (grey, white, green, blue, purple) with Classic's suffixes ("of
--- the Bear"); bosses drop their own. Heroes pick items up by walking over
--- them, drop them (Drop: someone else can take it - trading), and sell them
+-- the Bear"); bosses drop their own. Heroes pick an item up when you click it
+-- (the hero walks over if it's further off), drop them (Drop: someone else
+-- can take it - trading), and sell them
 -- at a merchant. A class hero wears gear in six slots (one weapon, three
 -- armour, two accessories: only worn gear counts) and carries six more things
 -- in the bag (potions, tomes, spare gear).
@@ -122,12 +123,15 @@ end })
 
 -- What a creep of wave `wave` drops (keys; usually nothing). boss: its own
 -- item and two more good ones.
-function L.Roll(st, wave, utype)
+-- chance: the % a creep drops something (Hero Defense works it out per wave,
+-- so every wave brings about the same amount of loot).
+function L.Roll(st, wave, utype, chance)
     local out = {}
     local own = L.BOSS_DROPS[utype]
     local function One(minQ, lv)
         local r = E.Rand(st, 100)
-        local q = r <= 35 and 1 or r <= 65 and 2 or r <= 93 and 3 or 4
+        -- (mostly grey and white: something new to wear often; green and blue rarer)
+        local q = r <= 30 and 1 or r <= 75 and 2 or r <= 96 and 3 or 4
         q = math.max(q, minQ or 1)
         local b, s = E.Rand(st, #L.BASES), E.Rand(st, #L.SUFFIXES)
         table.insert(out, string.format("g:%d:%d:%d:%d", b, q, s, lv))
@@ -135,8 +139,7 @@ function L.Roll(st, wave, utype)
     if own then
         table.insert(out, "n:" .. own[E.Rand(st, #own)])
         One(3, wave + 2)
-        One(3, wave + 2)
-    elseif E.Rand(st, 100) <= 10 + wave then
+    elseif E.Rand(st, 100) <= (chance or math.min(55, 25 + wave * 1.5)) then
         One(1, wave + 1)
     end
     return out
@@ -147,7 +150,8 @@ function L.Drop(st, keys, x, y)
     st.items = st.items or {}
     for i, key in ipairs(keys) do
         local a = i * 2.4
-        table.insert(st.items, { key = key, x = x + math.cos(a) * 0.5, y = y + math.sin(a) * 0.5 })
+        st.nextItem = (st.nextItem or 0) + 1
+        table.insert(st.items, { id = st.nextItem, key = key, x = x + math.cos(a) * 0.5, y = y + math.sin(a) * 0.5 })
     end
     while #st.items > 80 do table.remove(st.items, 1) end -- (the oldest go)
 end
@@ -157,6 +161,7 @@ end
 -- accessories (rings, amulets, trinkets). Only worn gear counts.
 ---------------------------------------------------------------------------
 L.GEAR = { "weapon", "armor", "armor", "armor", "jewel", "jewel" }
+L.REACH = 1.6 -- (how close a hero must be to pick an item up)
 L.GEAR_NAMES = { weapon = "Weapon", armor = "Armour", jewel = "Accessory" }
 -- (the merchant's things to wear)
 WC.Items.claws.slot, WC.Items.ring.slot, WC.Items.boots.slot = "jewel", "jewel", "armor"
@@ -255,6 +260,36 @@ do
                 L.Give(st, h, cmd.item)
             end
             return ok, why
+        elseif cmd.type == "pickItem" then
+            -- Pick an item up: at once if the hero is next to it, else it walks there.
+            local h = st.ents[cmd.unit or 0]
+            if not (h and h.owner == p and E.IsHero(h) and not h.illusion) then return false, "a hero picks it up" end
+            local it
+            for _, x in ipairs(st.items or {}) do if x.id == cmd.item then it = x end end
+            if not it then return false, "it's gone" end
+            if #(h.items or {}) >= 6 and not L.FreeSlot(h, it.key) then return false, "the bag is full" end
+            h.pickup = it.id
+            if (h.x - it.x) ^ 2 + (h.y - it.y) ^ 2 > L.REACH * L.REACH then
+                E.Order(st, h, { type = "move", x = it.x, y = it.y })
+            end
+            return true
+        elseif cmd.type == "sellJunk" then
+            -- Every grey item in the bag, at once.
+            local h, shop = st.ents[cmd.unit or 0], st.ents[cmd.building or 0]
+            if not (h and h.owner == p and E.IsHero(h)) then return false, "a hero sells" end
+            if not (shop and E.Def(shop).sells) then return false, "sell at a merchant" end
+            local cx, cy = E.Center(shop)
+            if (h.x - cx) ^ 2 + (h.y - cy) ^ 2 > WC.SHOP_RANGE ^ 2 then return false, "bring the hero to the merchant" end
+            local gold, keep = 0, {}
+            for _, key in ipairs(h.items or {}) do
+                local it = WC.Items[key]
+                if it and it.quality == 1 then gold = gold + math.floor((it.cost or 0) * 0.5) else table.insert(keep, key) end
+            end
+            if gold == 0 then return false, "no grey items to sell" end
+            h.items = keep
+            st.players[p].gold = st.players[p].gold + gold
+            E.Emit("sellItem", { id = h.id, owner = p, gold = gold })
+            return true
         elseif cmd.type == "dropItem" then
             local h = st.ents[cmd.unit or 0]
             if not (h and h.owner == p and E.IsHero(h)) then return false, "a hero drops it" end
@@ -284,25 +319,30 @@ do
         end
         return Command(st, p, cmd)
     end
-    -- Picking up: a hero next to an item, with room in the bag. (Melee
-    -- games' creep camps do this themselves: Creeps.lua.)
+    -- Picking up: a hero sent for an item (pickItem) takes it once it's close.
+    -- (Melee games' creep camps: walking over, in Creeps.lua.)
     local World = E.WorldTick
     function E.WorldTick(st, dt)
         if World then World(st, dt) end
         if st.creeps or not st.items or #st.items == 0 then return end
-        for i = #st.items, 1, -1 do
-            local it = st.items[i]
-            for _, id in ipairs(st.list) do
-                local h = st.ents[id]
-                if h and E.IsHero(h) and not h.illusion and not h.dead
-                    and (#(h.items or {}) < 6 or L.FreeSlot(h, it.key))
-                    and (h.x - it.x) ^ 2 + (h.y - it.y) ^ 2 <= 0.81
-                    and not (h.dropped and h.dropped.key == it.key and st.time - h.dropped.t < 3) then
-                    L.Give(st, h, it.key)
-                    table.remove(st.items, i)
-                    if E.RefreshHero then E.RefreshHero(st, h) end
-                    E.Emit("pickup", { id = h.id, owner = h.owner, item = it.key })
-                    break
+        for _, id in ipairs(st.list) do
+            local h = st.ents[id]
+            if h and h.pickup and not h.dead then
+                local at
+                for i, x in ipairs(st.items) do if x.id == h.pickup then at = i end end
+                local it = at and st.items[at]
+                if not it then
+                    h.pickup = nil
+                elseif (h.x - it.x) ^ 2 + (h.y - it.y) ^ 2 <= L.REACH * L.REACH then
+                    h.pickup = nil
+                    if L.Give(st, h, it.key) then
+                        table.remove(st.items, at)
+                        if h.order and h.order.type == "move" then h.order, h.path = nil, nil end
+                        if E.RefreshHero then E.RefreshHero(st, h) end
+                        E.Emit("pickup", { id = h.id, owner = h.owner, item = it.key })
+                    end
+                elseif not h.order then
+                    h.pickup = nil -- (it stopped on the way: sent elsewhere)
                 end
             end
         end

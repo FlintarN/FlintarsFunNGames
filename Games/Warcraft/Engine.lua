@@ -371,7 +371,10 @@ end
 
 local function NewBuilding(st, owner, btype, x, y, done)
     local d = D().Buildings[btype]
-    local e = Add(st, { kind = d.neutral and "mine" or "building", type = btype, owner = owner, x = x, y = y,
+    -- (A neutral building is a gold mine - unless it sells or hires: the
+    -- Goblin Merchant and Mercenary Camp are buildings, or no card shows them.)
+    local mine = d.neutral and not d.sells and not d.hires
+    local e = Add(st, { kind = mine and "mine" or "building", type = btype, owner = owner, x = x, y = y,
         size = d.size, hp = done and d.hp or math.max(1, math.floor(d.hp * 0.1)), maxHp = d.hp,
         progress = done and 1 or 0, queue = {}, trainT = 0, garrison = d.garrison and {} or nil })
     Occupy(st, e, true)

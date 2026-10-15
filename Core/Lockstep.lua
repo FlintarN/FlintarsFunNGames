@@ -15,8 +15,21 @@
 -- have of that player's commands (r), so everyone ends up knowing the same
 -- before the computer takes the seat over: the player's last message may
 -- have reached some of us and not others.
--- Messages go once to the whole group when everyone is in it, else by
--- whisper to each player.
+-- Messages go once to everyone: the group when everyone is in it, else the
+-- game's own hidden channel (a code lobby's); whispers to each player only
+-- when there's neither. Only the newest message waits for WoW's send limit
+-- (each one carries everything the others are missing), so the game never
+-- falls behind a pile of old ones.
+--
+-- Kept small (one WoW message, 255 bytes, wherever possible): a newer order
+-- to the same units in the same turn replaces the older one (that turn isn't
+-- final yet, so nobody has run it), and the fingerprint is short and only
+-- rides along for a few messages. A message goes right after each turn runs
+-- (so the others hear "I'm through turn T" as early as possible).
+-- Each player's own delay (how many turns ahead their commands go) follows
+-- their measured round trip: a quick connection keeps it short, a slow one
+-- gets a longer one instead of making everyone stutter. That's safe per
+-- player: a command never goes into a turn already promised.
 --
 --   local g = ns.Lockstep.New({ id = gameId, seat = 1, peers = { [2] = "Bob", [3] = "Cara" },
 --       hash = function() return E.Hash(st) end })
@@ -36,6 +49,8 @@ L.BEAT = 0.5   -- and at least this often (a lost message is covered soon)
 L.HASH = 20    -- turns between fingerprints
 L.HIST = 64    -- turns of everyone's commands kept after they ran (to hand on if a player drops)
 L.RELAY = 5    -- seconds a player is quiet before the others pass on their commands
+L.MAX_DELAY = 6 -- the longest my own delay gets (on a slow connection)
+L.HASH_SENDS = 4 -- messages a fingerprint rides along in
 
 local games = {} -- id -> game (to deliver messages)
 local G = {}
@@ -50,7 +65,7 @@ end
 function L.New(o)
     local peers = o.peers or { [3 - o.seat] = o.peer }
     local g = setmetatable({
-        id = o.id, seat = o.seat, peers = peers, hash = o.hash, send = o.send,
+        id = o.id, seat = o.seat, peers = peers, hash = o.hash, send = o.send, scope = o.scope,
         turn = 0,                    -- the next turn to run
         mine = {},                   -- turn -> my commands
         theirs = {},                 -- seat -> turn -> commands
@@ -63,6 +78,8 @@ function L.New(o)
         hist = {},                   -- seat -> turn -> commands that ran (the last HIST turns)
         dropped = {},                -- seat -> the turn from which nobody gives its commands
         told = {},                   -- seat -> seat -> how far they said they know that seat
+        delay = L.DELAY,             -- how many turns ahead my commands go (see Measure)
+        pings = {},                  -- myThru -> when I first sent it (to measure the round trip)
     }, G)
     for seat in pairs(peers) do
         g.theirs[seat], g.thru[seat], g.acked[seat], g.theirHashes[seat] = {}, L.DELAY - 1, -1, {}
@@ -75,11 +92,51 @@ function L.Stop(g)
     if g then games[g.id] = nil end
 end
 
-function G:Command(cmd)
-    local t = self.turn + L.DELAY
-    self.mine[t] = self.mine[t] or {}
-    table.insert(self.mine[t], Clean(cmd))
+-- `same` (optional): a newer command with the same key in the same turn
+-- replaces the older one (another move order to the same units).
+function G:Command(cmd, same)
+    local t = math.max(self.turn + self.delay, self.myThru + 1)
+    local list = self.mine[t] or {}
+    self.mine[t] = list
+    local c = Clean(cmd)
+    local prev = self.lastSame
+    if same and #list > 0 and prev and prev[1] == t and prev[2] == same then
+        list[#list] = c
+    else
+        list[#list + 1] = c
+    end
+    self.lastSame = same and { t, same } or nil
     self.dirty = true
+end
+
+-- A short fingerprint (the game's own is long).
+local function Short(s)
+    local h = 0
+    for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
+    return h
+end
+
+-- The round trip to the slowest player sets my delay: my "through turn T"
+-- must reach them before they get to T. Up at once, down slowly.
+function G:Measure(seat, acked, now)
+    local sent = self.pings[acked]
+    if not sent then return end
+    local low = self:MinAcked()
+    for t in pairs(self.pings) do if t <= low then self.pings[t] = nil end end
+    local rtt = now - sent
+    self.rtt = self.rtt or {}
+    self.rtt[seat] = rtt
+    local worst = 0
+    for s, r in pairs(self.rtt) do if self.peers[s] and r > worst then worst = r end end
+    -- (they hear it after about half the round trip - less their wait to
+    -- answer - plus a little to spare; my promise runs delay-1 turns ahead)
+    local need = 1 + math.ceil(((worst - L.SEND / 2) / 2 + 0.05) / L.TURN)
+    need = math.max(L.DELAY, math.min(L.MAX_DELAY, need))
+    if need > self.delay then
+        self.delay, self.slowSince = need, now
+    elseif need < self.delay and now - (self.slowSince or 0) > 5 then
+        self.delay, self.slowSince = self.delay - 1, now
+    end
 end
 
 -- The lowest turn every other player has of mine.
@@ -106,22 +163,29 @@ function G:Send(now)
         if t <= low and t < self.turn then self.mine[t] = nil end
     end
     local c = {}
-    for t = low + 1, self.turn + L.DELAY do
+    for t = low + 1, math.max(self.turn + self.delay, self.myThru + 1) do
         if self.mine[t] and #self.mine[t] > 0 then table.insert(c, { t, self.mine[t] }) end
     end
     local a = {}
     for seat, thru in pairs(self.thru) do table.insert(a, { seat, thru }) end
     table.sort(a, function(x, y) return x[1] < y[1] end)
     local msg = { i = self.id, s = self.seat, t = self.myThru, a = a, c = c, r = self:Relay(now) }
-    if self.lastHash then msg.h = self.lastHash end
+    if self.lastHash and (self.hashSends or 0) > 0 then
+        msg.h = self.lastHash
+        self.hashSends = self.hashSends - 1
+    end
+    if not self.pings[self.myThru] then self.pings[self.myThru] = now end
     local data = ns.Serialize.Encode(msg)
     if self.send then
         self.send(data)
     elseif next(self.peers) then
+        local key = "LS" .. tostring(self.id) -- (a newer message replaces one still waiting)
         if AllInGroup(self.peers) then
-            ns.Net.SendFast("LS", data, "group")
+            ns.Net.SendFast("LS", data, "group", key)
+        elseif self.scope and ns.Net.Route(self.scope) then
+            ns.Net.SendFast("LS", data, self.scope, key)
         else
-            for _, name in pairs(self.peers) do ns.Net.WhisperFast("LS", data, name) end
+            for _, name in pairs(self.peers) do ns.Net.WhisperFast("LS", data, name, key .. name) end
         end
     end
     self.lastSend, self.dirty = now, false
@@ -153,9 +217,23 @@ function G:Relay(now)
 end
 
 function G:Update(now)
-    self.myThru = math.max(self.myThru, self.turn + L.DELAY - 1)
+    self.myThru = math.max(self.myThru, self.turn + self.delay - 1)
     local since = now - self.lastSend
-    if (self.dirty and since >= L.SEND) or since >= L.BEAT then self:Send(now) end
+    -- Whispering each player (no group, no channel yet): a message is several,
+    -- so send them less often, or WoW's limit holds them up and they pile up.
+    local gap, beat = L.SEND, L.BEAT
+    if not self.send and not self:OneMessage() then
+        local n = 0
+        for _ in pairs(self.peers) do n = n + 1 end
+        gap, beat = L.SEND * math.max(1, n * 0.6), math.max(L.BEAT, L.SEND * n)
+    end
+    -- (a little early is fine: right after a turn, not a frame later)
+    if (self.dirty and since >= gap * 0.8) or since >= beat then self:Send(now) end
+end
+
+-- Does one message reach everyone (the group, or the game's channel)?
+function G:OneMessage()
+    return AllInGroup(self.peers) or (self.scope ~= nil and ns.Net.Route(self.scope) ~= nil)
 end
 
 function G:CanRun()
@@ -231,10 +309,11 @@ function G:Run(fn)
     end
     fn(bySeat)
     self.turn = t + 1
+    self.dirty = true -- (tell the others I'm a turn further on)
     if t > 0 and t % L.HASH == 0 and self.hash then
-        local h = tostring(self.hash())
+        local h = tostring(Short(tostring(self.hash())))
         self.hashes[t] = h
-        self.lastHash = { t, h }
+        self.lastHash, self.hashSends = { t, h }, L.HASH_SENDS
         for seat in pairs(self.peers) do self:Check(seat, t) end
     end
 end
@@ -259,6 +338,7 @@ function G:Receive(msg, now)
         for _, pair in ipairs(msg.a) do
             if type(pair) == "table" and pair[1] == self.seat and type(pair[2]) == "number" then
                 self.acked[seat] = math.max(self.acked[seat], pair[2])
+                self:Measure(seat, pair[2], now)
             elseif type(pair) == "table" and type(pair[1]) == "number" and type(pair[2]) == "number" then
                 self.told[seat][pair[1]] = pair[2]
             end

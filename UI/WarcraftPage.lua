@@ -196,6 +196,16 @@ local function MakeDoodad(parent)
     if sc.SetCameraFieldOfView then sc:SetCameraFieldOfView(view.fov) end
     if sc.SetCameraNearClip then sc:SetCameraNearClip(0.1) end
     if sc.SetCameraFarClip then sc:SetCameraFarClip(5000) end
+    -- A tint in the light (Tower Defense's tower levels); nil: plain light.
+    function sc:Tint(col)
+        local key = col and (col[1] .. "," .. col[2] .. "," .. col[3]) or "none"
+        if self.tintKey == key or not self.SetLightAmbientColor then return end
+        self.tintKey = key
+        local r, g, b = 1, 1, 1
+        if col then r, g, b = col[1], col[2], col[3] end
+        self:SetLightAmbientColor(r, g, b)
+        if self.SetLightDiffuseColor then self:SetLightDiffuseColor(r, g, b) end
+    end
     -- Stand the model on the ground at the frame's centre, its width
     -- filling fp pixels (a building's footprint): see Fit.
     function sc:Ground(fp, look)
@@ -1474,6 +1484,15 @@ function P:Events(events)
             local s = ns.Session.Get(self.kind)
             local who = ev.owner == ME and "You" or (s and s.game and s.game.names and s.game.names[ev.owner] or ("Player " .. ev.owner))
             self:Say(who .. " opened the " .. WC().Modes.hd.LANE_NAMES[ev.lane] .. " lane!")
+        elseif ev.kind == "spellNumber" then
+            local t = self.st.ents[ev.target]
+            if (ev.owner == ME or (t and t.owner == ME)) and ev.amount > 0 and t and self:Sees(t) then
+                if ev.heal then self:Float(ev.target, "+" .. ev.amount, 0.3, 1, 0.3)
+                else self:Float(ev.target, tostring(ev.amount), 1, 0.85, 0.2) end
+            end
+        elseif ev.kind == "hdEnrage" then
+            self:Say(ev.name .. " is enraged and hits harder!")
+            W.PlaySound("RAID_WARNING")
         elseif ev.kind == "hdBoss" then
             self:Say(ev.name .. " is down! Its loot is on the ground.")
         elseif ev.kind == "pickup" and ev.owner == ME and WC().Items[ev.item] and WC().Items[ev.item].loot then
@@ -2568,6 +2587,7 @@ function P:Draw()
                 t.model:Ground(size, look)
                 t.model:SetDepth(self:DepthAt(e.y + e.size, RADIUS[look.file] or 30))
                 t.model:Use(look.file, look.facing)
+                if t.model.Tint then t.model:Tint(look.tint) end
                 Place(t.model, self.view, px + size / 2, py + size / 2)
                 t.model:SetAlpha(alpha)
                 t.model:Show()
@@ -3326,11 +3346,36 @@ function P:DrawCommands(sel)
                     local hk = WC().ITEM_KEYS[key]
                     local tip = it.cost .. " gold. " .. it.text
                     if not buyer then tip = "|cffff6060Bring a hero next to the shop.|r " .. tip end
-                    Add({ icon = it.icon, key = hk, title = "Buy " .. it.name .. " (" .. hk .. ")", cost = { it.cost, 0 }, tip = tip,
+                    Add({ icon = it.icon, key = hk, title = "Buy " .. it.name .. (hk and (" (" .. hk .. ")") or ""), cost = { it.cost, 0 }, tip = tip,
                         enabled = buyer ~= nil, action = function()
                             local ok, why = self:Cmd({ type = "buy", building = b.id, unit = buyer.id, item = key })
                             if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
                         end })
+                end
+            end
+            -- Sell the junk: every grey item the hero carries (a merchant).
+            if E().Def(b).sells and b.owner == 0 then
+                local cx, cy = E().Center(b)
+                local seller, junk, gold = nil, 0, 0
+                for _, id in ipairs(st.list) do
+                    local e = st.ents[id]
+                    if e and e.owner == ME and E().IsHero(e) and not e.illusion and (e.x - cx) ^ 2 + (e.y - cy) ^ 2 <= WC().SHOP_RANGE ^ 2 then
+                        seller = e
+                        break
+                    end
+                end
+                for _, key in ipairs(seller and seller.items or EMPTY) do
+                    local it = WC().Items[key]
+                    if it and it.quality == 1 then junk, gold = junk + 1, gold + math.floor((it.cost or 0) * 0.5) end
+                end
+                if seller then
+                    list[12] = { icon = IC .. "INV_Misc_Coin_02", key = "J", title = "Sell Grey Items (J)", enabled = junk > 0,
+                        tip = junk > 0 and string.format("Sell your %d grey item%s for %d gold. (Anything else: Shift+right-click it in the bag.)", junk, junk == 1 and "" or "s", gold)
+                            or "No grey items in the bag. (Sell anything else with Shift+right-click in the bag.)",
+                        action = function()
+                            local ok, why = self:Cmd({ type = "sellJunk", unit = seller.id, building = b.id })
+                            if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+                        end }
                 end
             end
             -- Mercenaries for hire (one of your units next to the camp).
@@ -3681,6 +3726,8 @@ function P:Sounds(events)
     end
 end
 
+local SAME_ORDER = { move = true, attack = true, attackMove = true, patrol = true }
+
 -- A command from your clicks. In PvP it's checked on a copy of the game (so
 -- you hear "not enough gold" at once) and runs in a later turn on both sides.
 function P:Cmd(cmd)
@@ -3689,7 +3736,13 @@ function P:Cmd(cmd)
         ok, why = E().Command(self.st, ME, cmd)
     else
         ok, why = E().Command(Copy(self.st), ME, cmd)
-        if ok then self.ls:Command(cmd) end
+        -- (another plain order to the same units in the same turn replaces
+        -- the last: clicking fast doesn't make the messages bigger)
+        local same
+        if ok and not cmd.queue and SAME_ORDER[cmd.type] and cmd.units then
+            same = cmd.type .. ":" .. table.concat(cmd.units, ",")
+        end
+        if ok then self.ls:Command(cmd, same) end
     end
     if ok then self:Acknowledge(cmd) end
     return ok, why
@@ -3786,7 +3839,19 @@ function P:StartPvp(s)
         if p ~= seat then peers[p] = name end
     end
     local st = self.st
-    self.ls = ns.Lockstep.New({ id = s.recordId, seat = seat, peers = peers,
+    -- Outside a group, one message on the game's own hidden channel rather
+    -- than a whisper to every player: a code lobby has one; a guild or realm
+    -- game joins one made from the game's id (whispers only until it's in).
+    local scope
+    if s.scope == "code" then
+        scope = ns.Session.Scope(s)
+    elseif next(peers) and s.scope and s.scope ~= "group" then
+        local code = tostring(s.recordId or ""):gsub("[^%w]", ""):sub(-8):upper()
+        scope = "code:G" .. code
+        ns.Net.JoinChannel(ns.Net.CodeChannel("G" .. code))
+        self.gameChannel = ns.Net.CodeChannel("G" .. code)
+    end
+    self.ls = ns.Lockstep.New({ id = s.recordId, seat = seat, peers = peers, scope = scope,
         hash = function() return E().Hash(st) end })
     self.pvpStart = Now()
     self.claim:Hide()
@@ -3913,6 +3978,7 @@ end
 
 function P:LeavePvp()
     if self.ls then ns.Lockstep.Stop(self.ls) end
+    if self.gameChannel then ns.Net.LeaveChannel(self.gameChannel) self.gameChannel = nil end
     self.ls, self.pvp, self.pvpGame, self.setupOpen = nil, nil, nil, false
     self.surrender:Hide()
     self.claim:Hide()
@@ -4247,6 +4313,27 @@ local SPELL_FX = {
     purge = { 166609, "target", 1, 1 },
     sentry_ward = { 166994, "point", 0.8, 1 },
     stasis_trap = { 166306, "point", 1.4, 1.5 },
+    -- The WoW classes (Hero Defense): the same models, by kind of spell.
+    heroic_strike = { 166841, "target", 0.8, 0.8 }, thunder_clap_w = { 167120, "caster", 1.6, 1.5 },
+    charge = { 166306, "target", 1, 1 }, battle_shout = { 166306, "caster", 1.2, 1.2 }, recklessness = { 166826, "caster", 1, 1.5 },
+    holy_light_p = { 166350, "target", 1, 1.2 }, judgement = { 166841, "target", 1, 1 }, consecration = { 166350, "caster", 2, 8 },
+    divine_shield_p = { 166430, "caster", 1.2, 1.5 },
+    arcane_shot = { 166538, "target", 1, 1 }, multi_shot = { 166841, "target", 1, 1 }, serpent_sting = { 166609, "target", 1, 1 },
+    call_pet = { 166994, "caster", 1.2, 1.5 }, volley = { 165716, "point", 1.4, 5 },
+    sinister_strike = { 166841, "target", 0.8, 0.8 }, eviscerate = { 166841, "target", 1.1, 1 }, stealth = { 166430, "caster", 1, 1.2 },
+    kidney_shot = { 166306, "target", 0.8, 1 }, adrenaline_rush = { 166951, "caster", 1, 1.2 },
+    flash_heal = { 166350, "target", 1, 1 }, pw_shield = { 166430, "target", 1, 1.5 }, sw_pain = { 166538, "target", 1, 1.2 },
+    renew = { 166350, "target", 0.8, 1.5 }, prayer_of_healing = { 166350, "caster", 2.2, 1.5 },
+    lightning_bolt = { 166841, "target", 1, 1 }, chain_heal = { 166293, "target", 1, 1.2 }, frost_shock = { 165716, "target", 0.6, 1 },
+    bloodlust_s = { 166826, "caster", 1.4, 1.5 },
+    fireball = { 166190, "target", 0.7, 1 }, frost_nova = { 167120, "caster", 1.6, 1.5 }, blizzard_m = { 165716, "point", 1.6, 6 },
+    blink = { 167094, "caster", 0.8, 1 }, water_elemental_m = { 167178, "caster", 1, 1.5 },
+    shadow_bolt = { 166538, "target", 1, 1 }, corruption = { 166538, "target", 0.8, 1.2 }, drain_life = { 166538, "target", 1, 1.5 },
+    summon_voidwalker = { 166994, "caster", 1.2, 1.5 }, rain_of_fire = { 166190, "point", 1.6, 8 },
+    wrath = { 166609, "target", 1, 1 }, rejuvenation = { 166293, "target", 0.8, 1.5 }, entangling_roots = { 166306, "target", 1, 2 },
+    bear_form = { 166112, "caster", 1, 1.2 }, tranquility = { 166350, "caster", 2.4, 3 },
+    death_grip = { 166538, "target", 1, 1 }, icy_touch = { 165716, "target", 0.6, 1 }, plague_strike = { 166609, "target", 1, 1 },
+    death_coil = { 166538, "target", 1.2, 1.2 }, army_of_the_dead = { 166704, "caster", 2, 2 },
 }
 -- While a unit has the buff: file, scale, height (yards above the ground).
 local BUFF_FX = {
@@ -4402,7 +4489,9 @@ end
 
 -- Every frame: buffs and auras on the units in sight, effects follow their
 -- units, finished ones go.
--- Items lying on the ground (dropped by creeps): their icons; a hero walks over one to take it.
+-- Items lying on the ground: their icons in a frame of their quality colour.
+-- Hover for what it is; click to pick it up (your hero walks over if it's
+-- further off). (Melee creep camps' drops have no id: the hero walks there.)
 function P:DrawItems()
     local st = self.st
     self.itemTex = self.itemTex or {}
@@ -4412,25 +4501,114 @@ function P:DrawItems()
         local seen = self.vis and self.vis[math.floor(it.y) * st.w + math.floor(it.x)]
         if px > -20 and px < BW + 20 and py > -20 and py < VIEW_H + 20 and seen then
             n = n + 1
-            local t = self.itemTex[n]
-            if not t then
-                t = self.fxLayer:CreateTexture(nil, "ARTWORK")
-                t:SetSize(16, 16)
-                t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                self.itemTex[n] = t
+            local b = self.itemTex[n]
+            if not b then
+                b = CreateFrame("Button", nil, self.fxLayer)
+                b:SetSize(18, 18)
+                b.edge = b:CreateTexture(nil, "BACKGROUND")
+                b.edge:SetPoint("TOPLEFT", -2, 2)
+                b.edge:SetPoint("BOTTOMRIGHT", 2, -2)
+                b.icon = b:CreateTexture(nil, "ARTWORK")
+                b.icon:SetAllPoints()
+                b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                local hl = b:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 1, 1, 0.25)
+                b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                b:SetScript("OnClick", function() self:PickUp(b.item) end)
+                b:SetScript("OnEnter", function()
+                    local d = b.item and WC().Items[b.item.key]
+                    if not d then return end
+                    GameTooltip:SetOwner(b, "ANCHOR_TOP")
+                    GameTooltip:SetText(d.color and ("|c" .. d.color .. d.name .. "|r") or d.name, 1, 0.82, 0)
+                    if d.slot then GameTooltip:AddLine(WC().Loot.GEAR_NAMES[d.slot], 0.7, 0.7, 0.7) end
+                    GameTooltip:AddLine(d.text or "", 1, 1, 1, true)
+                    GameTooltip:AddLine("Click: your hero picks it up.", 0.6, 0.6, 0.6, true)
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+                self.itemTex[n] = b
             end
-            t:SetTexture(WC().Items[it.key].icon)
-            t:ClearAllPoints()
-            t:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
-            t:Show()
+            local d = WC().Items[it.key]
+            b.item = it
+            b.icon:SetTexture(d and d.icon)
+            local c = d and d.color
+            if c then
+                b.edge:SetColorTexture(tonumber(c:sub(3, 4), 16) / 255, tonumber(c:sub(5, 6), 16) / 255, tonumber(c:sub(7, 8), 16) / 255, 1)
+            else
+                b.edge:SetColorTexture(0, 0, 0, 0.8)
+            end
+            b:ClearAllPoints()
+            b:SetPoint("CENTER", self.view, "TOPLEFT", px, -py)
+            b:Show()
         end
     end
     for i = n + 1, #self.itemTex do self.itemTex[i]:Hide() end
 end
 
+-- Pick up an item on the ground: the selected hero of yours, else your hero.
+function P:PickUp(it)
+    local st = self.st
+    if not (st and it) then return end
+    local hero
+    for _, e in ipairs(self:Selected()) do
+        if e.owner == ME and E().IsHero(e) and not e.illusion then hero = e break end
+    end
+    if not hero then
+        for _, id in ipairs(st.list) do
+            local e = st.ents[id]
+            if e and e.owner == ME and E().IsHero(e) and not e.illusion then hero = e break end
+        end
+    end
+    if not hero then return self:Say("A hero picks items up") end
+    if it.id then
+        local ok, why = self:Cmd({ type = "pickItem", unit = hero.id, item = it.id })
+        if not ok and why then self:Say(why:sub(1, 1):upper() .. why:sub(2)) end
+    else
+        self:Cmd({ type = "move", units = { hero.id }, x = it.x, y = it.y })
+    end
+end
+
+-- Numbers over a target: spell damage (yellow) and healing (green).
+function P:Float(id, text, r, g, b)
+    self.floats = self.floats or {}
+    local fs
+    for _, f in ipairs(self.floats) do if not f.on then fs = f break end end
+    if not fs then
+        fs = self.fxLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        table.insert(self.floats, fs)
+    end
+    fs.on, fs.id, fs.t0 = true, id, Now()
+    fs:SetText(text)
+    fs:SetTextColor(r, g, b)
+    fs:Show()
+end
+
+function P:DrawFloats()
+    local st = self.st
+    if not (st and self.floats) then return end
+    local now = Now()
+    for _, fs in ipairs(self.floats) do
+        if fs.on then
+            local e = st.ents[fs.id]
+            local k = (now - fs.t0) / 1.2
+            if not e or k >= 1 then
+                fs.on = false
+                fs:Hide()
+            else
+                local px, py = e.x * TILE - self.camX, e.y * TILE - self.camY
+                fs:ClearAllPoints()
+                fs:SetPoint("BOTTOM", self.view, "TOPLEFT", px, -py + 34 + k * 26)
+                fs:SetAlpha(1 - k * k)
+            end
+        end
+    end
+end
+
 function P:DrawFx()
     local st = self.st
     if not st then return end
+    self:DrawFloats()
     self.fx = self.fx or {}
     for _, fx in pairs(self.fx) do if not fx.untilT then fx.seen = false end end
     local cx, cy = self.camX, self.camY

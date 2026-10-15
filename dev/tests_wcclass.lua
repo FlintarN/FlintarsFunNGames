@@ -167,7 +167,10 @@ function WcLootTests()
     a.x, a.y, b.x, b.y = 30, 24, 36, 24
     L.Drop(st, { "g:1:3:1:10" }, a.x, a.y)
     Run(st, 0.5)
-    check(a.gear and a.gear[1] == "g:1:3:1:10" and #(a.items or {}) == 0, "loot: walking over a weapon puts it on")
+    check(not a.gear or not a.gear[1], "loot: walking over it doesn't pick it up")
+    check(E.Command(st, 1, { type = "pickItem", unit = a.id, item = st.items[#st.items].id }), "loot: click it to pick it up")
+    Run(st, 0.5)
+    check(a.gear and a.gear[1] == "g:1:3:1:10" and #(a.items or {}) == 0, "loot: a weapon picked up goes on")
     check(E.Stat(a, "str") == str + it.str and a.maxHp > hp, "loot: its strength and stamina count")
 
     -- Gear and bag: six of each. Potions go in the bag, gear on the hero.
@@ -204,7 +207,7 @@ function WcLootTests()
     Run(st, 1)
     check(#a.items == 0, "loot: not straight back into your own bag")
     local item = st.items[#st.items]
-    E.Command(st, 2, { type = "move", units = { b.id }, x = item.x, y = item.y })
+    check(E.Command(st, 2, { type = "pickItem", unit = b.id, item = item.id }), "loot: a friend clicks it from afar")
     Run(st, 5)
     check(b.gear and b.gear[1] == "g:1:3:1:10", "loot: a friend picks it up (and wears it)")
     E.Command(st, 2, { type = "unequip", unit = b.id, gear = 1 })
@@ -226,7 +229,7 @@ function WcLootTests()
     for i = n + 1, #st.items do
         if st.items[i].key == "n:cruel_barb" or st.items[i].key == "n:cape_brotherhood" then own = true end
     end
-    check(#st.items >= n + 3 and own, "loot: Edwin VanCleef drops his own, and more")
+    check(#st.items >= n + 2 and own, "loot: Edwin VanCleef drops his own, and one more")
 end
 
 -- The screen: the altar's classes; drop from the bag with a right-click.
@@ -270,6 +273,48 @@ function WcClassPageTests()
     check(not h.gear[1] and h.items[1] == "g:3:4:2:12", "class page: right-click it to take it off")
     slot._scripts.OnClick(slot, "RightButton")
     check(#h.items == 0 and st.items[#st.items].key == "g:3:4:2:12", "class page: right-click in the bag drops it")
+    -- The merchant: its card sells, to a hero next to it.
+    local shop = st.ents[st.hd.shop]
+    local sx, sy = E.Center(shop)
+    h.x, h.y, h.order, h.path = sx + 1, sy + 2, nil, nil
+    st.players[1].gold = 1000
+    view.sel = { shop.id }
+    Advance(0.2)
+    view:Draw()
+    local titles = {}
+    for _, c in ipairs(view.cmds) do if c:IsShown() then titles[#titles + 1] = c.title end end
+    local card = table.concat(titles, " | ")
+    check(card:find("Buy Tome of Experience (E)", 1, true) and card:find("Buy Potion of Healing", 1, true),
+        "class page: the merchant's card (" .. card .. ")")
+    for _, c in ipairs(view.cmds) do if c:IsShown() and c.title:find("Buy Potion of Healing", 1, true) then c.action() end end
+    check(h.items[1] == "healing_potion" and st.players[1].gold == 1000 - WC.Items.healing_potion.cost, "class page: buy a potion")
+    check(WC.ART.models.hd_merchant and WC.ART.models.hd_merchant.file == 197791, "class page: the merchant is a goblin tent")
+    -- Selling the junk: every grey item, from the merchant's card.
+    h.items = { "g:7:1:1:3", "g:2:1:3:4", "healing_potion" }
+    local gold0 = st.players[1].gold
+    Advance(0.2)
+    view:Draw()
+    local sold = false
+    for _, c in ipairs(view.cmds) do if c:IsShown() and c.title == "Sell Grey Items (J)" then c.action() sold = true end end
+    check(sold and #h.items == 1 and h.items[1] == "healing_potion" and st.players[1].gold > gold0, "class page: sell the grey items")
+    -- Loot on the ground: a button with a tooltip; click it and the hero fetches it.
+    WC.Loot.Drop(st, { "g:9:2:1:6" }, h.x + 4, h.y)
+    view.sel = { h.id }
+    Advance(0.2)
+    view:Draw()
+    local btn
+    for _, b in ipairs(view.itemTex) do if b:IsShown() and b.item and b.item.key == "g:9:2:1:6" then btn = b end end
+    check(btn ~= nil, "class page: the item shows on the ground")
+    btn._scripts.OnEnter(btn)
+    btn._scripts.OnClick(btn, "LeftButton")
+    Run(st, 4)
+    check(h.gear[2] == "g:9:2:1:6" or h.items[2] == "g:9:2:1:6", "class page: click it - the hero fetches it")
+    -- A spell's damage: a number over the target.
+    view:Events({ { kind = "spellNumber", owner = 1, id = h.id, target = h.id, amount = 77 } })
+    view:DrawFx()
+    local shown = false
+    for _, f in ipairs(view.floats or {}) do if f.on and f:GetText() == "77" then shown = true end end
+    check(shown, "class page: spell damage shows as a number")
     ns.db.warcraft.lobby = nil
     view:Quit()
 end

@@ -69,7 +69,14 @@ async function Pump(players, seconds = 0) {
     let traffic = false;
     for (const p of players) {
       await p.run(`Advance(${round === 0 ? seconds : 0})`);
-      const out = await Get(p, 'TakeOutbox()');
+      let out = await Get(p, 'TakeOutbox()');
+      // (LATENCY: what was sent arrives one pump later - like WoW's delay)
+      if (globalThis.LATENCY) {
+        const late = p.held || '';
+        p.held = out;
+        out = round === 0 ? late : '';
+        if (round > 0) { p.held = (late ? late + '' : '') + (p.held || ''); }
+      }
       if (!out) continue;
       for (const line of out.split('\x01')) {
         traffic = true;
@@ -95,7 +102,7 @@ async function Pump(players, seconds = 0) {
       // Messages waiting for WoW's send limit: let a little time pass, as in the game.
       let waiting = 0;
       for (const p of players) waiting += await Get(p, '(ns.Net.Waiting and ns.Net.Waiting() or 0)');
-      if (!waiting || ++waits > 400) return;
+      if (!waiting || ++waits > 400 || globalThis.NOWAIT) return;
       for (const p of players) await p.run('Advance(0.25)');
     }
   }
@@ -109,7 +116,6 @@ async function Section(title, fn) {
   await fn();
 }
 
-// ---------------------------------------------------------------------------
 await Section('Rules and helpers', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_unit.lua'), 'utf8'));
@@ -838,6 +844,7 @@ await Section('Warcraft III armies', async () => {
 await Section('Warcraft III lockstep', async () => {
   const p = await Player('Flintar', []);
   await p.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  await p.run('WcLagTests()');
   await p.run('WcLockstepTests(0)');
   await p.run('WcLockstepTests()');
 });
@@ -942,6 +949,53 @@ await Section('Warcraft 4: Hero Defense online', async () => {
   const h2 = await Get(bob, `WcPvpHash(${t})`);
   await host.run(`check("${h1}" ~= "" and "${h1}" == "${h2}", "hd online: both clients have the same game at turn ${t}")`);
   await host.run(`check(WcPvpInfo() == "1:nil", "hd online: no desync (" .. WcPvpInfo() .. ")")`);
+});
+
+// Four players clicking orders four times a second, with every message a
+// moment late (as on a real connection): the turns keep up, nothing piles up
+// in WoW's send line, and the messages stay small.
+for (const group of [false, true]) await Section(`Warcraft 4: four players clicking, messages late (${group ? 'group' : 'code'})`, async () => {
+  const names = ['Flintar', 'Bob', 'Cara', 'Dan'];
+  const players = [];
+  for (const n of names) players.push(await Player(n, group ? names.filter(x => x !== n) : []));
+  for (const q of players) await q.run(readFileSync(join(here, 'tests_wcpvp.lua'), 'utf8'));
+  const host = players[0];
+  const code = await Get(host, group ? 'WcPvpHost("group")' : 'WcPvpHost()');
+  await Pump(players, 1);
+  await host.run('WcPvpLobby("mode:hd")');
+  await Pump(players, 1);
+  for (const q of players.slice(1)) { await q.run(group ? 'WcPvpJoinGroup()' : `WcPvpJoin("${code}")`); await Pump(players, 2); }
+  for (const q of players.slice(1)) await q.run('WcPvpLobby("ready:on")');
+  await Pump(players, 1);
+  await host.run('WcPvpStart(4)');
+  await Pump(players, 1);
+  // (from here on: real time - no waiting for the send line - and late messages)
+  globalThis.NOWAIT = true;
+  globalThis.LATENCY = true;
+  try {
+    await host.run('local o = ns.Net.SendFast __lsMax = 0 ns.Net.SendFast = function(c, d, ...) if c == "LS" then __lsMax = math.max(__lsMax, #d) end return o(c, d, ...) end');
+    const heroes = ['cls_warrior', 'cls_priest', 'cls_mage', 'cls_rogue'];
+    for (let i = 0; i < 4; i++) await players[i].run(`WcPvpHdHero("${heroes[i]}")`);
+    const start = await Get(host, 'WcPvpTurn()');
+    let most = 0;
+    for (let i = 1; i <= 120; i++) { // 30 seconds
+      for (const q of players) await q.run(`local v = ns.UI.pages.warcraft.view local h = ns.WC.Modes.hd.Hero(v.st, v.ls.seat) if h then v:Cmd({ type = "move", units = { h.id }, x = 30 + (${i} % 5), y = 30 }) v:Cmd({ type = "move", units = { h.id }, x = 31, y = 30 + (${i} % 3) }) end`);
+      for (const q of players) await q.run('WcPvpRun(5)');
+      await Pump(players, 0.25);
+      let wait = 0;
+      for (const q of players) wait += await Get(q, 'ns.Net.Waiting()');
+      most = Math.max(most, wait);
+    }
+    const turns = (await Get(host, 'WcPvpTurn()')) - start;
+    await host.run(`check(${turns} >= 110, "late messages: the turns keep up (${turns} of 120)")`);
+    await host.run(`check(${most} <= 8, "late messages: nothing piles up waiting to be sent (at most ${most})")`);
+    await host.run(`check(__lsMax < 600, "late messages: they stay small (" .. __lsMax .. " bytes)")`);
+    await host.run(`local d = ns.UI.pages.warcraft.view.ls.delay check(d >= 2 and d <= 4, "late messages: the delay follows the connection (" .. d .. " turns)")`);
+    await host.run(`check(WcPvpInfo() == "1:nil", "late messages: no desync (" .. WcPvpInfo() .. ")")`);
+  } finally {
+    globalThis.NOWAIT = false;
+    globalThis.LATENCY = false;
+  }
 });
 
 await Section('Warcraft 4: three players and a computer', async () => {

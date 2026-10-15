@@ -7,6 +7,57 @@ local S = ns.Session
 
 -- Two lockstep games wired to each other in memory; every third message is
 -- lost on the way. Both sides give commands; the games must stay the same.
+-- The send line and lockstep under load: a newer message never cuts off one
+-- already half sent; fast clicks to the same units don't grow the messages;
+-- my delay follows the round trip.
+function WcLagTests()
+    local Net = ns.Net
+    local fast = Net.FAST
+    Net.FAST = { fast[1] }
+    Advance(30)
+    Net.WhisperFast("LT", string.rep("x", 3000), "Bob", "k") -- (more parts than WoW lets out at once)
+    local waiting = Net.Waiting()
+    check(waiting > 0, "net: a long message, part of it waiting (" .. waiting .. ")")
+    Net.WhisperFast("LT", "new", "Bob", "k")
+    check(Net.Waiting() == waiting + 1, "net: a half-sent message isn't cut off by a newer one")
+    Net.WhisperFast("LT", "newer", "Bob", "k")
+    check(Net.Waiting() == waiting + 1, "net: but a newer one replaces one still wholly waiting")
+    Advance(30)
+    Net.FAST = fast
+    TakeOutbox()
+
+    local g = L.New({ id = "lag", seat = 1, peer = "x", send = function() end })
+    g:Command({ type = "move", units = { 7 }, x = 1, y = 1 }, "move:7")
+    g:Command({ type = "move", units = { 7 }, x = 2, y = 1 }, "move:7")
+    g:Command({ type = "move", units = { 8 }, x = 3, y = 1 }, "move:8")
+    g:Command({ type = "move", units = { 8 }, x = 4, y = 1, queue = true })
+    g:Command({ type = "move", units = { 8 }, x = 5, y = 1 }, "move:8")
+    local list = g.mine[g.turn + L.DELAY]
+    check(#list == 4 and list[1].x == 2 and list[2].x == 3 and list[4].x == 5,
+        "lockstep: a newer order to the same units replaces the last, in the same turn only")
+    -- The round trip: slow answers raise my delay, quick ones bring it back (slowly).
+    local now = 0
+    g:Update(now) g:Send(now)
+    g:Receive({ s = 2, t = 1, a = { { 1, g.myThru } } }, now + 1.2)
+    check(g.delay > L.DELAY, "lockstep: a slow round trip raises my delay (" .. g.delay .. ")")
+    local high = g.delay
+    g:Update(now + 1.2)
+    local promised = g.myThru
+    g.delay = L.DELAY -- (as if it just came down)
+    g:Command({ type = "stop", units = { 7 } })
+    check(promised > g.turn + L.DELAY - 1 and g.mine[promised + 1] and #g.mine[promised + 1] == 1,
+        "lockstep: when the delay comes down, a command never goes into a turn already promised")
+    g.delay = high
+    for i = 1, 40 do
+        now = 2 + i * 0.5
+        g.turn = g.turn + 1
+        g:Update(now) g:Send(now)
+        g:Receive({ s = 2, t = g.turn + 2, a = { { 1, g.myThru } } }, now + 0.1)
+    end
+    check(g.delay == L.DELAY and high > g.delay, "lockstep: a quick one brings it back down (" .. g.delay .. ")")
+    L.Stop(g)
+end
+
 function WcLockstepTests(lose)
     lose = lose or 3
     local sts = {}

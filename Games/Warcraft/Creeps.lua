@@ -57,6 +57,9 @@ WC.Derive("Buildings", "goblin_merchant", "arcane_vault", { name = "Goblin Merch
     sells = { "healing_potion", "mana_potion", "town_portal", "boots", "claws", "ring" }, neutral = true })
 WC.Derive("Buildings", "mercenary_camp", "voodoo_lounge", { name = "Mercenary Camp", requires = false, cost = { 0, 0 },
     sells = false, hires = { "creep_gnoll", "creep_thug", "creep_murloc", "creep_ogre" }, neutral = true })
+-- The Goblin Merchant's look: a goblin tent (the Arcane Vault's auction-house
+-- front looked like a sign hanging in front of a building).
+WC.ART.models.goblin_merchant = { file = 197791, fill = 1 } -- generic/goblin/passivedoodads/goblintents/goblintent01
 WC.MERC_COST = { creep_gnoll = 120, creep_thug = 175, creep_murloc = 140, creep_ogre = 340 }
 WC.MERC_KEYS = { creep_gnoll = "G", creep_thug = "T", creep_murloc = "M", creep_ogre = "O" }
 
